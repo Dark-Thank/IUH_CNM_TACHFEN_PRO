@@ -2,22 +2,33 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import { authService } from "@/services/authService";
 import type { AuthState } from "@/types/store";
+import { persist } from "zustand/middleware";
+import { useChatStore } from "./useChatStore";
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>()(
+  persist ((set, get) => ({
   accessToken: null,
   user: null,
   loading: false,
   setAccessToken: (accessToken) => {
     set({ accessToken });
   },
-  clearState: () => set({ accessToken: null, user: null, loading: false }),
-
+  clearState: () => {
+        set({ accessToken: null, user: null, loading: false });
+        
+        localStorage.clear();
+        
+      },
 
   signUp: async (username, password, email, firstName, lastName) => {
     try {
       set({ loading: true });
 
+      localStorage.clear(); // Xóa toàn bộ localStorage trước khi đăng ký, đảm bảo không còn dữ liệu cũ nào ảnh hưởng đến quá trình đăng ký mới
+      useChatStore.getState().reset(); // Đặt lại trạng thái chat để đảm bảo không còn dữ liệu cũ nào ảnh hưởng đến trải nghiệm người dùng sau khi đăng ký mới
+      
       //  gọi api
+
       await authService.signUp(username, password, email, firstName, lastName);
 
       toast.success("Đăng ký thành công! Bạn sẽ được chuyển sang trang đăng nhập.");
@@ -37,6 +48,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       get().setAccessToken(accessToken);
 
       await get().fetchMe();
+      useChatStore.getState().fetchConversations(); // Fetch conversations ngay sau khi đăng nhập thành công để cập nhật giao diện người dùng với dữ liệu mới nhất
+    useChatStore.getState().fetchConversations();
 
       toast.success("Chào mừng bạn quay lại với Moji 🎉");
     } catch (error) {
@@ -81,6 +94,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       setAccessToken(accessToken);
 
+
+
       if (!user) {
         await fetchMe();
       }
@@ -93,4 +108,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false });
     }
   },
-}));
+}),{name: "auth-storage",
+  partialize: (state) => ({user: state.user}),
+})
+);
