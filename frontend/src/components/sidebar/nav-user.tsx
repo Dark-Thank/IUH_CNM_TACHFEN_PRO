@@ -20,16 +20,14 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import type { User } from "@/types/user"
+import { ChevronsUpDownIcon, UserIcon, Bell } from "lucide-react"
+import Logout from "../auth/logout"
 
 export function NavUser({
   user,
 }: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
+  user: User
 }) {
   const { isMobile } = useSidebar()
   return (
@@ -42,12 +40,12 @@ export function NavUser({
             }
           >
             <Avatar>
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback>CN</AvatarFallback>
+              <AvatarImage src={user.avatarUrl} alt={user.displayName} />
+              <AvatarFallback>{user.displayName.charAt(0)}</AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs">{user.email}</span>
+              <span className="truncate font-medium">{user.displayName}</span>
+              <span className="truncate text-xs">{user.username}</span>
             </div>
             <ChevronsUpDownIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -61,12 +59,12 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar>
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback>CN</AvatarFallback>
+                    <AvatarImage src={user.avatarUrl} alt={user.username} />
+                    <AvatarFallback>{user.displayName.charAt(0)}</AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
-                    <span className="truncate text-xs">{user.email}</span>
+                    <span className="truncate font-medium">{user.displayName}</span>
+                    <span className="truncate text-xs">{user.username}</span>
                   </div>
                 </div>
               </DropdownMenuLabel>
@@ -74,34 +72,19 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem>
-                <SparklesIcon
+                <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground"
                 />
-                Upgrade to Pro
+                Tài khoản
+              </DropdownMenuItem>
+              <DropdownMenuItem>
+                <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                Thông báo
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <BadgeCheckIcon
-                />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCardIcon
-                />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BellIcon
-                />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <LogOutIcon
+            <DropdownMenuItem className="cursor-pointer" variant="destructive">
+              <Logout
               />
-              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -8,7 +8,7 @@ export interface AuthState {
   loading: boolean;
 
   setAccessToken: (accessToken: string) => void;
-  
+
   clearState: () => void;
   signUp: (
     username: string,
@@ -40,16 +40,28 @@ export interface ChatState {
     }
   >;
   activeConversationId: string | null;
-  
- 
-  loading: boolean;
+  convoLoading: boolean;
+  messageLoading: boolean;
   reset: () => void;
 
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
- 
-  
-  
+  fetchMessages: (conversationId?: string) => Promise<void>;
+  sendDirectMessage: (
+    recipientId: string,
+    content: string,
+    imgUrl?: string
+  ) => Promise<void>;
+  sendGroupMessage: (
+    conversationId: string,
+    content: string,
+    imgUrl?: string
+  ) => Promise<void>;
+  // add message
+  addMessage: (message: Message) => Promise<void>;
+  // update convo
+  updateConversation: (conversation: Conversation) => void;
+
 }
 
 export interface SocketState {
@@ -74,4 +86,11 @@ export interface FriendState {
 
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
+}
+
+export interface SocketState {
+  socket: Socket | null;
+  onlineUsers: string[];
+  connectSocket: () => void;
+  disconnectSocket: () => void;
 }

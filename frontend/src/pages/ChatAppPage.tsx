@@ -9,7 +9,7 @@ const ChatAppPage = () => {
 
       <div className="flex h-screen w-full p-2">
         <ChatWindowLayout />
-      </div>
+      </div>   
     </SidebarProvider>
   );
 };

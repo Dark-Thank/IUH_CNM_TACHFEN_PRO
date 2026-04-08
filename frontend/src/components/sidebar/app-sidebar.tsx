@@ -5,7 +5,7 @@ import * as React from "react"
 
 import { NavUser } from "@/components/sidebar/nav-user"
 import {
- Sidebar,
+  Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
@@ -26,15 +26,17 @@ import GroupChatList from "../chat/GroupChatList";
 import AddFriendModal from "../chat/AddFriendModal";
 import DirectMessageList from "../chat/DirectMessageList";
 import { useThemeStore } from "@/stores/useThemeStore"
+import { useAuthStore } from "@/stores/useAuthStore"
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
+  const { user } = useAuthStore();
   return (
     <Sidebar variant="inset" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" className="bg-gradient-primary">
-          <a href="#">
+              <a href="#">
                 <div className="flex w-full items-center px-2 justify-between">
                   <h1 className="text-xl font-bold text-white">Moji</h1>
                   <div className="flex items-center gap-2">
@@ -52,14 +54,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
-      <SidebarContent>
-          {/* Create New Chat */}
+      <SidebarContent className="beautiful-scrollbar">
+        {/* Create New Chat */}
         <SidebarGroup>
           <SidebarGroupContent>
-            <CreateNewChat/>
+            <CreateNewChat />
           </SidebarGroupContent>
         </SidebarGroup>
-         {/* Group Chat */}
+        {/* Group Chat */}
         <SidebarGroup>
           <div className="flex items-center justify-between">
             <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
@@ -71,7 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-{/* Dirrect Message */}
+        {/* Dirrect Message */}
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
           <SidebarGroupAction
@@ -80,14 +82,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           >
             <AddFriendModal />
           </SidebarGroupAction>
-     
+
           <SidebarGroupContent>
-            <DirectMessageList/>
+            <DirectMessageList />
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        {/* <NavUser user={data.user} /> */}
+        {user && <NavUser user={user} />}
       </SidebarFooter>
     </Sidebar>
   )

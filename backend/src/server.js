@@ -11,10 +11,11 @@ import { protectedRoute } from "./middlewares/authMiddleware.js";
 import cors from "cors";
 import swaggerUi from "swagger-ui-express";
 import fs from "fs";
+import { app, server } from "./socket/index.js";
 
 dotenv.config();
 
-const app = express();
+// const app = express();
 const PORT = process.env.PORT || 5001;
 
 // Cấu hình CORS
@@ -44,7 +45,7 @@ app.use('/api/messages', messageRoute);
 app.use('/api/conversations', conversationRoute);
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`server bắt đầu trên cổng ${PORT}`);
   });
 });

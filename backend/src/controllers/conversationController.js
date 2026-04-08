@@ -103,7 +103,7 @@ export const getConversations = async (req, res) => {
             }));
             return{
                 ...convo.toObject(),
-                unreadCount: convo.unreadCounts || {},
+                unreadCounts: convo.unreadCounts || {},
                 participants,
             };
         });
@@ -148,8 +148,19 @@ export const getMessages = async (req, res) => {
         console.error("Lỗi khi lấy messages:", error);
         return res.status(500).json({message: "Lỗi hệ thống"});
     }
-
-
-
-
 };
+
+export const getUserConversationsForSocketIO = async (userId) => {
+  try {
+    const conversations = await Conversation.find(
+      { "participants.userId": userId },
+      { _id: 1 },
+    );
+
+    return conversations.map((c) => c._id.toString());
+  } catch (error) {
+    console.error("Lỗi khi fetch conversations: ", error);
+    return [];
+  }
+};
+
