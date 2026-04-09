@@ -1,6 +1,6 @@
-import { join } from "path";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import { io } from "../socket/index.js";
 
 export const createConversation = async (req, res) => {
     try {
@@ -23,11 +23,11 @@ export const createConversation = async (req, res) => {
             
             if(!conversation){
                 conversation = new Conversation({
-                    type: 'direct', 
+                    type: 'direct',
                     participants: [{userId}, {userId: participantId}],
                     lastMessageAt: new Date(),
                     unreadCounts: new Map(),
-                 });
+                });
                 await conversation.save();
             }
                 
@@ -65,7 +65,15 @@ export const createConversation = async (req, res) => {
             {path: 'lastMessage.senderId', select: 'displayName avatarUrl'},
         ]);
 
-        return res.status(201).json({conversation});
+        const participants = (conversation.participants || []).map((p) => ({
+                _id: p.userId?._id,
+                displayName: p.userId?.displayName,
+                avatarUrl: p.userId?.avatarUrl ?? null,
+                joinedAt: p.joinedAt,
+            }));
+        const formatted = {...conversation.toObject(), participants};
+
+        return res.status(201).json({conversation: formatted});
 
 
     } catch (error) {
@@ -124,7 +132,7 @@ export const getMessages = async (req, res) => {
         const query = {conversationId};
 
         if(cursor){
-            query.createAt = {$lt: new Date(cursor)};
+            query.createdAt = {$lt: new Date(cursor)};
         }
 
         let messages = await Message.find(query)
@@ -163,4 +171,58 @@ export const getUserConversationsForSocketIO = async (userId) => {
     return [];
   }
 };
+
+export const markAsSeen = async (req, res) => {
+    try {
+        const {conversationId} = req.params;
+        const userId = req.user._id.toString();
+
+        const conversation = await Conversation.findById(conversationId).lean();
+
+        if(!conversation){
+            return res.status(404).json({message: "Conversation không tồn tại"});
+        }
+
+        const last = conversation.lastMessage;
+        if(!last){
+            return res.status(200).json({message: "Không có tin nhắn nào để Mark as seen"});
+        }
+
+        if(last.senderId.toString() === userId){
+            return res.status(200).json({message: "Sender khong can Mark as seen"});
+        }
+
+        const updated = await Conversation.findByIdAndUpdate(
+            conversationId,
+            {
+                $addToSet: {seenBy: userId},
+                $set: {[`unreadCounts.${userId}`]: 0},
+            }, {
+                new: true,
+            }
+        )
+
+        io.to(conversationId).emit("read-message", {
+            conversation: updated,
+            lastMessage: {
+                _id: updated?.lastMessage._id,
+                content: updated?.lastMessage.content,
+                createdAt: updated?.lastMessage.createdAt,
+                sender: {
+                    _id: updated?.lastMessage.senderId,
+                }
+            }
+        })
+
+        return res.status(200).json({
+            message: "Mark as seen",
+            seenBy: updated?.seenBy || [],
+            myUnreadCount: updated?.unreadCounts[userId] || 0,
+        })
+
+    } catch (error) {
+        console.error("Lỗi khi Mark as seen:", error);
+        return res.status(500).json({message: "Lỗi hệ thống"});
+    }
+}
 

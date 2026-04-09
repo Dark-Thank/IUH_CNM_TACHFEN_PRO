@@ -60,8 +60,26 @@ export interface ChatState {
   // add message
   addMessage: (message: Message) => Promise<void>;
   // update convo
-  updateConversation: (conversation: Conversation) => void;
+  updateConversation: (conversation: unknown) => void;
+  markAsSeen: () => Promise<void>;
+  addConvo:(convo: Conversation) => void;
+  createConversation: (
+    type: "group" | "direct",
+    name: string,
+    memberIds: string[]
+  ) => Promise<void>;
+}
 
+export interface SocketState {
+  socket: Socket | null;
+  onlineUsers: string[];
+  connectSocket: () => void;
+  disconnectSocket: () => void;
+}
+
+
+export interface UserState {
+  updateAvatarUrl: (formData: FormData) => Promise<void>;
 }
 
 export interface SocketState {
@@ -82,15 +100,4 @@ export interface FriendState {
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
-}
-
-export interface UserState {
-  updateAvatarUrl: (formData: FormData) => Promise<void>;
-}
-
-export interface SocketState {
-  socket: Socket | null;
-  onlineUsers: string[];
-  connectSocket: () => void;
-  disconnectSocket: () => void;
 }

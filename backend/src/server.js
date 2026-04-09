@@ -1,16 +1,16 @@
-import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import dotenv from "dotenv";
+import express from "express";
+import fs from "fs";
+import swaggerUi from "swagger-ui-express";
 import { connectDB } from "./libs/db.js";
+import { protectedRoute } from "./middlewares/authMiddleware.js";
 import authRoute from "./routes/authRoute.js";
-import userRoute from "./routes/userRoute.js";
+import conversationRoute from "./routes/conversationRoute.js";
 import friendRoute from "./routes/friendRoute.js";
 import messageRoute from "./routes/messageRoute.js";
-import conversationRoute from "./routes/conversationRoute.js";
-import cookieParser from "cookie-parser";
-import { protectedRoute } from "./middlewares/authMiddleware.js";
-import cors from "cors";
-import swaggerUi from "swagger-ui-express";
-import fs from "fs";
+import userRoute from "./routes/userRoute.js";
 import { app, server } from "./socket/index.js";
 
 dotenv.config();
@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 5001;
 // Cấu hình CORS
 app.use(cors({
   origin: 'http://localhost:5173', // Chỉ cho phép FE của bạn truy cập
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   credentials: true // Cho phép gửi cookie/token nếu cần
 }));
 

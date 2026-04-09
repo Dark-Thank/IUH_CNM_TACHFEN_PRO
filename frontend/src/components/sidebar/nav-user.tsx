@@ -21,8 +21,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { User } from "@/types/user"
-import { ChevronsUpDownIcon, UserIcon, Bell } from "lucide-react"
+import { Bell, ChevronsUpDownIcon, UserIcon } from "lucide-react"
+import { useState } from "react"
 import Logout from "../auth/logout"
+import FriendRequestDialog from "../friendRequest/FriendRequestDialog"
 
 export function NavUser({
   user,
@@ -30,7 +32,9 @@ export function NavUser({
   user: User
 }) {
   const { isMobile } = useSidebar()
+  const [friendRequestOpen, setfriendRequestOpen] = useState(false);
   return (
+    <>
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
@@ -76,7 +80,9 @@ export function NavUser({
                 />
                 Tài khoản
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem
+              onClick={() => setfriendRequestOpen(true)}
+              >
                 <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
                 Thông báo
               </DropdownMenuItem>
@@ -90,5 +96,12 @@ export function NavUser({
         </DropdownMenu>
       </SidebarMenuItem>
     </SidebarMenu>
+
+    <FriendRequestDialog
+        open={friendRequestOpen}
+        setOpen={setfriendRequestOpen}
+      />
+    </>
+    
   )
 }

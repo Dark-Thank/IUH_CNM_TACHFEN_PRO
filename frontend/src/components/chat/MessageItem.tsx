@@ -1,8 +1,8 @@
-import type { Conversation, Message, Participant } from "@/types/chat";
-import UserAvatar from "./UserAvatar";
 import { cn, formatMessageTime } from "@/lib/utils";
-import { Card } from "../ui/card";
+import type { Conversation, Message, Participant } from "@/types/chat";
 import { Badge } from "../ui/badge";
+import { Card } from "../ui/card";
+import UserAvatar from "./UserAvatar";
 
 
 interface MessageItemProps {
@@ -20,17 +20,30 @@ const MessageItem = ({
     selectedConvo,
     lastMessageStatus,
 }: MessageItemProps) => {
-    const prev = messages[index + 1];
+    const prev = index + 1 < messages.length ? messages[index + 1] : undefined;
 
-    const isGroupBreak = index === 0 ||
-        message.senderId !== prev?.senderId
-        || new Date(message.createdAt).getTime() - new Date(prev?.createdAt || 0).getTime() > 300000;
+    const isShowTime =
+    index === 0 ||
+    new Date(message.createdAt).getTime() -
+      new Date(prev?.createdAt || 0).getTime() >
+      300000; // 5 phút
+
+    const isGroupBreak = isShowTime || message.senderId !== prev?.senderId;
+
+
 
     const participant = selectedConvo.participants.find(
         (p: Participant) => p._id.toString() === message.senderId.toString()
     );
     return (
-        <div
+        <>
+        {/* time */}
+                {isShowTime && (
+                    <span className="flex justify-center text-xs text-muted-foreground px-1">
+                        {formatMessageTime(new Date(message.createdAt))}
+                    </span>
+                )}
+                <div
             className={cn(
                 "flex gap-2 message-bounce mt-1",
                 message.isOwn ? "justify-end" : "justify-start"
@@ -65,12 +78,7 @@ const MessageItem = ({
                     <p className="text-sm leading-relaxed break-words">{message.content}</p>
                 </Card>
 
-                {/* time */}
-                {isGroupBreak && (
-                    <span className="text-xs text-muted-foreground px-1">
-                        {formatMessageTime(new Date(message.createdAt))}
-                    </span>
-                )}
+                
 
 
                 {/* seen/ delivered */}
@@ -89,6 +97,7 @@ const MessageItem = ({
                 )}
             </div>
         </div>
+        </>
     )
 }
 
