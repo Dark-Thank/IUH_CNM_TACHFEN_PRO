@@ -1,5 +1,5 @@
 import User from "../models/User.js";
-
+import { uploadImageFromBuffer }from "../middlewares/uploadMiddleware.js";
 export const authMe = async (req, res) => {
   try {
     const user = req.user; // lấy từ authMiddleware
