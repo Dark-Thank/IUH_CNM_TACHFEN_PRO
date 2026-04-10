@@ -13,6 +13,7 @@ export const useChatStore = create<ChatState>()(
       activeConversationId: null,
       convoLoading: false, // convo loading
       messageLoading: false, // message loading
+      loading: false,
 
 
       setActiveConversation: (id) => set({ activeConversationId: id }),
@@ -150,35 +151,36 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy khi ra add message:", error);
         }
       },
-      updateConversation: (conversation) => {
+        updateConversation: (conversation) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c),
+            c._id === conversation._id ? { ...c, ...conversation } : c
+          ),
         }));
       },
       markAsSeen: async () => {
         try {
-          const {user} = useAuthStore.getState();
-          const {activeConversationId, conversations} = get();
+          const { user } = useAuthStore.getState();
+          const { activeConversationId, conversations } = get();
 
-          if(!activeConversationId || !user) {
+          if (!activeConversationId || !user) {
             return;
           }
 
           const convo = conversations.find((c) => c._id === activeConversationId);
 
-          if(!convo) {
+          if (!convo) {
             return;
           }
 
-          if((convo.unreadCounts?.[user._id] ?? 0) ===0){
+          if ((convo.unreadCounts?.[user._id] ?? 0) === 0) {
             return;
           }
 
           await chatService.markAsSeen(activeConversationId);
 
-          set((state) =>({
-            conversations: state.conversations.map((c) =>(
+          set((state) => ({
+            conversations: state.conversations.map((c) => (
               c._id === activeConversationId && c.lastMessage ? {
                 ...c,
                 unreadCounts: {
@@ -186,7 +188,7 @@ export const useChatStore = create<ChatState>()(
                   [user._id]: 0
                 }
               }
-              : c
+                : c
             ))
           }))
 
@@ -211,6 +213,7 @@ export const useChatStore = create<ChatState>()(
       },
       createConversation: async (type, name, memberIds) => {
         try {
+          set({ loading: true });
           const conversation = await chatService.createConversation(
             type,
             name,
@@ -224,6 +227,8 @@ export const useChatStore = create<ChatState>()(
             .socket?.emit("join-conversation", conversation._id);
         } catch (error) {
           console.error("Lỗi xảy ra khi gọi createConversation trong store", error);
+        } finally {
+          set({ loading: false });
         }
       },
     }),
