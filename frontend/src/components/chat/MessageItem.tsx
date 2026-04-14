@@ -75,26 +75,30 @@ const MessageItem = ({
                         message.isOwn ? "chat-bubble-sent border-0" : "chat-bubble-received"
                     )}
                 >
-                    <p className="text-sm leading-relaxed break-words">{message.content}</p>
+                    <div className="text-sm leading-relaxed break-words">
+  {message.content && <p>{message.content}</p>}
+
+  {message.imgUrl && (
+    <img
+      src={message.imgUrl}
+      alt="image"
+      className="mt-2 max-w-[200px] rounded-lg object-cover"
+    />
+  )}
+</div>
                 </Card>
 
                 
 
 
                 {/* seen/ delivered */}
-                {message.isOwn && message._id === selectedConvo.lastMessage?._id && (
-                    <Badge
-                        variant="outline"
-                        className={cn(
-                            "text-xs px-1.5 py-0.5 h-4 border-0",
-                            lastMessageStatus === "seen"
-                                ? "bg-primary/20 text-primary"
-                                : "bg-muted text-muted-foreground"
-                        )}
-                    >
-                        {lastMessageStatus}
-                    </Badge>
-                )}
+                {selectedConvo.type === "direct" &&
+  message.isOwn &&
+  message._id === selectedConvo.lastMessage?._id && (
+    <Badge>
+      {lastMessageStatus}
+    </Badge>
+)}
             </div>
         </div>
         </>
