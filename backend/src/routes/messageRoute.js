@@ -10,14 +10,14 @@ const router = express.Router();
 
 router.post(
   "/direct",
-  upload.single("image"),     
+  upload.array("images", 10),     
   //checkFriendship,
   sendDirectMessage
 );
 
 router.post(
   "/group",
-  upload.single("image"),
+  upload.array("images", 10),
   //checkGroupMembership,
   sendGroupMessage
 );

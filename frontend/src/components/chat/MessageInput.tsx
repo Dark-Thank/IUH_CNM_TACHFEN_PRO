@@ -13,33 +13,34 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     const { sendDirectMessage, sendGroupMessage } = useChatStore();
 
     const [value, setValue] = useState("");
-    const [image, setImage] = useState<File | null>(null);
+    const [images, setImages] = useState<File[]>([]);
 
     if (!user) return null;
 
     const sendMessage = async () => {
-        if (!value.trim() && !image) return;
+        if (!value.trim() && images.length === 0) return;
 
         const formData = new FormData();
         formData.append("content", value);
 
-        if (image) {
-            formData.append("image", image); //  QUAN TRỌNG
-        }
+        //  gửi nhiều ảnh đúng key "images"
+        images.forEach((img) => {
+            formData.append("images", img);
+        });
 
         try {
             if (selectedConvo.type === "direct") {
-    const otherUser = selectedConvo.participants.find(
-        (p) => p._id !== user._id
-    );
+                const otherUser = selectedConvo.participants.find(
+                    (p) => p._id !== user._id
+                );
 
-    await sendDirectMessage(otherUser!._id, formData);
+                await sendDirectMessage(otherUser!._id, formData);
+            } else {
+                await sendGroupMessage(selectedConvo._id, formData);
+            }
 
-} else {
-    await sendGroupMessage(selectedConvo._id, formData);
-}
             setValue("");
-            setImage(null);
+            setImages([]);
 
         } catch (error) {
             console.error(error);
@@ -57,22 +58,29 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     return (
         <div className="flex flex-col gap-2 p-3 bg-background">
 
-            {/* PREVIEW ẢNH */}
-            {image && (
-                <div className="relative w-fit">
-                    <img
-                        src={URL.createObjectURL(image)}
-                        className="w-20 h-20 object-cover rounded"
-                    />
-                    <button
-                        onClick={() => setImage(null)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full px-1"
-                    >
-                        x
-                    </button>
+            {/* PREVIEW NHIỀU ẢNH */}
+            {images.length > 0 && (
+                <div className="flex gap-2 flex-wrap">
+                    {images.map((img, idx) => (
+                        <div key={idx} className="relative">
+                            <img
+                                src={URL.createObjectURL(img)}
+                                className="w-20 h-20 object-cover rounded"
+                            />
+                            <button
+                                onClick={() =>
+                                    setImages(images.filter((_, i) => i !== idx))
+                                }
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full px-1"
+                            >
+                                x
+                            </button>
+                        </div>
+                    ))}
                 </div>
             )}
 
+            {/* INPUT AREA */}
             <div className="flex items-center gap-2">
 
                 {/* CHỌN ẢNH */}
@@ -80,12 +88,14 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
                     <input
                         type="file"
                         accept="image/*"
+                        multiple
                         hidden
                         onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) setImage(file);
+                            const files = Array.from(e.target.files || []);
+                            setImages((prev) => [...prev, ...files]);
                         }}
                     />
+
                     <Button variant="ghost" size="icon" asChild>
                         <span>
                             <ImagePlus className="size-4" />
@@ -93,6 +103,7 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
                     </Button>
                 </label>
 
+                {/* TEXT INPUT */}
                 <div className="flex-1 relative">
                     <Input
                         value={value}
@@ -111,12 +122,14 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
                     </div>
                 </div>
 
+                {/* SEND BUTTON */}
                 <Button
                     onClick={sendMessage}
-                    disabled={!value.trim() && !image}
+                    disabled={!value.trim() && images.length === 0}
                 >
                     <Send className="size-4 text-white" />
                 </Button>
+
             </div>
         </div>
     );

@@ -78,13 +78,16 @@ const MessageItem = ({
                     <div className="text-sm leading-relaxed break-words">
   {message.content && <p>{message.content}</p>}
 
-  {message.imgUrl && (
+  {message.imgUrls?.length > 0 &&
+  message.imgUrls.map((url, index) => (
     <img
-      src={message.imgUrl}
+      key={index}
+      src={url}
       alt="image"
       className="mt-2 max-w-[200px] rounded-lg object-cover"
     />
-  )}
+  ))
+}
 </div>
                 </Card>
 
