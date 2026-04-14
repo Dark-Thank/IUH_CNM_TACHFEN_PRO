@@ -22,34 +22,25 @@ export const chatService = {
     return { messages: res.data.messages, cursor: res.data.nextCursor };
   },
 
-  async sendDirectMessage(
-    recipientId: string,
-    content: string = "",
-    imgUrl?: string,
-    conversationId?: string
-  ) {
-    const res = await api.post("/messages/direct", {
-      recipientId,
-      content,
-      imgUrl,
-      conversationId,
-    });
+ async sendDirectMessage(formData: FormData) {
+  const res = await api.post("/messages/direct", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
 
-    return res.data.message;
-  },
+  return res.data.message;
+},
 
-  async sendGroupMessage(
-    conversationId: string,
-    content: string = "",
-    imgUrl?: string
-  ) {
-    const res = await api.post("/messages/group", {
-      conversationId,
-      content,
-      imgUrl,
-    });
-    return res.data.message;
-  },
+  async sendGroupMessage(formData: FormData) {
+  const res = await api.post("/messages/group", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
+  return res.data.message;
+},
 
   async markAsSeen(conversationId: string) {
     const res = await api.patch(`/conversations/${conversationId}/seen`);

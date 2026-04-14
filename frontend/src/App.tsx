@@ -4,6 +4,8 @@ import ChatAppPage from "./pages/ChatAppPage";
 import { Toaster } from "sonner";
 import SignUpPage from "./pages/SignUpPage";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import OtpVerifyPage from "./pages/OtpVerifyPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import { useEffect } from "react";
 import { useThemeStore } from "./stores/useThemeStore";
 import { useAuthStore } from "./stores/useAuthStore";
@@ -39,6 +41,14 @@ function App() {
           <Route
             path="/signup"
             element={<SignUpPage />}
+          />
+          <Route
+            path="/verify-otp"
+            element={<OtpVerifyPage />}
+          />
+          <Route
+            path="/forgot-password"
+            element={<ForgotPasswordPage />}
           />
 
           {/* protected routes */}

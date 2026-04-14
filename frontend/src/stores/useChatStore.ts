@@ -85,36 +85,36 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-      sendDirectMessage: async (recipientId, content, imgUrl) => {
-        try {
-          const { activeConversationId } = get();
-          await chatService.sendDirectMessage(
-            recipientId,
-            content,
-            imgUrl,
-            activeConversationId || undefined
-          );
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c._id === activeConversationId ? { ...c, seenBy: [] } : c
-            ),
-          }));
-        } catch (error) {
-          console.error("Lỗi xảy ra khi gửi direct message", error);
-        }
-      },
-      sendGroupMessage: async (conversationId, content, imgUrl) => {
-        try {
-          await chatService.sendGroupMessage(conversationId, content, imgUrl);
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c._id === get().activeConversationId ? { ...c, seenBy: [] } : c
-            ),
-          }));
-        } catch (error) {
-          console.error("Lỗi xảy ra gửi group message", error);
-        }
-      },
+      sendDirectMessage: async (recipientId, formData?: FormData) => {
+  try {
+    const { activeConversationId } = get();
+
+    const data = formData || new FormData();
+
+    data.append("recipientId", recipientId);
+
+    if (activeConversationId) {
+      data.append("conversationId", activeConversationId);
+    }
+
+    await chatService.sendDirectMessage(data);
+
+  } catch (error) {
+    console.error(error);
+  }
+},
+      sendGroupMessage: async (conversationId, formData?: FormData) => {
+  try {
+    const data = formData || new FormData();
+
+    data.append("conversationId", conversationId);
+
+    await chatService.sendGroupMessage(data);
+
+  } catch (error) {
+    console.error(error);
+  }
+},
       addMessage: async (message) => {
         try {
           const { user } = useAuthStore.getState();
@@ -304,4 +304,7 @@ export const useChatStore = create<ChatState>()(
     }
   )
 );
+<<<<<<< HEAD
 
+=======
+>>>>>>> 55e1af829dba7c7c1985356b2320d8cd4981b281

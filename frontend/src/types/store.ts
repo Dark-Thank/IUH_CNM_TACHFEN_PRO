@@ -48,6 +48,7 @@ export interface ChatState {
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
+
   sendDirectMessage: (
     recipientId: string,
     content: string,
@@ -60,6 +61,7 @@ export interface ChatState {
   ) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
+
   addMessage: (message: Message) => Promise<void>;
 
   // update convo

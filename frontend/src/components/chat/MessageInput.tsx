@@ -11,27 +11,40 @@ import { toast } from 'sonner';
 const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage } = useChatStore();
-    const [value, setValue] = useState("");
 
-    if (!user) return;
+    const [value, setValue] = useState("");
+    const [image, setImage] = useState<File | null>(null);
+
+    if (!user) return null;
 
     const sendMessage = async () => {
-        if (!value.trim()) return;
-        const currValue = value;
-        setValue("");
+        if (!value.trim() && !image) return;
+
+        const formData = new FormData();
+        formData.append("content", value);
+
+        if (image) {
+            formData.append("image", image); //  QUAN TRỌNG
+        }
 
         try {
             if (selectedConvo.type === "direct") {
-                const participants = selectedConvo.participants;
-                const otherUser = participants.filter((p) => p._id !== user._id)[0];
-                await sendDirectMessage(otherUser._id, currValue);
-            } else {
-                await sendGroupMessage(selectedConvo._id, currValue);
-            }
+    const otherUser = selectedConvo.participants.find(
+        (p) => p._id !== user._id
+    );
+
+    await sendDirectMessage(otherUser!._id, formData);
+
+} else {
+    await sendGroupMessage(selectedConvo._id, formData);
+}
+            setValue("");
+            setImage(null);
+
         } catch (error) {
             console.error(error);
-            toast.error("Lỗi xảy ra khi gửi tin nhắn. Bạn hãy thử lại!");
-        } 
+            toast.error("Lỗi gửi tin nhắn!");
+        }
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -42,50 +55,71 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
     };
 
     return (
-        <div className="flex items-center gap-2 p-3 min-h-[56px] bg-background">
-            <Button
-                variant="ghost"
-                size="icon"
-                className="hover:bg-primary/10 transition-smooth"
-            >
-                <ImagePlus className="size-4" />
-            </Button>
+        <div className="flex flex-col gap-2 p-3 bg-background">
 
-            <div className="flex-1 relative">
-                <Input
-                    onKeyPress={handleKeyPress}
-                    value={value}
-                    onChange={(e) => setValue(e.target.value)}
-                    placeholder="Soạn tin nhắn..."
-                    className="pr-20 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none"
-                >
-
-                </Input>
-                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center gap-1">
-                    <Button
-                        asChild
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 hover:bg-primary/10 transition-smooth"
+            {/* PREVIEW ẢNH */}
+            {image && (
+                <div className="relative w-fit">
+                    <img
+                        src={URL.createObjectURL(image)}
+                        className="w-20 h-20 object-cover rounded"
+                    />
+                    <button
+                        onClick={() => setImage(null)}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full px-1"
                     >
-                        <div>
-                            <EmmojiPicker
-                                onChange={(emoji: string) => setValue(`${value}${emoji}`)}
-                            />
-                        </div>
-                    </Button>
+                        x
+                    </button>
                 </div>
+            )}
+
+            <div className="flex items-center gap-2">
+
+                {/* CHỌN ẢNH */}
+                <label>
+                    <input
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) setImage(file);
+                        }}
+                    />
+                    <Button variant="ghost" size="icon" asChild>
+                        <span>
+                            <ImagePlus className="size-4" />
+                        </span>
+                    </Button>
+                </label>
+
+                <div className="flex-1 relative">
+                    <Input
+                        value={value}
+                        onChange={(e) => setValue(e.target.value)}
+                        onKeyDown={handleKeyPress}
+                        placeholder="Soạn tin nhắn..."
+                        className="pr-16"
+                    />
+
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                        <EmmojiPicker
+                            onChange={(emoji: string) =>
+                                setValue((prev) => prev + emoji)
+                            }
+                        />
+                    </div>
+                </div>
+
+                <Button
+                    onClick={sendMessage}
+                    disabled={!value.trim() && !image}
+                >
+                    <Send className="size-4 text-white" />
+                </Button>
             </div>
-
-            <Button
-                onClick={sendMessage}
-                className="bg-gradient-chat hover:shadow-glow transition-smooth hover:scale-105"
-                disabled={!value.trim()}
-            >
-                <Send className="size-4 text-white" />
-            </Button>
         </div>
-    )
-}
+    );
+};
 
-export default MessageInput
+export default MessageInput;
