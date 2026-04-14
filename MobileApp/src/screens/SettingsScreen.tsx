@@ -1,24 +1,35 @@
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useUserStore } from "@/stores/useUserStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
 import { ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react-native";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
+  Image,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const ACCOUNT_SHEET_SNAP_POINTS = ["48%"];
+const ACCOUNT_SHEET_SNAP_POINTS = ["85%"];
 
 export default function SettingsScreen() {
   const accountSheetRef = useRef<BottomSheetModal>(null);
   const { isDark, toggleTheme } = useThemeStore();
   const { user, loading, signOut } = useAuthStore();
+  const { updateProfile } = useUserStore();
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [bio, setBio] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const colors = {
     background: isDark ? "#0f172a" : "#f8fafc",
@@ -32,12 +43,44 @@ export default function SettingsScreen() {
   };
 
   const openAccountSheet = () => {
+    setDisplayName(user?.displayName || "");
+    setEmail(user?.email || "");
+    setPhone(user?.phone || "");
+    setBio(user?.bio || "");
     accountSheetRef.current?.present();
   };
+
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.displayName || "");
+      setEmail(user.email || "");
+      setPhone(user.phone || "");
+      setBio(user.bio || "");
+    }
+  }, [user]);
 
   const handleSignOut = async () => {
     accountSheetRef.current?.dismiss();
     await signOut();
+  };
+
+  const handleSaveProfile = async () => {
+    if (!displayName.trim()) {
+      return;
+    }
+
+    if (!email.trim()) {
+      return;
+    }
+
+    setSaving(true);
+    await updateProfile({
+      displayName: displayName.trim(),
+      email: email.trim(),
+      phone: phone.trim(),
+      bio: bio.trim(),
+    });
+    setSaving(false);
   };
 
   return (
@@ -53,9 +96,13 @@ export default function SettingsScreen() {
           ]}
         >
           <View style={[styles.avatar, { backgroundColor: colors.cardSoft }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {(user?.displayName || user?.username || "M").charAt(0).toUpperCase()}
-            </Text>
+            {user?.avatarUrl ? (
+              <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={[styles.avatarText, { color: colors.primary }]}>
+                {(user?.displayName || user?.username || "M").charAt(0).toUpperCase()}
+              </Text>
+            )}
           </View>
           <View style={styles.profileText}>
             <Text style={[styles.profileName, { color: colors.text }]}>
@@ -143,10 +190,7 @@ export default function SettingsScreen() {
           <Text style={[styles.sheetTitle, { color: colors.text }]}>
             Tài khoản
           </Text>
-          <Text style={[styles.sheetSubtitle, { color: colors.muted }]}>
-            Màn hình này thay thế modal profile rỗng trên web bằng bottom sheet để
-            thao tác nhanh hơn trên mobile.
-          </Text>
+          
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
             <Text style={[styles.infoLabel, { color: colors.muted }]}>Email</Text>
@@ -157,14 +201,104 @@ export default function SettingsScreen() {
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
             <Text style={[styles.infoLabel, { color: colors.muted }]}>
-              Display name
+              Tên đăng nhập
             </Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user?.displayName || "Chưa cập nhật"}
+              {user?.username || "Chưa cập nhật"}
             </Text>
           </View>
 
           
+          <View style={[styles.infoBox, { borderColor: colors.border }]}>
+            <Text style={[styles.infoLabel, { color: colors.muted }]}>Avatar</Text>
+            <View style={styles.avatarRow}>
+              <View style={[styles.avatarSmall, { backgroundColor: colors.cardSoft }]}>
+                {user?.avatarUrl ? (
+                  <Image source={{ uri: user.avatarUrl }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={[styles.avatarTextSmall, { color: colors.primary }]}>
+                    {(user?.displayName || user?.username || "M").charAt(0).toUpperCase()}
+                  </Text>
+                )}
+              </View>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                {user?.avatarUrl ? "Da co avatar" : "Chua co avatar"}
+              </Text>
+            </View>
+          </View>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
+          >
+            <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Tên hiển thị</Text>
+                <TextInput
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Email</Text>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Số điện thoại</Text>
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                  ]}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Giới thiệu</Text>
+                <TextInput
+                  value={bio}
+                  onChangeText={setBio}
+                  multiline
+                  style={[
+                    styles.input,
+                    styles.inputMultiline,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                  ]}
+                />
+              </View>
+
+              <Pressable
+                onPress={handleSaveProfile}
+                disabled={saving}
+                style={[
+                  styles.saveButton,
+                  { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 },
+                ]}
+              >
+                <Text style={styles.saveButtonText}>
+                  {saving ? "Dang luu..." : "Luu thong tin"}
+                </Text>
+              </Pressable>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </BottomSheetView>
       </BottomSheetModal>
     </SafeAreaView>
@@ -193,6 +327,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 20,
   },
   avatarText: {
     fontSize: 24,
@@ -278,6 +417,59 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
     marginTop: 4,
+  },
+  avatarRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  avatarSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarTextSmall: {
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  formContent: {
+    gap: 12,
+    paddingBottom: 8,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  inputMultiline: {
+    minHeight: 90,
+    textAlignVertical: "top",
+  },
+  saveButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    paddingVertical: 12,
+    marginTop: 6,
+  },
+  saveButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
   },
   signOutButton: {
     flexDirection: "row",

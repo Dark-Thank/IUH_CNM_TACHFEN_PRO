@@ -84,6 +84,12 @@ export interface SocketState {
 
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
+  updateProfile: (payload: {
+    displayName?: string;
+    email?: string;
+    bio?: string;
+    phone?: string;
+  }) => Promise<void>;
 }
 
 export interface FriendState {

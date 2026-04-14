@@ -24,4 +24,15 @@ export const useUserStore = create<UserState>(() => ({
       toast.error("Upload avatar khong thanh cong.");
     }
   },
+  updateProfile: async (payload) => {
+    try {
+      const { setUser } = useAuthStore.getState();
+      const updatedUser = await userService.updateProfile(payload);
+      setUser(updatedUser);
+      toast.success("Cap nhat thong tin thanh cong.");
+    } catch (error) {
+      console.error("Loi khi updateProfile", error);
+      toast.error("Cap nhat thong tin that bai.");
+    }
+  },
 }));

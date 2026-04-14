@@ -12,4 +12,13 @@ export const userService = {
 
     return res.data;
   },
+  updateProfile: async (payload: {
+    displayName?: string;
+    email?: string;
+    bio?: string;
+    phone?: string;
+  }) => {
+    const res = await api.patch("/users/me", payload);
+    return res.data.user;
+  },
 };
