@@ -94,7 +94,8 @@ const MessageItem = ({
                 {/* seen/ delivered */}
                 {selectedConvo.type === "direct" &&
   message.isOwn &&
-  message._id === selectedConvo.lastMessage?._id && (
+  message._id === selectedConvo.lastMessage?._id &&
+  message.content &&  (
     <Badge>
       {lastMessageStatus}
     </Badge>
