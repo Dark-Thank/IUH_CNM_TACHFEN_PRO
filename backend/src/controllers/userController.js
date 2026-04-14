@@ -1,5 +1,6 @@
-import User from "../models/User.js";
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import User from "../models/User.js";
+
 export const authMe = async (req, res) => {
   try {
     const user = req.user; // lấy từ authMiddleware
@@ -31,6 +32,29 @@ export const searchUserByUsername = async (req, res) => {
     return res.status(200).json({ user });
   } catch (error) {
     console.error("Lỗi xảy ra khi searchUserByUsername", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "Cần cung cấp userId." });
+    }
+
+    const user = await User.findById(userId).select(
+      "_id displayName username avatarUrl email bio phone createdAt"
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+
+    return res.status(200).json({ user });
+  } catch (error) {
+    console.error("Lỗi xảy ra khi getUserById", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

@@ -49,16 +49,8 @@ export interface ChatState {
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
 
-  sendDirectMessage: (
-    recipientId: string,
-    content: string,
-    imgUrl?: string
-  ) => Promise<void>;
-  sendGroupMessage: (
-    conversationId: string,
-    content: string,
-    imgUrl?: string
-  ) => Promise<void>;
+  sendDirectMessage: (userId: string, formData: FormData) => Promise<void>;
+  sendGroupMessage: (conversationId: string, formData: FormData) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
 
@@ -97,5 +89,6 @@ export interface FriendState {
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
+  removeFriend: (friendId: string) => Promise<void>;
 }
 

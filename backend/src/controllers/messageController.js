@@ -1,12 +1,14 @@
+import Block from "../models/Block.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
-import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
 import { io } from "../socket/index.js";
+
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
+
 export const sendDirectMessage = async (req, res) => {
     try {
         
-       
         const { recipientId, content, conversationId } = req.body;
         const senderId = req.user._id;
 
@@ -18,7 +20,15 @@ export const sendDirectMessage = async (req, res) => {
             return res.status(400).json({ message: "Tin nhắn rỗng" });
         }
 
-        
+        // Check if recipient has blocked sender
+        const isBlocked = await Block.findOne({
+            blocker: recipientId,
+            blocked: senderId
+        });
+
+        if (isBlocked) {
+            return res.status(403).json({ message: "Bạn không thể gửi tin nhắn cho người dùng này vì đã bị chặn" });
+        }
 
         if (conversationId) {
             conversation = await Conversation.findById(conversationId);

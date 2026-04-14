@@ -14,6 +14,10 @@ export interface Friend {
   username: string;
   displayName: string;
   avatarUrl?: string;
+  email?: string;
+  bio?: string;
+  phone?: string;
+  createdAt?: string;
 }
 
 export interface FriendRequest {
