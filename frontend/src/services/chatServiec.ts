@@ -1,4 +1,3 @@
-
 import api from "@/lib/axios";
 import type { ConversationResponse, Message } from "@/types/chat";
 
@@ -65,4 +64,15 @@ export const chatService = {
     const res = await api.post("/conversations", { type, name, memberIds });
     return res.data.conversation;
   },
+
+  async togglePinMessage(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/pin`);
+    return res.data.message;
+  },
+
+  async recallMessage(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/recall`);
+    return res.data;
+  },
 };
+

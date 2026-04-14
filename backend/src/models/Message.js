@@ -19,8 +19,27 @@ const messageSchema = new mongoose.Schema({
     },
     imgUrl: {
         type: String
-    },  
+    },
+    isPinned: {
+        type: Boolean,
+        default: false
+    },
+    pinnedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+    },
+    pinnedAt: {
+        type: Date
+    },
+    isRecalled: {
+        type: Boolean,
+        default: false
+    },
+    recalledAt: {
+        type: Date
+    }  
 }, { timestamps: true }
+
 );
 
 messageSchema.index({conversationId: 1, createdAt: -1 });
