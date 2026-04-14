@@ -1,4 +1,4 @@
-export interface Participant {
+  export interface Participant {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
@@ -49,8 +49,19 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+
   imgUrls?: string[]; // FIX HERE
+
+ 
+  isPinned?: boolean;
+  pinnedBy?: string;
+  pinnedAt?: string;
+  isRecalled?: boolean;
+  recalledAt?: string;
+
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
+
 }
+

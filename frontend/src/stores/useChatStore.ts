@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
+import type { Message } from "@/types/chat";
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -11,10 +12,9 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messages: {},
       activeConversationId: null,
-      convoLoading: false, // convo loading
-      messageLoading: false, // message loading
+      convoLoading: false,
+      messageLoading: false,
       loading: false,
-
 
       setActiveConversation: (id) => set({ activeConversationId: id }),
       reset: () => {
@@ -86,35 +86,35 @@ export const useChatStore = create<ChatState>()(
         }
       },
       sendDirectMessage: async (recipientId, formData?: FormData) => {
-  try {
-    const { activeConversationId } = get();
+        try {
+          const { activeConversationId } = get();
 
-    const data = formData || new FormData();
+          const data = formData || new FormData();
 
-    data.append("recipientId", recipientId);
+          data.append("recipientId", recipientId);
 
-    if (activeConversationId) {
-      data.append("conversationId", activeConversationId);
-    }
+          if (activeConversationId) {
+            data.append("conversationId", activeConversationId);
+          }
 
-    await chatService.sendDirectMessage(data);
+          await chatService.sendDirectMessage(data);
 
-  } catch (error) {
-    console.error(error);
-  }
-},
+        } catch (error) {
+          console.error(error);
+        }
+      },
       sendGroupMessage: async (conversationId, formData?: FormData) => {
-  try {
-    const data = formData || new FormData();
+        try {
+          const data = formData || new FormData();
 
-    data.append("conversationId", conversationId);
+          data.append("conversationId", conversationId);
 
-    await chatService.sendGroupMessage(data);
+          await chatService.sendGroupMessage(data);
 
-  } catch (error) {
-    console.error(error);
-  }
-},
+        } catch (error) {
+          console.error(error);
+        }
+      },
       addMessage: async (message) => {
         try {
           const { user } = useAuthStore.getState();
@@ -151,13 +151,14 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy khi ra add message:", error);
         }
       },
-        updateConversation: (conversation) => {
+      updateConversation: (conversation: any) => {
         set((state) => ({
           conversations: state.conversations.map((c) =>
             c._id === conversation._id ? { ...c, ...conversation } : c
           ),
         }));
       },
+
       markAsSeen: async () => {
         try {
           const { user } = useAuthStore.getState();
@@ -190,9 +191,7 @@ export const useChatStore = create<ChatState>()(
               }
                 : c
             ))
-          }))
-
-
+          }));
         } catch (error) {
           console.error("Lỗi xảy ra khi goi markAsSeen trong store:", error);
         }
@@ -231,10 +230,78 @@ export const useChatStore = create<ChatState>()(
           set({ loading: false });
         }
       },
+
+      togglePinMessage: async (messageId: string) => {
+        try {
+          const { activeConversationId, messages } = get();
+          if (!activeConversationId) return;
+
+          const data = await chatService.togglePinMessage(messageId);
+
+          set((state) => {
+            const convoMessages = state.messages[activeConversationId];
+            if (!convoMessages) return state;
+
+            const updatedItems = convoMessages.items.map((m) =>
+              m._id === messageId
+                ? { ...m, isPinned: data.isPinned, pinnedBy: data.pinnedBy, pinnedAt: data.pinnedAt }
+                : m
+            );
+
+            return {
+              ...state,
+              messages: {
+                ...state.messages,
+                [activeConversationId]: {
+                  ...convoMessages,
+                  items: updatedItems,
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Lỗi khi toggle pin message:", error);
+        }
+      },
+
+      recallMessage: async (messageId: string) => {
+        try {
+          const { activeConversationId, messages } = get();
+          if (!activeConversationId) return;
+
+          const data = await chatService.recallMessage(messageId);
+
+          set((state) => {
+            const convoMessages = state.messages[activeConversationId];
+            if (!convoMessages) return state;
+
+            const updatedItems = convoMessages.items.map((m) =>
+              m._id === messageId
+                ? { ...m, ...data }
+                : m
+            );
+
+            return {
+              ...state,
+              messages: {
+                ...state.messages,
+                [activeConversationId]: {
+                  ...convoMessages,
+                  items: updatedItems,
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Lỗi khi thu hồi tin nhắn:", error);
+        }
+      },
     }),
+
     {
       name: "chat-storage",
       partialize: (state) => ({ conversations: state.conversations }),
     }
   )
 );
+

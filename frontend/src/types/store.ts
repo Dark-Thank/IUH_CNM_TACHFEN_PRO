@@ -48,10 +48,22 @@ export interface ChatState {
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
-  sendDirectMessage: (recipientId: string, formData?: FormData) => Promise<void>;
-  sendGroupMessage: (conversationId: string, formData?: FormData) => Promise<void>;
-  // add message
+
+  sendDirectMessage: (
+    recipientId: string,
+    content: string,
+    imgUrl?: string
+  ) => Promise<void>;
+  sendGroupMessage: (
+    conversationId: string,
+    content: string,
+    imgUrl?: string
+  ) => Promise<void>;
+  togglePinMessage: (messageId: string) => Promise<void>;
+  recallMessage: (messageId: string) => Promise<void>;
+
   addMessage: (message: Message) => Promise<void>;
+
   // update convo
   updateConversation: (conversation: unknown) => void;
   markAsSeen: () => Promise<void>;
@@ -70,16 +82,8 @@ export interface SocketState {
   disconnectSocket: () => void;
 }
 
-
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
-}
-
-export interface SocketState {
-  socket: Socket | null;
-  onlineUsers: string[];
-  connectSocket: () => void;
-  disconnectSocket: () => void;
 }
 
 export interface FriendState {
@@ -94,3 +98,4 @@ export interface FriendState {
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
 }
+

@@ -1,10 +1,16 @@
 import express from 'express';
-import { sendDirectMessage, sendGroupMessage } from '../controllers/messageController.js';
+import { sendDirectMessage, sendGroupMessage, togglePinMessage, recallMessage } from '../controllers/messageController.js';
 import { checkFriendship } from '../middlewares/friendMiddleware.js';
 import { checkGroupMembership } from '../middlewares/friendMiddleware.js';
-import { upload } from "../middlewares/uploadMiddleware.js";
+
+import { protectedRoute } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
+
+router.put('/:messageId/pin', protectedRoute, togglePinMessage);
+router.put('/:messageId/recall', protectedRoute, recallMessage);
+import { upload } from "../middlewares/uploadMiddleware.js";
+
 
 
 

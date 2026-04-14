@@ -77,7 +77,51 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
     });
+
+    // message pinned
+    socket.on("messagePinned", ({ messageId, isPinned, pinnedBy, pinnedAt }) => {
+      const updatePin = () => {
+        const chatStore = useChatStore.getState();
+        const { activeConversationId, messages } = chatStore;
+        if (!activeConversationId) return;
+
+        const convoMessages = messages[activeConversationId];
+        if (!convoMessages) return;
+
+        const updatedItems = convoMessages.items.map((m) =>
+          m._id === messageId 
+            ? { ...m, isPinned, pinnedBy: pinnedBy, pinnedAt: pinnedAt?.toString() }
+            : m
+        );
+
+        chatStore.messages[activeConversationId].items = updatedItems;
+      };
+      updatePin();
+    });
+
+    // message recalled
+    socket.on("messageRecalled", ({ messageId, content, isRecalled, recalledAt }) => {
+      const updateRecall = () => {
+        const chatStore = useChatStore.getState();
+        const { activeConversationId, messages } = chatStore;
+        if (!activeConversationId) return;
+
+        const convoMessages = messages[activeConversationId];
+        if (!convoMessages) return;
+
+        const updatedItems = convoMessages.items.map((m) =>
+          m._id === messageId 
+            ? { ...m, content, isRecalled, recalledAt }
+            : m
+        );
+
+        chatStore.messages[activeConversationId].items = updatedItems;
+      };
+      updateRecall();
+    });
   },
+
+
   disconnectSocket: () => {
     const socket = get().socket;
     if (socket) {
