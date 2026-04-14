@@ -9,7 +9,7 @@ export const sendDirectMessage = async (req, res) => {
     try {
         const { recipientId, content, conversationId } = req.body;
         const senderId = req.user._id;
-        
+
         let conversation;
 
         //  CHO PHÉP gửi ảnh mà không cần text
@@ -50,7 +50,7 @@ export const sendDirectMessage = async (req, res) => {
             conversationId: conversation._id,
             senderId,
             content,
-            imgUrl: imageUrl, 
+            imgUrl: imageUrl,
         });
 
         updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -91,7 +91,7 @@ export const sendGroupMessage = async (req, res) => {
             conversationId,
             senderId,
             content,
-            imgUrl: imageUrl, 
+            imgUrl: imageUrl,
         });
 
         updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -109,4 +109,69 @@ export const sendGroupMessage = async (req, res) => {
 
 
 
+};
+
+export const togglePinMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // Toggle pin
+        const now = new Date();
+        if (message.isPinned) {
+            message.isPinned = false;
+            message.pinnedBy = undefined;
+            message.pinnedAt = undefined;
+        } else {
+            message.isPinned = true;
+            message.pinnedBy = userId;
+            message.pinnedAt = now;
+        }
+
+        await message.save();
+
+        // notify via socket
+        io.to(message.conversationId.toString()).emit("update-message", { message });
+
+        return res.status(200).json({ message });
+    } catch (error) {
+        console.error("Lỗi khi toggle pin message:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const recallMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user._id;
+
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({ message: "Message not found" });
+        }
+
+        // only sender can recall
+        if (message.senderId.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Not allowed to recall this message" });
+        }
+
+        message.isRecalled = true;
+        message.recalledAt = new Date();
+
+        await message.save();
+
+        io.to(message.conversationId.toString()).emit("update-message", { message });
+
+        return res.status(200).json({ message });
+    } catch (error) {
+        console.error("Lỗi khi thu hồi tin nhắn:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
 };

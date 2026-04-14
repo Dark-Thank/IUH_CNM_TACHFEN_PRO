@@ -86,35 +86,35 @@ export const useChatStore = create<ChatState>()(
         }
       },
       sendDirectMessage: async (recipientId, formData?: FormData) => {
-  try {
-    const { activeConversationId } = get();
+        try {
+          const { activeConversationId } = get();
 
-    const data = formData || new FormData();
+          const data = formData || new FormData();
 
-    data.append("recipientId", recipientId);
+          data.append("recipientId", recipientId);
 
-    if (activeConversationId) {
-      data.append("conversationId", activeConversationId);
-    }
+          if (activeConversationId) {
+            data.append("conversationId", activeConversationId);
+          }
 
-    await chatService.sendDirectMessage(data);
+          await chatService.sendDirectMessage(data);
 
-  } catch (error) {
-    console.error(error);
-  }
-},
+        } catch (error) {
+          console.error(error);
+        }
+      },
       sendGroupMessage: async (conversationId, formData?: FormData) => {
-  try {
-    const data = formData || new FormData();
+        try {
+          const data = formData || new FormData();
 
-    data.append("conversationId", conversationId);
+          data.append("conversationId", conversationId);
 
-    await chatService.sendGroupMessage(data);
+          await chatService.sendGroupMessage(data);
 
-  } catch (error) {
-    console.error(error);
-  }
-},
+        } catch (error) {
+          console.error(error);
+        }
+      },
       addMessage: async (message) => {
         try {
           const { user } = useAuthStore.getState();
@@ -243,7 +243,7 @@ export const useChatStore = create<ChatState>()(
             if (!convoMessages) return state;
 
             const updatedItems = convoMessages.items.map((m) =>
-              m._id === messageId 
+              m._id === messageId
                 ? { ...m, isPinned: data.isPinned, pinnedBy: data.pinnedBy, pinnedAt: data.pinnedAt }
                 : m
             );
@@ -276,7 +276,7 @@ export const useChatStore = create<ChatState>()(
             if (!convoMessages) return state;
 
             const updatedItems = convoMessages.items.map((m) =>
-              m._id === messageId 
+              m._id === messageId
                 ? { ...m, ...data }
                 : m
             );
@@ -304,7 +304,4 @@ export const useChatStore = create<ChatState>()(
     }
   )
 );
-<<<<<<< HEAD
 
-=======
->>>>>>> 55e1af829dba7c7c1985356b2320d8cd4981b281
