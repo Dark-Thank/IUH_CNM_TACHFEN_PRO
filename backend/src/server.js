@@ -53,7 +53,7 @@ app.use('/api/messages', messageRoute);
 app.use('/api/conversations', conversationRoute);
 
 connectDB().then(() => {
-  server.listen(PORT, () => {
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`server bắt đầu trên cổng ${PORT}`);
   });
 });
