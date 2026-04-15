@@ -44,10 +44,25 @@ export const useAuthStore = create<AuthState>()(
             lastName
           );
 
-          toast.success("Dang ky thanh cong! Ban se duoc chuyen sang trang dang nhap.");
-        } catch (error) {
-          console.error(error);
-          toast.error("Dang ky khong thanh cong.");
+          // store pending otp email so UI can show OTP verify flow
+          set({ pendingOtpEmail: email });
+          const successMsg = "Da gui ma OTP toi email. Vui long xac thuc de hoan tat dang ky.";
+          toast.success(successMsg);
+          return { ok: true } as const;
+        } catch (error: any) {
+          // Prefer backend error message when available
+          const message = error?.response?.data?.message ?? "Dang ky khong thanh cong.";
+
+          // Avoid noisy Axios stack traces for expected client errors (4xx)
+          const status = error?.response?.status;
+          if (status && status >= 400 && status < 500) {
+            console.warn("[Auth][signUp]", status, message);
+          } else {
+            console.error(error);
+          }
+
+          toast.error(message);
+          return { ok: false, message } as const;
         } finally {
           set({ loading: false });
         }

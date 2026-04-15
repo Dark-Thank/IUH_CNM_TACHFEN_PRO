@@ -80,7 +80,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
       return;
     }
 
-    await signUp(
+    const res = await signUp(
       username.trim(),
       password,
       email.trim(),
@@ -88,7 +88,23 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
       lastName.trim()
     );
 
-    onSignInPress?.();
+    // signUp now returns { ok: boolean, message?: string }
+    if (res && (res as any).ok) {
+      onSignInPress?.();
+      return;
+    }
+
+    // show field-specific errors if backend indicates existing username/email
+    const message = (res as any)?.message;
+    if (typeof message === "string") {
+      const lower = message.toLowerCase();
+      if (lower.includes("username") || lower.includes("username đã tồn tại") || lower.includes("username đã")) {
+        setErrors((current) => ({ ...current, username: "Username đã tồn tại." }));
+      }
+      if (lower.includes("email") || lower.includes("email đã tồn tại") || lower.includes("email đã")) {
+        setErrors((current) => ({ ...current, email: "Email đã tồn tại." }));
+      }
+    }
   };
 
   return (
