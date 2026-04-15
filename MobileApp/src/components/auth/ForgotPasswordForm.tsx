@@ -1,7 +1,6 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useState } from "react";
-import { toast } from "@/lib/toast";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
@@ -18,16 +17,16 @@ interface Props {
     onCancel?: () => void;
 }
 
-export default function OtpVerifyForm({ onCancel }: Props) {
+export default function ForgotPasswordForm({ onCancel }: Props) {
     const { isDark } = useThemeStore();
-    const { pendingOtpEmail, verifyOtp, loading } = useAuthStore();
-    const [otp, setOtp] = useState("");
+    const { forgotPassword, loading } = useAuthStore();
+    const [email, setEmail] = useState("");
+
     const colors = getColors(isDark);
 
     const handleSubmit = async () => {
-        if (!pendingOtpEmail) return;
-
-        await verifyOtp(pendingOtpEmail, otp.trim());
+        if (!email) return;
+        await forgotPassword?.(email.trim());
     };
 
     return (
@@ -37,19 +36,18 @@ export default function OtpVerifyForm({ onCancel }: Props) {
                 style={styles.keyboardView}
             >
                 <View style={[styles.container, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.title, { color: colors.text }]}>Xác thực OTP</Text>
-                    <Text style={[styles.help, { color: colors.muted }]}>Mã OTP đã được gửi tới: {pendingOtpEmail}</Text>
+                    <Text style={[styles.title, { color: colors.text }]}>Quên mật khẩu</Text>
+                    <Text style={[styles.help, { color: colors.muted }]}>Nhập email để nhận mã đặt lại mật khẩu.</Text>
 
                     <TextInput
-                        value={otp}
-                        onChangeText={setOtp}
-                        placeholder="Nhập mã OTP"
+                        value={email}
+                        onChangeText={setEmail}
+                        placeholder="Email"
                         placeholderTextColor={colors.placeholder}
-                        keyboardType="number-pad"
+                        keyboardType="email-address"
+                        autoCapitalize="none"
                         style={[styles.input, { backgroundColor: colors.input, color: colors.text, borderColor: colors.border }]}
                     />
-
-                    {/* OTP-only flow (used for sign-in / sign-up) */}
 
                     <Pressable
                         onPress={handleSubmit}
@@ -59,12 +57,12 @@ export default function OtpVerifyForm({ onCancel }: Props) {
                             { backgroundColor: colors.primary, opacity: loading ? 0.65 : pressed ? 0.88 : 1 },
                         ]}
                     >
-                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Xác thực</Text>}
+                        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Gửi mã đặt lại</Text>}
                     </Pressable>
 
                     <View style={styles.row}>
                         <Pressable onPress={onCancel}>
-                            <Text style={[styles.cancelText, { color: colors.muted }]}>Hủy</Text>
+                            <Text style={[styles.cancelText, { color: colors.muted }]}>Quay lại</Text>
                         </Pressable>
                     </View>
                 </View>
@@ -101,16 +99,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         paddingHorizontal: 12,
         marginTop: 12,
-    },
-    inputShell: {
-        minHeight: 48,
-        borderRadius: 12,
-        borderWidth: 1,
-        paddingHorizontal: 12,
-        marginTop: 12,
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
     },
     submit: { minHeight: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 12 },
     submitText: { color: "#fff", fontWeight: "800" },

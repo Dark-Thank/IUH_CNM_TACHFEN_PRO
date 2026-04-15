@@ -6,6 +6,8 @@ export interface AuthState {
   accessToken: string | null;
   user: User | null;
   loading: boolean;
+  pendingOtpEmail?: string | null;
+  pendingOtpForReset?: boolean;
 
   setAccessToken: (accessToken: string) => void;
   setUser: (user: User) => void;
@@ -18,6 +20,9 @@ export interface AuthState {
     lastName: string
   ) => Promise<void>;
   signIn: (username: string, password: string) => Promise<void>;
+  forgotPassword?: (email: string) => Promise<void>;
+  verifyOtp?: (email: string, otp: string) => Promise<void>;
+  resetPassword?: (email: string, otp: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -42,7 +47,7 @@ export interface ChatState {
   activeConversationId: string | null;
   convoLoading: boolean;
   messageLoading: boolean;
-  loading:boolean;
+  loading: boolean;
   reset: () => void;
 
   setActiveConversation: (id: string | null) => void;
@@ -63,7 +68,7 @@ export interface ChatState {
   // update convo
   updateConversation: (conversation: Partial<Conversation> & { _id: string }) => void;
   markAsSeen: () => Promise<void>;
-  addConvo:(convo: Conversation) => void;
+  addConvo: (convo: Conversation) => void;
   createConversation: (
     type: "group" | "direct",
     name: string,

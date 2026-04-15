@@ -35,6 +35,24 @@ export const authService = {
     return res.data; // { accessToken }
   },
 
+  forgotPassword: async (email: string) => {
+    const res = await api.post(
+      "/auth/forgot-password",
+      { email },
+      { withCredentials: true }
+    );
+    return res.data;
+  },
+
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    const res = await api.post(
+      "/auth/reset-password",
+      { email, otp, newPassword },
+      { withCredentials: true }
+    );
+    return res.data;
+  },
+
   signOut: async () => {
     return api.post("/auth/signout", undefined, { withCredentials: true });
   },

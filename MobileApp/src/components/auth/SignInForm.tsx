@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 interface SignInFormProps {
   onSignUpPress?: () => void;
+  onForgotPress?: () => void;
 }
 
 type SignInErrors = {
@@ -24,7 +25,7 @@ type SignInErrors = {
   password?: string;
 };
 
-export default function SignInForm({ onSignUpPress }: SignInFormProps) {
+export default function SignInForm({ onSignUpPress, onForgotPress }: SignInFormProps) {
   const { isDark } = useThemeStore();
   const { loading, signIn } = useAuthStore();
   const [username, setUsername] = useState("");
@@ -53,8 +54,11 @@ export default function SignInForm({ onSignUpPress }: SignInFormProps) {
     if (!validate() || loading) {
       return;
     }
-
-    await signIn(username.trim(), password);
+    try {
+      await signIn(username.trim(), password);
+    } catch (e) {
+      // Đã toast lỗi ở store, không throw lại để tránh RN overlay
+    }
   };
 
   return (
@@ -204,6 +208,11 @@ export default function SignInForm({ onSignUpPress }: SignInFormProps) {
                 <Text style={[styles.switchLink, { color: colors.primary }]}>
                   Đăng ký
                 </Text>
+              </Pressable>
+            </View>
+            <View style={[styles.switchRow, { marginTop: 8 }]}>
+              <Pressable onPress={() => onForgotPress?.()}>
+                <Text style={[styles.switchLink, { color: colors.primary }]}>Quên mật khẩu?</Text>
               </Pressable>
             </View>
           </View>

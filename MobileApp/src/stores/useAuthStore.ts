@@ -14,6 +14,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       loading: false,
       pendingOtpEmail: null,
+      pendingOtpForReset: false,
 
       setAccessToken: (accessToken) => {
         authSession.setAccessToken(accessToken);
@@ -68,6 +69,22 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      forgotPassword: async (email: string) => {
+        try {
+          // immediately mark pending reset flow so UI navigates to OTP input quickly
+          set({ pendingOtpEmail: email, pendingOtpForReset: true, loading: true });
+          await authService.forgotPassword(email);
+          toast.success("Nếu email tồn tại, mã reset đã được gửi.");
+        } catch (error) {
+          console.error(error);
+          toast.error("Gửi mã reset thất bại.");
+          // keep pending state so user can still enter OTP if server actually sent it
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
       signIn: async (username, password) => {
         try {
           get().clearState();
@@ -81,8 +98,11 @@ export const useAuthStore = create<AuthState>()(
           return res;
         } catch (error) {
           console.error(error);
-          toast.error("Dang nhap khong thanh cong.");
-          throw error;
+          // Hiển thị message cụ thể từ backend nếu có
+          const serverMessage = (error as any)?.response?.data?.message || (error as any)?.message;
+          toast.error(serverMessage || "Tên đăng nhập hoặc mật khẩu không trùng khớp.");
+          // Không throw error ra ngoài để tránh RN alert mặc định
+          return null;
         } finally {
           set({ loading: false });
         }
