@@ -1,7 +1,8 @@
 import { authSession } from "@/lib/authSession";
 import axios, { type AxiosRequestHeaders } from "axios";
 
-const BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST ?? "192.168.100.247";
+// Default to the dev machine LAN IP (used by Expo Go). Override with EXPO_PUBLIC_BACKEND_HOST or EXPO_PUBLIC_API_URL.
+const BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST ?? "172.20.10.5";
 const BACKEND_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT ?? "5001";
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
@@ -12,6 +13,12 @@ const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
 });
+
+// Helpful debug: show computed API URL in Metro logs when the app starts
+try {
+  // eslint-disable-next-line no-console
+  console.log("[MobileApp] API_URL=", API_URL);
+} catch (e) { }
 
 api.interceptors.request.use((config) => {
   const accessToken = authSession.getAccessToken();
@@ -35,6 +42,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
+    // Log network errors for easier debugging in Metro/Expo logs
+    if (!error.response) {
+      // eslint-disable-next-line no-console
+      console.error("[MobileApp][Axios] Network or CORS error:", error.message, error.config?.url);
+      return Promise.reject(error);
+    }
     const originalRequest = error.config;
     const originalUrl = originalRequest?.url ?? "";
 

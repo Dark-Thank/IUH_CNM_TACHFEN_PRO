@@ -2,7 +2,7 @@ import type { SocketState } from "@/types/store";
 import { authSession } from "@/lib/authSession";
 import { socketEmitter } from "@/lib/socketEmitter";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
-import { io, type Socket } from "socket.io-client";
+import type { Socket } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
 
@@ -57,7 +57,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       return;
     }
 
-    const socket: Socket = io(baseURL, {
+    // Dynamically require socket.io-client at runtime to ensure Metro/webpack
+    // picks the browser build for web and avoids node-only modules like 'fs'.
+    // Use runtime require instead of static import to prevent bundlers
+    // from pulling Node-specific entry points.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const socketLib: any = (typeof window !== "undefined" && typeof document !== "undefined")
+      ? require("socket.io-client/dist/socket.io.js")
+      : require("socket.io-client");
+
+    const ioClient = socketLib.io || socketLib.default || socketLib;
+
+    const socket: Socket = ioClient(baseURL, {
       auth: { token: accessToken },
       autoConnect: false,
       transports: ["websocket"],

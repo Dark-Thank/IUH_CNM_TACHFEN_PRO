@@ -13,6 +13,7 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       user: null,
       loading: false,
+      pendingOtpEmail: null,
 
       setAccessToken: (accessToken) => {
         authSession.setAccessToken(accessToken);
@@ -57,16 +58,35 @@ export const useAuthStore = create<AuthState>()(
           get().clearState();
           set({ loading: true });
 
-          const { accessToken } = await authService.signIn(username, password);
-          get().setAccessToken(accessToken);
+          // backend returns { message, userId, email }
+          const res = await authService.signIn(username, password);
+          set({ pendingOtpEmail: res.email });
 
-          await get().fetchMe();
-          await useChatStore.getState().fetchConversations();
-
-          toast.success("Chao mung ban quay lai voi Moji.");
+          toast.success("Da gui ma OTP toi email. Vui long kiem tra email.");
+          return res;
         } catch (error) {
           console.error(error);
           toast.error("Dang nhap khong thanh cong.");
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      verifyOtp: async (email, otp) => {
+        try {
+          set({ loading: true });
+          const res = await authService.verifyOtp(email, otp);
+          const { accessToken } = res;
+          get().setAccessToken(accessToken);
+          await get().fetchMe();
+          await useChatStore.getState().fetchConversations();
+          set({ pendingOtpEmail: null });
+          toast.success("Dang nhap thanh cong!");
+        } catch (error) {
+          console.error(error);
+          toast.error("Xac thuc OTP that bai.");
+          throw error;
         } finally {
           set({ loading: false });
         }

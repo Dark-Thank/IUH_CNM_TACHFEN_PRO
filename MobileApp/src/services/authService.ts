@@ -23,7 +23,16 @@ export const authService = {
       { username, password },
       { withCredentials: true }
     );
-    return res.data; // access token
+    return res.data; // { message, userId, email }
+  },
+
+  verifyOtp: async (email: string, otp: string) => {
+    const res = await api.post(
+      "/auth/verify-otp",
+      { email, otp },
+      { withCredentials: true }
+    );
+    return res.data; // { accessToken }
   },
 
   signOut: async () => {
