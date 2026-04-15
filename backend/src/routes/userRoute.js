@@ -5,13 +5,13 @@ import {
   getUserById,
   requestChangePassword,
   searchUserByUsername,
+  updateMe,
   uploadAvatar,
 } from "../controllers/userController.js";
 import { protectedRoute } from "../middlewares/authMiddleware.js";
 import { upload } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
-
 
 router.get("/me", protectedRoute, authMe);
 router.get("/search", protectedRoute, searchUserByUsername);
@@ -20,5 +20,6 @@ router.post("/change-password", protectedRoute, changePassword);
 router.post("/request-change-password", protectedRoute, requestChangePassword);
 
 router.get("/:userId", getUserById);
+e
 
 export default router;

@@ -1,0 +1,144 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authSession } from "@/lib/authSession";
+import { toast } from "@/lib/toast";
+import { authService } from "@/services/authService";
+import type { AuthState } from "@/types/store";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { useChatStore } from "./useChatStore";
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      accessToken: null,
+      user: null,
+      loading: false,
+
+      setAccessToken: (accessToken) => {
+        authSession.setAccessToken(accessToken);
+        set({ accessToken });
+      },
+
+      setUser: (user) => {
+        authSession.setCurrentUserId(user._id);
+        set({ user });
+      },
+
+      clearState: () => {
+        authSession.clear();
+        set({ accessToken: null, user: null, loading: false });
+        useChatStore.getState().reset();
+      },
+
+      signUp: async (username, password, email, firstName, lastName) => {
+        try {
+          set({ loading: true });
+          useChatStore.getState().reset();
+
+          await authService.signUp(
+            username,
+            password,
+            email,
+            firstName,
+            lastName
+          );
+
+          toast.success("Dang ky thanh cong! Ban se duoc chuyen sang trang dang nhap.");
+        } catch (error) {
+          console.error(error);
+          toast.error("Dang ky khong thanh cong.");
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      signIn: async (username, password) => {
+        try {
+          get().clearState();
+          set({ loading: true });
+
+          const { accessToken } = await authService.signIn(username, password);
+          get().setAccessToken(accessToken);
+
+          await get().fetchMe();
+          await useChatStore.getState().fetchConversations();
+
+          toast.success("Chao mung ban quay lai voi Moji.");
+        } catch (error) {
+          console.error(error);
+          toast.error("Dang nhap khong thanh cong.");
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      signOut: async () => {
+        try {
+          await authService.signOut();
+          get().clearState();
+          toast.success("Logout thanh cong.");
+        } catch (error) {
+          console.error(error);
+          get().clearState();
+          toast.error("Loi xay ra khi logout. Hay thu lai.");
+        }
+      },
+
+      fetchMe: async () => {
+        try {
+          set({ loading: true });
+          const user = await authService.fetchMe();
+          authSession.setCurrentUserId(user._id);
+          set({ user });
+        } catch (error) {
+          console.error(error);
+          authSession.clear();
+          set({ user: null, accessToken: null });
+          toast.error("Loi xay ra khi lay du lieu nguoi dung.");
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      refresh: async () => {
+        try {
+          set({ loading: true });
+          const { user, fetchMe, setAccessToken } = get();
+          const accessToken = await authService.refresh();
+
+          setAccessToken(accessToken);
+
+          if (!user) {
+            await fetchMe();
+          }
+        } catch (error) {
+          console.error(error);
+          toast.error("Phien dang nhap da het han. Vui long dang nhap lai.");
+          get().clearState();
+        } finally {
+          set({ loading: false });
+        }
+      },
+    }),
+    {
+      name: "auth-storage",
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (state) => ({
+        accessToken: state.accessToken,
+        user: state.user,
+      }),
+      onRehydrateStorage: () => (state) => {
+        authSession.setAccessToken(state?.accessToken ?? null);
+        authSession.setCurrentUserId(state?.user?._id ?? null);
+      },
+    }
+  )
+);
+
+authSession.setAccessTokenChangeHandler((accessToken) => {
+  useAuthStore.setState({ accessToken });
+});
+
+authSession.setUnauthorizedHandler(() => {
+  useAuthStore.getState().clearState();
+});
