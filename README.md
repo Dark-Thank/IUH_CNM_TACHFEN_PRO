@@ -1,5 +1,5 @@
 🚀 Hướng dẫn chạy chương trình
-🖥️ Backend
+---🖥️ Backend---
 # 1. Thêm file .env vào thư mục BE
 
 # 2. Cài dependencies
@@ -12,7 +12,7 @@ npm run dev
 Nếu cần tạo ACCESS_TOKEN_SECRET, chạy lệnh sau:
 
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-🌐 Frontend
+---🌐 Frontend---
 # 1. Cài dependencies
 npm install
 
