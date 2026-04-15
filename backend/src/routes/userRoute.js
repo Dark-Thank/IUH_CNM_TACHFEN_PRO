@@ -20,6 +20,5 @@ router.post("/change-password", protectedRoute, changePassword);
 router.post("/request-change-password", protectedRoute, requestChangePassword);
 
 router.get("/:userId", getUserById);
-e
 
 export default router;
