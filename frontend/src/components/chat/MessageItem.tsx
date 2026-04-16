@@ -13,6 +13,7 @@ import { MoreVertical, Trash2 } from "lucide-react";
 import UserAvatar from "./UserAvatar";
 import RecallConfirmDialog from "./RecallConfirmDialog";
 import { useChatStore } from "@/stores/useChatStore";
+import { chatService } from "@/services/chatServiec";
 
 interface MessageItemProps {
   message: Message;
@@ -30,6 +31,14 @@ const MessageItem = ({
   lastMessageStatus,
 }: MessageItemProps) => {
   const { togglePinMessage } = useChatStore();
+
+  const handleDownloadFile = async (fileIndex: number, fileName: string) => {
+    try {
+      await chatService.downloadMessageFile(message._id, fileIndex, fileName);
+    } catch (error) {
+      console.error("Lỗi khi tải file:", error);
+    }
+  };
 
   const prev =
     index + 1 < messages.length ? messages[index + 1] : undefined;
@@ -134,20 +143,20 @@ const MessageItem = ({
           </Card>
           {/* FILES */}
           {/* FILES */}
-{(message.fileUrls || []).length > 0 && (
-  <div className="mt-2 space-y-1">
-    {message.fileUrls!.map((file, index) => (
-      <a
-        key={index}
-        href={file.url}
-        target="_blank"
-        className="block text-sm text-blue-500 underline"
-      >
-        📎 {file.name}
-      </a>
-    ))}
-  </div>
-)}
+          {(message.fileUrls || []).length > 0 && (
+            <div className="mt-2 space-y-1">
+              {message.fileUrls!.map((file, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => void handleDownloadFile(index, file.name)}
+                  className="block text-sm text-blue-500 underline text-left"
+                >
+                  📎 {file.name}
+                </button>
+              ))}
+            </div>
+          )}
           {/* ACTION MENU */}
           <DropdownMenu>
             <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 flex-shrink-0 self-center">

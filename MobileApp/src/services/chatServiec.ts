@@ -1,7 +1,27 @@
+import { authSession } from "@/lib/authSession";
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import api from "@/lib/axios";
 import type { ConversationResponse, Message } from "@/types/chat";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 const pageLimit = 50;
+const attachmentDirectory = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}attachments/`;
+
+const sanitizeAttachmentFileName = (value = "download") =>
+  value.replace(/[\\/:*?"<>|]/g, "-").trim() || "download";
+
+const ensureAttachmentDirectory = async () => {
+  const info = await FileSystem.getInfoAsync(attachmentDirectory);
+
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(attachmentDirectory, {
+      intermediates: true,
+    });
+  }
+
+  return attachmentDirectory;
+};
 
 interface FetchMessageProps {
   messages: Message[];
@@ -98,5 +118,42 @@ export const chatService = {
   async togglePinMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/pin`);
     return res.data.message;
+  },
+
+  async downloadMessageFile(
+    messageId: string,
+    fileIndex: number,
+    fileName: string,
+    mimeType?: string
+  ) {
+    const accessToken = authSession.getAccessToken();
+
+    if (!accessToken) {
+      throw new Error("Không tìm thấy access token");
+    }
+
+    const directory = await ensureAttachmentDirectory();
+    const localFileName = `${Date.now()}-${sanitizeAttachmentFileName(fileName)}`;
+    const fileUri = `${directory}${localFileName}`;
+    const downloadUrl = `${getApiBaseUrl()}/messages/${messageId}/files/${fileIndex}`;
+
+    const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (downloadResult.status !== 200) {
+      throw new Error(`Tải file thất bại với mã ${downloadResult.status}`);
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(downloadResult.uri, {
+        mimeType,
+        dialogTitle: fileName,
+      });
+    }
+
+    return downloadResult.uri;
   },
 };

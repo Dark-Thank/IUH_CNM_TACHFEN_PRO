@@ -51,12 +51,22 @@ export const useChatStore = create<ChatState>()(
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
 
+          const sortedConversations = conversations.sort(
+            (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
+          );
+
           set({
-            conversations: conversations.sort(
-              (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
-            ),
+            conversations: sortedConversations,
             convoLoading: false,
           });
+
+          const socket = useSocketStore.getState().socket;
+
+          if (socket?.connected) {
+            sortedConversations.forEach((conversation) => {
+              socket.emit("join-conversation", conversation._id);
+            });
+          }
         } catch (error) {
           console.error("Lỗi xảy ra khi fetchConversations:", error);
           set({ convoLoading: false });

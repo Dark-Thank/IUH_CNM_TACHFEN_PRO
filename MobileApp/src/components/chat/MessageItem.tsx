@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Pin } from "lucide-react-native";
+import { chatService } from "@/services/chatServiec";
 import { formatMessageTime } from "@/lib/utils";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
@@ -94,6 +95,24 @@ export default function MessageItem({
     );
   };
 
+  const handleOpenFile = async (
+    fileIndex: number,
+    fileName: string,
+    mimeType?: string
+  ) => {
+    try {
+      await chatService.downloadMessageFile(
+        message._id,
+        fileIndex,
+        fileName,
+        mimeType
+      );
+    } catch (error) {
+      console.error("Loi khi tai file:", error);
+      Alert.alert("Tai file that bai", "Khong the tai tep dinh kem nay.");
+    }
+  };
+
   const renderContent = () => {
     if (message.isRecalled) {
       return (
@@ -138,7 +157,11 @@ export default function MessageItem({
         ))}
 
         {message.fileUrls?.map((file, idx) => (
-          <Pressable key={idx} style={styles.fileBox}>
+          <Pressable
+            key={idx}
+            style={styles.fileBox}
+            onPress={() => void handleOpenFile(idx, file.name, file.type)}
+          >
             <Text style={{ color: isDark ? "#cbd5e1" : "#0f172a" }}>
               File: {file.name}
             </Text>
@@ -205,10 +228,10 @@ export default function MessageItem({
               isOwn
                 ? { backgroundColor: isDark ? "#a855f7" : "#8b5cf6" }
                 : {
-                    backgroundColor: isDark ? "#1f2937" : "#ffffff",
-                    borderColor: isDark ? "#334155" : "#e2e8f0",
-                    borderWidth: 1,
-                  },
+                  backgroundColor: isDark ? "#1f2937" : "#ffffff",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                  borderWidth: 1,
+                },
             ]}
           >
             {renderContent()}

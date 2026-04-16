@@ -78,11 +78,17 @@ export const useChatStore = create<ChatState>()(
         try {
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
+          const sortedConversations = uniqueById(conversations).sort(
+            (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
+          );
+
           set({
-            conversations: uniqueById(conversations).sort(
-              (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
-            ),
+            conversations: sortedConversations,
             convoLoading: false,
+          });
+
+          sortedConversations.forEach((conversation) => {
+            socketEmitter.emit("join-conversation", conversation._id);
           });
         } catch (error) {
           if (!isUnauthorizedError(error)) {
@@ -287,13 +293,13 @@ export const useChatStore = create<ChatState>()(
                 items: state.messages[convoId].items.map((m: Message) =>
                   m._id === messageId
                     ? {
-                        ...m,
-                        isPinned: !m.isPinned,
-                        ...(m.isPinned 
-                          ? { pinnedBy: undefined, pinnedAt: undefined }
-                          : { pinnedBy: userId, pinnedAt: new Date().toISOString() }
-                        )
-                      }
+                      ...m,
+                      isPinned: !m.isPinned,
+                      ...(m.isPinned
+                        ? { pinnedBy: undefined, pinnedAt: undefined }
+                        : { pinnedBy: userId, pinnedAt: new Date().toISOString() }
+                      )
+                    }
                     : m
                 ),
               },
