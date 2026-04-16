@@ -1,18 +1,13 @@
 import { authSession } from "@/lib/authSession";
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import axios, { type AxiosRequestHeaders } from "axios";
 
-// Default to the dev machine LAN IP (used by Expo Go). Override with EXPO_PUBLIC_BACKEND_HOST or EXPO_PUBLIC_API_URL.
-// Note: Update this if your dev machine IP changes. You can also set EXPO_PUBLIC_BACKEND_HOST in environment.
-const BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST ?? "172.20.10.2";
-const BACKEND_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT ?? "5001";
-const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
-
-const API_URL =
-  configuredApiUrl || `http://${BACKEND_HOST}:${BACKEND_PORT}/api`;
+const API_URL = getApiBaseUrl();
 
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
+  timeout: 10000,
 });
 
 // Helpful debug: show computed API URL in Metro logs when the app starts

@@ -1,4 +1,5 @@
 import { authSession } from "@/lib/authSession";
+import { getBackendOrigin } from "@/lib/backendUrl";
 import { socketEmitter } from "@/lib/socketEmitter";
 import type { SocketState } from "@/types/store";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
@@ -6,15 +7,19 @@ import type { Socket } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
 
-const BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST ?? "192.168.100.247";
-const BACKEND_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT ?? "5001";
-const configuredSocketUrl = process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
-
-const baseURL =
-  configuredSocketUrl || `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+const baseURL = process.env.EXPO_PUBLIC_SOCKET_URL?.trim() || getBackendOrigin();
 
 let appStateSubscription: NativeEventSubscription | null = null;
 let currentAppState: AppStateStatus = "active";
+
+const joinKnownConversations = (socket: Socket) => {
+  useChatStore
+    .getState()
+    .conversations
+    .forEach((conversation) => {
+      socket.emit("join-conversation", conversation._id);
+    });
+};
 
 const isAppActive = () => {
   const appState = AppState.currentState;
@@ -65,7 +70,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const socket: Socket = ioClient(baseURL, {
       auth: { token: accessToken },
       autoConnect: false,
-      transports: ["websocket"],
+      transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -78,6 +83,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on("connect", () => {
       console.log("Da ket noi voi socket");
       set({ isConnected: true });
+      joinKnownConversations(socket);
     });
 
     socket.on("disconnect", (reason) => {
@@ -92,6 +98,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("online-users", (userIds) => {
       set({ onlineUsers: userIds });
+    });
+
+    socket.on("conversation-upsert", (conversation: any) => {
+      useChatStore.getState().upsertConversation(conversation);
+      socket.emit("join-conversation", conversation._id);
     });
 
     socket.on("new-message", ({ message, conversation, unreadCounts }) => {

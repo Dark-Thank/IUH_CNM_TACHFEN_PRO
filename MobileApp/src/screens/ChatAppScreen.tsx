@@ -2,286 +2,586 @@ import ChatCard from "@/components/chat/ChatCard";
 import FriendListModal from "@/components/chat/FriendListModal";
 import MessageInput from "@/components/chat/MessageInput";
 import MessageItem from "@/components/chat/MessageItem";
-
-
 import PinnedSection from "@/components/chat/PinnedSection";
-
+import UserAvatar from "@/components/chat/UserAvatar";
 import { toast } from "@/lib/toast";
-
 import type { RootTabParamList } from "@/navigation/AppNavigator";
 import { friendService } from "@/services/friendService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useFriendStore } from "@/stores/useFriendStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation, Message } from "@/types/chat";
+import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-
-import { Bell, ChevronLeft, MessageCircleMore, User, UserPlus, Users } from "lucide-react-native";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-
+import { Bell, ChevronLeft, X } from "lucide-react-native";
 import {
-  ActivityIndicator,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+    type NativeScrollEvent,
+    type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TOP_LOAD_THRESHOLD = 72;
-type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
 
+type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
+type SearchStatus = "idle" | "loading" | "not_found" | "found";
+type FriendRelationship = "self" | "friend" | "sent" | "received" | "available";
 
 const uniqueById = <T extends { _id: string }>(items: T[]) => {
   const seen = new Set<string>();
+
   return items.filter((item) => {
-    if (seen.has(item._id)) return false;
+    if (seen.has(item._id)) {
+      return false;
+    }
+
     seen.add(item._id);
     return true;
   });
 };
 
 const getConversationTitle = (conversation: Conversation, currentUserId?: string) => {
-  if (conversation.type === "group") return conversation.group?.name || "Nhóm chat";
-  return conversation.participants.find((p) => p._id !== currentUserId)?.displayName || "Tin nhắn";
+  if (conversation.type === "group") {
+    return conversation.group?.name || "Nhom chat";
+  }
+
+  return (
+    conversation.participants.find((participant) => participant._id !== currentUserId)
+      ?.displayName || "Tin nhan"
+  );
 };
 
+const getDirectParticipant = (conversation: Conversation, currentUserId?: string) =>
+  conversation.participants.find((participant) => participant._id !== currentUserId);
+
+const getConversationActivityLabel = (
+  conversation: Conversation,
+  onlineUserIds: Set<string>,
+  currentUserId?: string
+) => {
+  if (conversation.type === "direct") {
+    const otherUser = getDirectParticipant(conversation, currentUserId);
+
+    if (!otherUser) {
+      return "";
+    }
+
+    return onlineUserIds.has(otherUser._id) ? "Dang hoat dong" : "Dang ngoai tuyen";
+  }
+
+  const members = conversation.participants.filter(
+    (participant) => participant._id !== currentUserId
+  );
+  const onlineCount = members.filter((participant) => onlineUserIds.has(participant._id)).length;
+
+  if (onlineCount <= 0) {
+    return `${members.length} thanh vien`;
+  }
+
+  return `${onlineCount} thanh vien dang hoat dong`;
+};
+
+const getRequestUser = (request: FriendRequest, type: "received" | "sent") =>
+  type === "received" ? request.from : request.to;
+
+const matchesQuery = (value: string, query: string) =>
+  value.toLowerCase().includes(query.trim().toLowerCase());
+
+const isSuccessMessage = (message: string) => /thanh cong|thành công/i.test(message);
+
+function SectionActionButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const { isDark } = useThemeStore();
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.sectionActionButton,
+        {
+          backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+          borderColor: isDark ? "#334155" : "#e2e8f0",
+          opacity: pressed ? 0.9 : 1,
+        },
+      ]}
+    >
+      <Text style={[styles.sectionActionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function OverlayModal({
+  visible,
+  title,
+  onClose,
+  children,
+}: {
+  visible: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const { isDark } = useThemeStore();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.modalBackdrop} onPress={onClose} />
+
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                {title}
+              </Text>
+              <Pressable
+                onPress={onClose}
+                style={[
+                  styles.modalCloseButton,
+                  { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
+                ]}
+              >
+                <X size={18} color={isDark ? "#f8fafc" : "#0f172a"} />
+              </Pressable>
+            </View>
+            {children}
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
 export default function ChatAppScreen() {
-  const [showAddFriend, setShowAddFriend] = useState(false);
-const [showCreateGroup, setShowCreateGroup] = useState(false);
   const navigation = useNavigation<ChatNavigation>();
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
+  const onlineUsers = useSocketStore((state) => state.onlineUsers);
+
   const flatListRef = useRef<FlatList<Message>>(null);
+
   const [showRequests, setShowRequests] = useState(false);
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showFriendList, setShowFriendList] = useState(false);
 
   const [friendUsername, setFriendUsername] = useState("");
-  const [friendMessage, setFriendMessage] = useState("");
-  const [friendLoading, setFriendLoading] = useState(false);
-  const [friendFound, setFriendFound] = useState<null | { _id: string; displayName: string }>(null);
+  const [friendRequestMessage, setFriendRequestMessage] = useState("");
+  const [searchedUser, setSearchedUser] = useState<User | null>(null);
+  const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
+  const [newMessageQuery, setNewMessageQuery] = useState("");
   const [groupName, setGroupName] = useState("");
-  const [groupLoading, setGroupLoading] = useState(false);
-  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [groupQuery, setGroupQuery] = useState("");
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
 
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showFriendList, setShowFriendList] = useState(false);
   const {
-  friends,
-  receivedList,
-  sentList,
-  blockedUsers,
-  setBlockedUsers,
-  searchByUsername,
-  addFriend,
-  getAllFriendRequests,
-  acceptRequest,
-  declineRequest,
-  getFriends,
-  loading: friendStoreLoading,
-} = useFriendStore();
+    friends,
+    receivedList,
+    sentList,
+    blockedUsers,
+    setBlockedUsers,
+    loading: friendStoreLoading,
+    searchByUsername,
+    addFriend,
+    getAllFriendRequests,
+    acceptRequest,
+    declineRequest,
+    getFriends,
+  } = useFriendStore();
+
   const {
     activeConversationId,
     conversations,
     messages,
     convoLoading,
     messageLoading,
+    loading: chatLoading,
     setActiveConversation,
     fetchConversations,
     fetchMessages,
     markAsSeen,
-    createConversation
+    createConversation,
   } = useChatStore();
-  
+
+  const loadSocialData = useCallback(async () => {
+    await Promise.all([getFriends(), getAllFriendRequests()]);
+  }, [getAllFriendRequests, getFriends]);
 
   useFocusEffect(
     useCallback(() => {
       fetchConversations();
-    }, [fetchConversations])
+      loadSocialData().catch((error) => {
+        console.error("Loi khi tai du lieu ban be:", error);
+      });
+    }, [fetchConversations, loadSocialData])
   );
-
-  
 
   useEffect(() => {
-  const checkAllStatus = async () => {
-    const statuses = await Promise.all(
-      friends.map(async (f) => {
-        const isBlocked = await friendService.checkBlockStatus(f._id);
-        return isBlocked ? f._id : null;
-      })
-    );
+    const checkAllStatuses = async () => {
+      try {
+        const statuses = await Promise.all(
+          friends.map(async (friend) => {
+            const isBlocked = await friendService.checkBlockStatus(friend._id);
+            return isBlocked ? friend._id : null;
+          })
+        );
 
-    setBlockedUsers(statuses.filter(Boolean) as string[])
-  };
+        setBlockedUsers(statuses.filter(Boolean) as string[]);
+      } catch (error) {
+        console.error("Loi khi kiem tra block status:", error);
+      }
+    };
 
-  if (friends.length > 0) {
-    checkAllStatus();
-  }
-}, [friends]);
+    if (friends.length > 0) {
+      checkAllStatuses();
+    }
+  }, [friends, setBlockedUsers]);
 
   const sortedConversations = useMemo(
-    () => uniqueById(conversations).sort((a, b) => 
-      new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-    ), [conversations]
+    () =>
+      uniqueById(conversations).sort(
+        (left, right) =>
+          new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime()
+      ),
+    [conversations]
   );
 
-  const selectedConvo = sortedConversations.find((c) => c._id === activeConversationId) ?? null;
+  const directConversations = useMemo(
+    () => sortedConversations.filter((conversation) => conversation.type === "direct"),
+    [sortedConversations]
+  );
+
+  const groupConversations = useMemo(
+    () => sortedConversations.filter((conversation) => conversation.type === "group"),
+    [sortedConversations]
+  );
+
+  const onlineUserIds = useMemo(() => new Set(onlineUsers), [onlineUsers]);
+
+  const selectedConvo =
+    sortedConversations.find((conversation) => conversation._id === activeConversationId) ?? null;
+  const selectedConversationId = selectedConvo?._id ?? null;
+
+  const selectedConversationStatus = useMemo(
+    () =>
+      selectedConvo
+        ? getConversationActivityLabel(selectedConvo, onlineUserIds, user?._id)
+        : "",
+    [onlineUserIds, selectedConvo, user?._id]
+  );
 
   const messageItems = useMemo(
-    () => selectedConvo ? uniqueById(messages[selectedConvo._id]?.items ?? []) : [],
+    () => (selectedConvo ? uniqueById(messages[selectedConvo._id]?.items ?? []) : []),
     [messages, selectedConvo]
   );
 
-  const pinnedMessages = useMemo(() => messageItems.filter((m) => m.isPinned), [messageItems]);
+  const pinnedMessages = useMemo(
+    () => messageItems.filter((message) => message.isPinned),
+    [messageItems]
+  );
+
   const hasMoreMessages = selectedConvo ? messages[selectedConvo._id]?.hasMore ?? false : false;
   const latestMessageId = messageItems[messageItems.length - 1]?._id;
-  const lastMessageStatus: "delivered" | "seen" = (selectedConvo?.seenBy?.length ?? 0) > 0 ? "seen" : "delivered";
 
-  const handleBack = useCallback(() => setActiveConversation(null), [setActiveConversation]);
+  const lastMessageStatus: "delivered" | "seen" =
+    (selectedConvo?.seenBy?.length ?? 0) > 0 ? "seen" : "delivered";
 
-  // FIX LỖI 1: "Expected 0-1 arguments, but got 2"
-  // Truyền id vào fetchMessages. Store thường tự quản lý trang hoặc nhận tham số loadMore qua object.
-  const handleMessageScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset } = event.nativeEvent;
-      if (
-        contentOffset.y <= TOP_LOAD_THRESHOLD &&
-        hasMoreMessages &&
-        !messageLoading &&
-        activeConversationId
-      ) {
-        // Nếu store của bạn yêu cầu loadMore, hãy thử truyền fetchMessages(activeConversationId) 
-        // hoặc fetchMessages({ id: activeConversationId, loadMore: true }) tùy theo định nghĩa store.
-        fetchMessages(activeConversationId);
-      }
-    },
-    [hasMoreMessages, messageLoading, activeConversationId, fetchMessages]
-  );
+  const filteredFriendsForMessage = useMemo(() => {
+    const baseFriends = uniqueById(friends);
 
+    if (!newMessageQuery.trim()) {
+      return baseFriends;
+    }
 
-
-
-  const renderHeaderLeft = useCallback(() => {
-  if (!selectedConvo) return null;
-
-  return (
-    <Pressable
-      onPress={handleBack}
-      style={[
-        styles.headerBackButton,
-        { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
-      ]}
-    >
-      <ChevronLeft
-        size={20}
-        color={isDark ? "#f8fafc" : "#0f172a"}
-      />
-    </Pressable>
-  );
-}, [selectedConvo?._id, isDark, handleBack]);
-  
-  const renderHeaderRight = useCallback(() => {
-  if (selectedConvo) {
-    return (
-      <Text
-        style={[
-          styles.headerMeta,
-          { color: isDark ? "#94a3b8" : "#64748b" },
-        ]}
-      >
-        {selectedConvo.type === "group"
-          ? `${selectedConvo.participants.length} thành viên`
-          : "Cuộc trò chuyện"}
-      </Text>
+    return baseFriends.filter(
+      (friend) =>
+        matchesQuery(friend.displayName, newMessageQuery) ||
+        matchesQuery(friend.username, newMessageQuery)
     );
-  }
+  }, [friends, newMessageQuery]);
 
-  return (
-    <View style={{ flexDirection: "row", gap: 8 }}>
-      {/* Friend list */}
-      {/* <Pressable
-        onPress={() => setShowFriendList(true)}
-        style={[
-          styles.headerIconButton,
-          { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-        ]}
-      >
-        <MessageCircleMore
-          size={18}
-          color={isDark ? "#c084fc" : "#4f46e5"}
-        />
-      </Pressable> */}
+  const filteredFriendsForGroup = useMemo(() => {
+    const selectedIds = new Set(selectedGroupMembers.map((friend) => friend._id));
 
-      {/* Requests */}
-      <Pressable
-        onPress={() => setShowRequests(true)}
-        style={[
-          styles.headerIconButton,
-          { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-        ]}
-      >
-        <Bell size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
-        {receivedList.length > 0 && (
-          <View
-            style={[
-              styles.headerBadge,
-              { backgroundColor: isDark ? "#a855f7" : "#7c3aed" },
-            ]}
-          >
-            <Text style={styles.headerBadgeText}>
-              {receivedList.length}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-    </View>
+    return uniqueById(friends).filter((friend) => {
+      if (selectedIds.has(friend._id)) {
+        return false;
+      }
+
+      if (!groupQuery.trim()) {
+        return true;
+      }
+
+      return matchesQuery(friend.displayName, groupQuery) || matchesQuery(friend.username, groupQuery);
+    });
+  }, [friends, groupQuery, selectedGroupMembers]);
+
+  const searchedUserRelationship = useMemo<FriendRelationship>(() => {
+    if (!searchedUser || !user) {
+      return "available";
+    }
+
+    if (searchedUser._id === user._id) {
+      return "self";
+    }
+
+    if (friends.some((friend) => friend._id === searchedUser._id)) {
+      return "friend";
+    }
+
+    if (sentList.some((request) => request.to?._id === searchedUser._id)) {
+      return "sent";
+    }
+
+    if (receivedList.some((request) => request.from?._id === searchedUser._id)) {
+      return "received";
+    }
+
+    return "available";
+  }, [friends, receivedList, searchedUser, sentList, user]);
+
+  const isConversationBlocked = useMemo(() => {
+    if (!selectedConvo || selectedConvo.type !== "direct" || !user?._id) {
+      return false;
+    }
+
+    const otherUser = getDirectParticipant(selectedConvo, user._id);
+    return !!otherUser && blockedUsers.has(otherUser._id);
+  }, [blockedUsers, selectedConvo, user?._id]);
+
+  const handleBack = useCallback(() => {
+    setActiveConversation(null);
+  }, [setActiveConversation]);
+
+  const resetAddFriendState = useCallback(() => {
+    setFriendUsername("");
+    setFriendRequestMessage("");
+    setSearchedUser(null);
+    setSearchStatus("idle");
+  }, []);
+
+  const resetNewMessageState = useCallback(() => {
+    setNewMessageQuery("");
+  }, []);
+
+  const resetCreateGroupState = useCallback(() => {
+    setGroupName("");
+    setGroupQuery("");
+    setSelectedGroupMembers([]);
+  }, []);
+
+  const openRequestsModal = useCallback(() => {
+    setShowRequests(true);
+    getAllFriendRequests().catch((error) => {
+      console.error("Loi khi tai danh sach loi moi:", error);
+    });
+  }, [getAllFriendRequests]);
+
+  const openAddFriendModal = useCallback(() => {
+    setShowAddFriend(true);
+    resetAddFriendState();
+    loadSocialData().catch((error) => {
+      console.error("Loi khi tai du lieu ket ban:", error);
+    });
+  }, [loadSocialData, resetAddFriendState]);
+
+  const openNewMessageModal = useCallback(() => {
+    setShowNewMessage(true);
+    resetNewMessageState();
+    getFriends().catch((error) => {
+      console.error("Loi khi tai danh sach ban be:", error);
+    });
+  }, [getFriends, resetNewMessageState]);
+
+  const openCreateGroupModal = useCallback(() => {
+    setShowCreateGroup(true);
+    resetCreateGroupState();
+    getFriends().catch((error) => {
+      console.error("Loi khi tai danh sach ban be:", error);
+    });
+  }, [getFriends, resetCreateGroupState]);
+
+  const openFriendListModal = useCallback(() => {
+    setShowFriendList(true);
+  }, []);
+
+  const handleSearchUser = useCallback(async () => {
+    const normalizedUsername = friendUsername.trim().toLowerCase();
+
+    if (!normalizedUsername) {
+      toast.info("Nhap username de tim kiem.");
+      return;
+    }
+
+    setSearchStatus("loading");
+    const foundUser = await searchByUsername(normalizedUsername);
+    setSearchedUser(foundUser);
+    setSearchStatus(foundUser ? "found" : "not_found");
+  }, [friendUsername, searchByUsername]);
+
+  const handleSendFriendRequest = useCallback(async () => {
+    if (!searchedUser || searchedUserRelationship !== "available") {
+      return;
+    }
+
+    const resultMessage = await addFriend(
+      searchedUser._id,
+      friendRequestMessage.trim() || undefined
+    );
+
+    if (isSuccessMessage(resultMessage)) {
+      toast.success(resultMessage);
+      await getAllFriendRequests();
+      setShowAddFriend(false);
+      resetAddFriendState();
+      return;
+    }
+
+    toast.info(resultMessage);
+  }, [
+    addFriend,
+    friendRequestMessage,
+    getAllFriendRequests,
+    resetAddFriendState,
+    searchedUser,
+    searchedUserRelationship,
+  ]);
+
+  const handleAcceptRequest = useCallback(
+    async (requestId: string) => {
+      await acceptRequest(requestId);
+      await loadSocialData();
+      toast.success("Da chap nhan loi moi ket ban.");
+    },
+    [acceptRequest, loadSocialData]
   );
-}, [selectedConvo,
-  isDark,
-  receivedList.length]);
 
-  useLayoutEffect(() => {
-  navigation.setOptions({
-    title: selectedConvo
-      ? getConversationTitle(selectedConvo, user?._id)
-      : "Chat",
-    headerLeft: renderHeaderLeft,
-    headerRight: renderHeaderRight,
-  });
-}, [
-  navigation,
-  selectedConvo?._id,
-  user?._id,
-  renderHeaderLeft,
-  renderHeaderRight,
-]);
-  useEffect(() => {
-    if (!selectedConvo) {
+  const handleDeclineRequest = useCallback(
+    async (requestId: string) => {
+      await declineRequest(requestId);
+      await getAllFriendRequests();
+      toast.info("Da huy loi moi ket ban.");
+    },
+    [declineRequest, getAllFriendRequests]
+  );
+
+  const handleOpenConversation = useCallback(
+    async (friend: Friend) => {
+      if (blockedUsers.has(friend._id)) {
+        toast.error("Ban khong the nhan tin voi nguoi nay.");
+        return;
+      }
+
+      const existingConversation = directConversations.find((conversation) =>
+        conversation.participants.some((participant) => participant._id === friend._id)
+      );
+
+      setShowNewMessage(false);
+      resetNewMessageState();
+
+      if (existingConversation) {
+        setActiveConversation(existingConversation._id);
+        return;
+      }
+
+      await createConversation("direct", "", [friend._id]);
+    },
+    [blockedUsers, createConversation, directConversations, resetNewMessageState, setActiveConversation]
+  );
+
+  const handleFriendListSelect = useCallback(
+    async (friend: Friend) => {
+      setShowFriendList(false);
+      await handleOpenConversation(friend);
+    },
+    [handleOpenConversation]
+  );
+
+  const handleToggleGroupMember = useCallback((friend: Friend) => {
+    setSelectedGroupMembers((currentMembers) => {
+      const exists = currentMembers.some((member) => member._id === friend._id);
+
+      return exists
+        ? currentMembers.filter((member) => member._id !== friend._id)
+        : [...currentMembers, friend];
+    });
+  }, []);
+
+  const handleCreateGroup = useCallback(async () => {
+    if (!groupName.trim()) {
+      toast.warning("Nhap ten nhom truoc khi tao.");
       return;
     }
 
-    if (!messages[selectedConvo._id]) {
-      fetchMessages(selectedConvo._id);
-    }
-  }, [fetchMessages, messages, selectedConvo]);
-
-  useEffect(() => {
-    if (!selectedConvo) {
+    if (selectedGroupMembers.length === 0) {
+      toast.warning("Chon it nhat mot ban de tao nhom.");
       return;
     }
 
-    markAsSeen();
-  }, [markAsSeen, selectedConvo]);
+    await createConversation(
+      "group",
+      groupName.trim(),
+      selectedGroupMembers.map((friend) => friend._id)
+    );
+
+    setShowCreateGroup(false);
+    resetCreateGroupState();
+  }, [createConversation, groupName, resetCreateGroupState, selectedGroupMembers]);
+
+  useEffect(() => {
+    if (!selectedConversationId || messages[selectedConversationId]) {
+      return;
+    }
+
+    fetchMessages(selectedConversationId).catch((error) => {
+      console.error("Loi khi tai tin nhan:", error);
+    });
+  }, [fetchMessages, messages, selectedConversationId]);
+
+  useEffect(() => {
+    if (!selectedConversationId) {
+      return;
+    }
+
+    markAsSeen().catch((error) => {
+      console.error("Loi khi danh dau da xem:", error);
+    });
+  }, [markAsSeen, selectedConversationId]);
 
   useEffect(() => {
     if (!selectedConvo || !latestMessageId) {
@@ -295,223 +595,94 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
     return () => clearTimeout(timeout);
   }, [latestMessageId, selectedConvo]);
 
-  useEffect(() => {
-    if (!showRequests) {
-      return;
-    }
+  const handleMessageScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset } = event.nativeEvent;
 
-    getAllFriendRequests();
-  }, [getAllFriendRequests, showRequests]);
-
-  useEffect(() => {
-    if (!showCreateGroup) {
-      return;
-    }
-
-    getFriends();
-  }, [getFriends, showCreateGroup]);
-
-  useEffect(() => {
-    if (!showAddFriend) {
-      return;
-    }
-
-    getFriends();
-    getAllFriendRequests();
-  }, [getAllFriendRequests, getFriends, showAddFriend]);
-
-  const handleSelectConversation = async (conversationId: string) => {
-    setActiveConversation(conversationId);
-
-    if (!messages[conversationId]) {
-      await fetchMessages(conversationId);
-    }
-  };
-  const directConversations = useMemo(
-    () => sortedConversations.filter((conversation) => conversation.type === "direct"),
-    [sortedConversations]
-  );
-
-  const filteredDirectConversations = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-
-    if (!query) {
-      return directConversations;
-    }
-
-    return directConversations.filter((conversation) => {
-      const title = getConversationTitle(conversation, user?._id).toLowerCase();
-      return title.includes(query);
-    });
-  }, [directConversations, searchQuery, user?._id]);
-
-  const groupConversations = useMemo(
-    () => sortedConversations.filter((conversation) => conversation.type === "group"),
-    [sortedConversations]
-  );
-
-  
-
-  const resetFriendModal = () => {
-    setFriendUsername("");
-    setFriendMessage("");
-    setFriendFound(null);
-    setFriendLoading(false);
-  };
-
-  const resetGroupModal = () => {
-    setGroupName("");
-    setGroupLoading(false);
-    setSelectedFriendIds([]);
-  };
-
-  const handleSearchFriend = async () => {
-    if (!friendUsername.trim()) {
-      toast.error("Hay nhap username can tim.");
-      return;
-    }
-
-    setFriendLoading(true);
-    setFriendFound(null);
-
-    try {
-      const result = await searchByUsername(friendUsername.trim());
-
-      if (!result) {
-        toast.error("Khong tim thay nguoi dung.");
-        return;
+      if (
+        contentOffset.y <= TOP_LOAD_THRESHOLD &&
+        hasMoreMessages &&
+        !messageLoading &&
+        activeConversationId
+      ) {
+        fetchMessages(activeConversationId);
       }
+    },
+    [activeConversationId, fetchMessages, hasMoreMessages, messageLoading]
+  );
 
-      setFriendFound({ _id: result._id, displayName: result.displayName });
-    } catch (error) {
-      console.error(error);
-      toast.error("Khong the tim nguoi dung luc nay.");
-    } finally {
-      setFriendLoading(false);
-    }
-  };
-
-  const handleSendFriendRequest = async () => {
-    if (!friendFound) {
-      toast.error("Hay tim nguoi dung truoc khi gui loi moi.");
-      return;
-    }
-
-    const isAlreadyFriend = friends.some((friend) => friend._id === friendFound._id);
-    const isPendingRequest =
-      receivedList.some((request) => request.from?._id === friendFound._id) ||
-      sentList.some((request) => request.to?._id === friendFound._id);
-
-    if (isAlreadyFriend) {
-      toast.error("Nguoi nay da la ban be.");
-      return;
-    }
-
-    if (isPendingRequest) {
-      toast.error("Da co loi moi dang cho xu ly.");
-      return;
-    }
-
-    setFriendLoading(true);
-
-    try {
-      await addFriend(friendFound._id, friendMessage.trim() || undefined);
-      toast.success("Da gui loi moi ket ban.");
-      setShowAddFriend(false);
-      resetFriendModal();
-    } catch (error) {
-      console.error(error);
-      toast.error("Gui loi moi that bai.");
-    } finally {
-      setFriendLoading(false);
-    }
-  };
-
-  const handleAcceptRequest = async (requestId: string) => {
-    try {
-      await acceptRequest(requestId);
-      toast.success("Da chap nhan loi moi.");
-    } catch (error) {
-      console.error(error);
-      toast.error("Khong the chap nhan luc nay.");
-    }
-  };
-
-  const handleDeclineRequest = async (requestId: string) => {
-    try {
-      await declineRequest(requestId);
-      toast.success("Da tu choi loi moi.");
-    } catch (error) {
-      console.error(error);
-      toast.error("Khong the tu choi luc nay.");
-    }
-  };
-
-  const handleStartChat = async (friendId: string) => {
-    if (blockedUsers.has(friendId)) {
-      toast.error("Bạn đã chặn người này");
-      return;
-    }
-
-    const existing = conversations.find((c) =>
-      c.participants.some((p) => p._id === friendId)
-    );
-
-    if (existing) {
-      setActiveConversation(existing._id);
-      return;
-    }
-
-    await createConversation("direct", "Chat", [friendId]);
-  };
-
-
-  const toggleMember = (memberId: string) => {
-    setSelectedFriendIds((prev) =>
-      prev.includes(memberId)
-        ? prev.filter((id) => id !== memberId)
-        : [...prev, memberId]
-    );
-  };
-
-  const handleCreateGroup = async () => {
-    if (!groupName.trim()) {
-      toast.error("Hay nhap ten nhom.");
-      return;
-    }
-
-    if (selectedFriendIds.length === 0) {
-      toast.error("Hay chon it nhat 1 thanh vien.");
-      return;
-    }
-
-    setGroupLoading(true);
-
-    try {
-      await createConversation("group", groupName.trim(), selectedFriendIds);
-      toast.success("Tao nhom thanh cong.");
-      setShowCreateGroup(false);
-      resetGroupModal();
-    } catch (error) {
-      console.error(error);
-      toast.error("Tao nhom that bai.");
-    } finally {
-      setGroupLoading(false);
-    }
-  };
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Doan chat",
+      headerTitle: selectedConvo
+        ? () => (
+            <View style={styles.headerTitleWrap}>
+              <Text
+                numberOfLines={1}
+                style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+              >
+                {getConversationTitle(selectedConvo, user?._id)}
+              </Text>
+              {!!selectedConversationStatus && (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                >
+                  {selectedConversationStatus}
+                </Text>
+              )}
+            </View>
+          )
+        : undefined,
+      headerLeft: selectedConvo
+        ? () => (
+            <Pressable
+              onPress={handleBack}
+              style={[
+                styles.headerBackButton,
+                { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
+              ]}
+            >
+              <ChevronLeft size={20} color={isDark ? "#f8fafc" : "#0f172a"} />
+            </Pressable>
+          )
+        : undefined,
+      headerRight: !selectedConvo
+        ? () => (
+            <Pressable
+              onPress={openRequestsModal}
+              style={[
+                styles.headerIconButton,
+                { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+              ]}
+            >
+              <Bell size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+              {receivedList.length > 0 && (
+                <View style={styles.headerBadge}>
+                  <Text style={styles.headerBadgeText}>
+                    {receivedList.length > 9 ? "9+" : receivedList.length}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+          )
+        : undefined,
+    });
+  }, [
+    handleBack,
+    isDark,
+    navigation,
+    openRequestsModal,
+    receivedList.length,
+    selectedConvo,
+    selectedConversationStatus,
+    user?._id,
+  ]);
 
   if (selectedConvo) {
-    const isBlocked =
-  selectedConvo?.type === "direct" &&
-  selectedConvo.participants
-    .filter((p) => p._id !== user?._id)
-    .some((p) => blockedUsers.has(p._id));
     return (
       <SafeAreaView
-        style={[
-          styles.screen,
-          { backgroundColor: isDark ? "#0f172a" : "#f8fafc" },
-        ]}
+        style={[styles.screen, { backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]}
         edges={["left", "right"]}
       >
         <KeyboardAvoidingView
@@ -519,551 +690,570 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}
         >
-              <View style={styles.pinnedContainer}>
+          <View style={styles.pinnedContainer}>
             {pinnedMessages.length > 0 && (
-              <PinnedSection 
-                pinnedMessages={pinnedMessages} 
+              <PinnedSection
+                pinnedMessages={pinnedMessages}
                 onJump={(id) => {
-                  const index = messageItems.findIndex(m => m._id === id);
-                  if (index !== -1) flatListRef.current?.scrollToIndex({ index, animated: true });
-                }} 
+                  const index = messageItems.findIndex((message) => message._id === id);
+
+                  if (index !== -1) {
+                    flatListRef.current?.scrollToIndex({ index, animated: true });
+                  }
+                }}
               />
             )}
           </View>
-        <FlatList
-          ref={flatListRef}
-          data={messageItems}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.messageListContent}
-          style={styles.messageList}
-          onScroll={handleMessageScroll}
-          scrollEventThrottle={16}
-          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            messageLoading && hasMoreMessages ? (
-              <View style={styles.loadingMore}>
-                <ActivityIndicator
-                  size="small"
-                  color={isDark ? "#c084fc" : "#8b5cf6"}
-                />
-              </View>
-            ) : null
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyMessages}>
-              <Text
-                style={[
-                  styles.emptyText,
-                  { color: isDark ? "#cbd5e1" : "#475569" },
-                ]}
-              >
-                Chưa có tin nhắn nào trong cuộc trò chuyện này. Hãy bắt đầu bằng cách gửi một tin nhắn!
-              </Text>
-            </View>
-          }
-          renderItem={({ item, index }) => (
-            <MessageItem
-              message={item}
-              index={index}                 
-              messages={messageItems} 
-              previousMessage={index > 0 ? messageItems[index - 1] : undefined}
-              selectedConvo={selectedConvo}
-              lastMessageStatus={lastMessageStatus}
-            />
-          )}
-        />
-        {isBlocked ? (
-  <Text style={{ textAlign: "center", color: "red", marginBottom: 10 }}>
-    Bạn không thể trả lời cuộc trò chuyện này
-  </Text>
-) : null}
 
-<MessageInput
-  selectedConvo={selectedConvo}
-  disabled={isBlocked}
-/>
+          <FlatList
+            ref={flatListRef}
+            data={messageItems}
+            keyExtractor={(item) => item._id}
+            contentContainerStyle={[
+              styles.messageListContent,
+              { paddingTop: pinnedMessages.length > 0 ? 120 : 14 },
+            ]}
+            onScroll={handleMessageScroll}
+            scrollEventThrottle={16}
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={
+              messageLoading && hasMoreMessages ? (
+                <View style={styles.loadingMore}>
+                  <ActivityIndicator size="small" color="#8b5cf6" />
+                </View>
+              ) : null
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyMessages}>
+                <Text style={[styles.emptyMessageText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Chua co tin nhan nao trong cuoc tro chuyen nay.
+                </Text>
+              </View>
+            }
+            renderItem={({ item, index }) => (
+              <MessageItem
+                message={item}
+                index={index}
+                messages={messageItems}
+                previousMessage={index > 0 ? messageItems[index - 1] : undefined}
+                selectedConvo={selectedConvo}
+                lastMessageStatus={lastMessageStatus}
+              />
+            )}
+          />
+
+          {isConversationBlocked ? (
+            <Text style={styles.blockedNotice}>Ban khong the tra loi cuoc tro chuyen nay.</Text>
+          ) : null}
+
+          <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
 
-  // FIX LỖI 2: "Expression expected"
-  // MÀN HÌNH DANH SÁCH CÁC CUỘC HỘI THOẠI
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: isDark ? "#0f172a" : "#ffffff" }]}>
-      {/* <FlatList
-        data={sortedConversations}
-        keyExtractor={(item) => item._id}
-        contentContainerStyle={styles.conversationList}
-        renderItem={({ item }) => (
-          <ChatCard
-            conversation={item}
-            onPress={() => setActiveConversation(item._id)}
-            currentUserId={user?._id}
-          />
-
-        )}
-        // ListEmptyComponent={
-        //   <View style={styles.emptyMessages}>
-        //     <Text style={{ color: isDark ? "#94a3b8" : "#64748b" }}>Chưa có cuộc hội thoại nào.</Text>
-        //   </View>
-        // }
-        /> */}
-        {convoLoading ? (
-          <View style={styles.loaderState}>
-          <Text style={[styles.emptyText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-            Đang tải danh sách hội thoại...
+    <SafeAreaView
+      style={[styles.screen, { backgroundColor: isDark ? "#0f172a" : "#ffffff" }]}
+      edges={["left", "right"]}
+    >
+      {convoLoading ? (
+        <View style={styles.loaderState}>
+          <ActivityIndicator size="small" color="#8b5cf6" />
+          <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+            Dang tai danh sach doan chat...
           </Text>
         </View>
-        
-        
       ) : (
-        <FlatList
-          data={filteredDirectConversations}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.conversationList}
-          renderItem={({ item }) => (
-            <ChatCard
-              conversation={item}
-              currentUserId={user?._id}
-              isActive={item._id === activeConversationId}
-              onPress={handleSelectConversation}
-            />
-          )}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <View style={styles.searchRow}>
-                <TextInput
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder="Tim ban be de nhan tin"
-                  placeholderTextColor="#94a3b8"
-                  style={[
-                    styles.searchInput,
-                    { color: isDark ? "#f8fafc" : "#0f172a", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
-                  ]}
-                  autoCapitalize="none"
-                />
-              </View>
+        <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false}>
+          <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                Chat ban be
-              </Text>
-              <View style={styles.sectionActions}>
-                <Pressable
-                  onPress={() => setShowFriendList(true)}
-                  style={[
-                    styles.sectionAction,
-                    { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-                  ]}
-                >
-                  <User size={16} color={isDark ? "#c084fc" : "#6366f1"} />
-                  <Text style={[styles.sectionActionText, { color: isDark ? "#cbd5e1" : "#4f46e5" }]}>
-                    Danh sách bạn bè
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => setShowAddFriend(true)}
-                  style={[
-                    styles.sectionAction,
-                    { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-                  ]}
-                >
-                  <UserPlus size={16} color={isDark ? "#c084fc" : "#6366f1"} />
-                  <Text style={[styles.sectionActionText, { color: isDark ? "#cbd5e1" : "#4f46e5" }]}>
-                    Ket ban
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <MessageCircleMore
-                size={46}
-                color={isDark ? "#c084fc" : "#8b5cf6"}
-              />
-              <Text
-                style={[
-                  styles.emptyTitle,
-                  { color: isDark ? "#f8fafc" : "#0f172a" },
-                ]}
-              >
-                Chưa có cuộc trò chuyện nào
-              </Text>
-              <Text
-                style={[
-                  styles.emptyText,
-                  { color: isDark ? "#cbd5e1" : "#475569" },
-                ]}
-              >
-                Khi đăng nhập và tạo chat, danh sách cuộc trò chuyện sẽ hiện ở đây.
-              </Text>
-            </View>
-          }
-          ListFooterComponent={
-            <View style={styles.groupSection}>
-              <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleBlock}>
                 <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Group
+                  Ban be
                 </Text>
-                <Pressable
-                  onPress={() => setShowCreateGroup(true)}
-                  style={[
-                    styles.sectionAction,
-                    { backgroundColor: isDark ? "#1f2937" : "#eff6ff" },
-                  ]}
-                >
-                  <Users size={16} color={isDark ? "#c084fc" : "#2563eb"} />
-                  <Text style={[styles.sectionActionText, { color: isDark ? "#cbd5e1" : "#1d4ed8" }]}>
-                    Tạo nhóm
-                  </Text>
-                </Pressable>
               </View>
-              {groupConversations.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <MessageCircleMore size={46} color={isDark ? "#c084fc" : "#8b5cf6"} />
-                  <Text style={[styles.emptyTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                    Chưa có cuộc trò chuyện nhóm
-                  </Text>
-                  <Text style={[styles.emptyText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                    Tạo nhóm để bắt đầu cuộc trò chuyện chung.
-                  </Text>
-                </View>
-              ) : (
-                groupConversations.map((item) => (
-                  <ChatCard
-                    key={item._id}
-                    conversation={item}
-                    currentUserId={user?._id}
-                    isActive={item._id === activeConversationId}
-                    onPress={handleSelectConversation}
-                  />
-                ))
-              )}
+
+              <View style={styles.sectionActions}>
+                <SectionActionButton label="Ban be" onPress={openFriendListModal} />
+                <SectionActionButton label="Ket ban" onPress={openAddFriendModal} />
+                <SectionActionButton label="Tin nhan moi" onPress={openNewMessageModal} />
+              </View>
             </View>
-          }
-        />
-      )}
-      <Modal
-        transparent
-        animationType="slide"
-        visible={showAddFriend}
-        onRequestClose={() => {
-          setShowAddFriend(false);
-          resetFriendModal();
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-          >
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              <View style={[styles.modalCard, { backgroundColor: isDark ? "#111827" : "#ffffff" }]}>
-            <Text style={[styles.modalTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Gửi lời mời kết bạn
-            </Text>
-            <TextInput
-              value={friendUsername}
-              onChangeText={setFriendUsername}
-              placeholder="Username"
-              placeholderTextColor="#94a3b8"
-              style={[
-                styles.modalInput,
-                { color: isDark ? "#f8fafc" : "#0f172a", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
-              ]}
-              autoCapitalize="none"
-            />
-            <Pressable
-              onPress={handleSearchFriend}
-              disabled={friendLoading}
-              style={[
-                styles.modalPrimary,
-                { backgroundColor: isDark ? "#7c3aed" : "#4f46e5", opacity: friendLoading ? 0.7 : 1 },
-              ]}
-            >
-              <Text style={styles.modalPrimaryText}>
-                {friendLoading ? "Dang tim..." : "Tim user"}
-              </Text>
-            </Pressable>
-            {friendFound ? (
-              <View style={styles.modalHintGroup}>
-                <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Tim thay: {friendFound.displayName}
-                </Text>
-                {friends.some((friend) => friend._id === friendFound._id) ? (
-                  <Text style={[styles.modalHint, { color: isDark ? "#facc15" : "#b45309" }]}>
-                    Da la ban be, khong the gui loi moi.
-                  </Text>
-                ) : null}
-                {receivedList.some((request) => request.from?._id === friendFound._id) ? (
-                  <Text style={[styles.modalHint, { color: isDark ? "#facc15" : "#b45309" }]}>
-                    Ban dang co loi moi tu nguoi nay.
-                  </Text>
-                ) : null}
-                {sentList.some((request) => request.to?._id === friendFound._id) ? (
-                  <Text style={[styles.modalHint, { color: isDark ? "#facc15" : "#b45309" }]}>
-                    Da gui loi moi, vui long cho phan hoi.
-                  </Text>
-                ) : null}
-              </View>
-            ) : null}
-            <TextInput
-              value={friendMessage}
-              onChangeText={setFriendMessage}
-              placeholder="Loi nhan (tuy chon)"
-              placeholderTextColor="#94a3b8"
-              style={[
-                styles.modalInput,
-                { color: isDark ? "#f8fafc" : "#0f172a", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
-              ]}
-            />
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => {
-                  setShowAddFriend(false);
-                  resetFriendModal();
-                }}
-                style={[styles.modalGhost, { borderColor: isDark ? "#334155" : "#e2e8f0" }]}
-              >
-                <Text style={[styles.modalGhostText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Huỷ
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleSendFriendRequest}
-                disabled={friendLoading}
+
+            {directConversations.length > 0 ? (
+              directConversations.map((conversation) => {
+                const otherUser = getDirectParticipant(conversation, user?._id);
+
+                return (
+                  <ChatCard
+                    key={conversation._id}
+                    conversation={conversation}
+                    onPress={() => setActiveConversation(conversation._id)}
+                    currentUserId={user?._id}
+                    isOnline={!!otherUser && onlineUserIds.has(otherUser._id)}
+                  />
+                );
+              })
+            ) : (
+              <View
                 style={[
-                  styles.modalPrimary,
+                  styles.emptySection,
                   {
-                    backgroundColor: isDark ? "#22c55e" : "#16a34a",
-                    opacity:
-                      friendLoading ||
-                      (friendFound
-                        ? friends.some((friend) => friend._id === friendFound._id) ||
-                          receivedList.some((request) => request.from?._id === friendFound._id) ||
-                          sentList.some((request) => request.to?._id === friendFound._id)
-                        : false)
-                        ? 0.5
-                        : 1,
+                    backgroundColor: isDark ? "#111827" : "#ffffff",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
                   },
                 ]}
               >
-                <Text style={styles.modalPrimaryText}>
-                  Gửi lời mời
-                </Text>
-              </Pressable>
-            </View>
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      <Modal
-        transparent
-        animationType="slide"
-        visible={showCreateGroup}
-        onRequestClose={() => {
-          setShowCreateGroup(false);
-          resetGroupModal();
-        }}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-          >
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.modalScrollContent}
-            >
-              <View style={[styles.modalCard, { backgroundColor: isDark ? "#111827" : "#ffffff" }]}>
-            <Text style={[styles.modalTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Tạo nhóm chat
-            </Text>
-            <TextInput
-              value={groupName}
-              onChangeText={setGroupName}
-              placeholder="Tên nhóm"
-              placeholderTextColor="#94a3b8"
-              style={[
-                styles.modalInput,
-                { color: isDark ? "#f8fafc" : "#0f172a", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
-              ]}
-            />
-            <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-              Chon thanh vien tu danh sach ban be.
-            </Text>
-            {friendStoreLoading ? (
-              <View style={styles.modalLoading}>
-                <ActivityIndicator size="small" color={isDark ? "#c084fc" : "#8b5cf6"} />
-                <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Dang tai ban be...
+                <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Chua co doan chat voi ban be nao.
                 </Text>
               </View>
-            ) : friends.length === 0 ? (
-              <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                Chua co ban be nao.
-              </Text>
-            ) : (
-              friends.map((friend) => {
-                const isSelected = selectedFriendIds.includes(friend._id);
-                return (
-                  <Pressable
-                    key={friend._id}
-                    onPress={() => toggleMember(friend._id)}
-                    style={[
-                      styles.friendRow,
-                      {
-                        borderColor: isDark ? "#1f2937" : "#e2e8f0",
-                        backgroundColor: isSelected
-                          ? isDark
-                            ? "#1e293b"
-                            : "#eef2ff"
-                          : "transparent",
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.friendName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                      {friend.displayName}
-                    </Text>
-                    <Text style={[styles.friendMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                      @{friend.username}
-                    </Text>
-                  </Pressable>
-                );
-              })
             )}
-            <View style={styles.modalActions}>
-              <Pressable
-                onPress={() => {
-                  setShowCreateGroup(false);
-                  resetGroupModal();
-                }}
-                style={[styles.modalGhost, { borderColor: isDark ? "#334155" : "#e2e8f0" }]}
-              >
-                <Text style={[styles.modalGhostText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Huỷ
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleBlock}>
+                <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                  Group
                 </Text>
-              </Pressable>
-              <Pressable
-                onPress={handleCreateGroup}
-                disabled={groupLoading}
+                <Text style={[styles.sectionSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Tao nhom de tro chuyen voi nhieu ban cung luc.
+                </Text>
+              </View>
+
+              <View style={styles.sectionActions}>
+                <SectionActionButton label="Tao nhom" onPress={openCreateGroupModal} />
+              </View>
+            </View>
+
+            {groupConversations.length > 0 ? (
+              groupConversations.map((conversation) => (
+                <ChatCard
+                  key={conversation._id}
+                  conversation={conversation}
+                  onPress={() => setActiveConversation(conversation._id)}
+                  currentUserId={user?._id}
+                />
+              ))
+            ) : (
+              <View
                 style={[
-                  styles.modalPrimary,
-                  { backgroundColor: isDark ? "#2563eb" : "#1d4ed8", opacity: groupLoading ? 0.7 : 1 },
+                  styles.emptySection,
+                  {
+                    backgroundColor: isDark ? "#111827" : "#ffffff",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                  },
                 ]}
               >
-                <Text style={styles.modalPrimaryText}>
-                  {groupLoading ? "Đang tạo..." : "Tạo nhóm"}
+                <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Chua co nhom chat nao.
                 </Text>
-              </Pressable>
-            </View>
               </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+            )}
+          </View>
+        </ScrollView>
+      )}
 
-      <Modal
-        transparent
-        animationType="slide"
-        visible={showRequests}
-        onRequestClose={() => setShowRequests(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
-          >
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.modalScrollContent}>
-              <View style={[styles.modalCard, { backgroundColor: isDark ? "#111827" : "#ffffff" }]}>
-                <Text style={[styles.modalTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Loi moi ket ban
-                </Text>
-                {friendStoreLoading ? (
-                  <View style={styles.modalLoading}>
-                    <ActivityIndicator size="small" color={isDark ? "#c084fc" : "#8b5cf6"} />
-                    <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                      Dang tai danh sach...
-                    </Text>
+      <OverlayModal visible={showRequests} title="Loi moi ket ban" onClose={() => setShowRequests(false)}>
+        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Da nhan</Text>
+
+          {receivedList.length === 0 ? (
+            <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              Ban chua co loi moi ket ban nao.
+            </Text>
+          ) : (
+            receivedList.map((request) => {
+              const info = getRequestUser(request, "received");
+
+              if (!info) {
+                return null;
+              }
+
+              return (
+                <View
+                  key={request._id}
+                  style={[
+                    styles.requestCard,
+                    {
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                    },
+                  ]}
+                >
+                  <View style={styles.requestInfo}>
+                    <UserAvatar name={info.displayName} avatarUrl={info.avatarUrl} size={42} />
+                    <View style={styles.requestTextBlock}>
+                      <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                        {info.displayName}
+                      </Text>
+                      <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{info.username}</Text>
+                    </View>
                   </View>
-                ) : receivedList.length === 0 ? (
-                  <Text style={[styles.modalHint, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                    Chua co loi moi nao.
-                  </Text>
-                ) : (
-                  receivedList.map((request) => (
-                    <View
-                      key={request._id}
+
+                  <View style={styles.requestActions}>
+                    <Pressable
+                      onPress={() => handleDeclineRequest(request._id)}
+                      disabled={friendStoreLoading}
                       style={[
-                        styles.requestRow,
-                        { borderColor: isDark ? "#1f2937" : "#e2e8f0" },
+                        styles.secondaryButton,
+                        {
+                          backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                          borderColor: isDark ? "#334155" : "#e2e8f0",
+                        },
                       ]}
                     >
-                      <View style={styles.requestInfo}>
-                        <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                          {request.from?.displayName || "Nguoi dung"}
-                        </Text>
-                        <Text style={[styles.requestMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                          @{request.from?.username || "username"}
-                        </Text>
-                        {request.message ? (
-                          <Text style={[styles.requestMessage, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                            {request.message}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <View style={styles.requestActions}>
-                        <Pressable
-                          onPress={() => handleDeclineRequest(request._id)}
-                          style={[
-                            styles.requestButton,
-                            { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
-                          ]}
-                        >
-                          <Text style={[styles.requestButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                            Huy
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => handleAcceptRequest(request._id)}
-                          style={[
-                            styles.requestButton,
-                            { backgroundColor: isDark ? "#22c55e" : "#16a34a" },
-                          ]}
-                        >
-                          <Text style={styles.requestButtonTextPrimary}>Chap nhan</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                  ))
-                )}
-                <Pressable
-                  onPress={() => setShowRequests(false)}
-                  style={[styles.modalGhost, { borderColor: isDark ? "#334155" : "#e2e8f0" }]}
+                      <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Huy</Text>
+                    </Pressable>
+
+                    <Pressable
+                      onPress={() => handleAcceptRequest(request._id)}
+                      disabled={friendStoreLoading}
+                      style={styles.primaryButton}
+                    >
+                      <Text style={styles.primaryButtonText}>Chap nhan</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })
+          )}
+
+          <Text
+            style={[
+              styles.modalSectionTitle,
+              styles.modalSecondarySection,
+              { color: isDark ? "#f8fafc" : "#0f172a" },
+            ]}
+          >
+            Da gui
+          </Text>
+
+          {sentList.length === 0 ? (
+            <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              Ban chua gui loi moi ket ban nao.
+            </Text>
+          ) : (
+            sentList.map((request) => {
+              const info = getRequestUser(request, "sent");
+
+              if (!info) {
+                return null;
+              }
+
+              return (
+                <View
+                  key={request._id}
+                  style={[
+                    styles.requestCard,
+                    {
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                    },
+                  ]}
                 >
-                  <Text style={[styles.modalGhostText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                    Dong
+                  <View style={styles.requestInfo}>
+                    <UserAvatar name={info.displayName} avatarUrl={info.avatarUrl} size={42} />
+                    <View style={styles.requestTextBlock}>
+                      <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                        {info.displayName}
+                      </Text>
+                      <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{info.username}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.pendingLabel, { color: isDark ? "#94a3b8" : "#64748b" }]}>Dang cho phan hoi</Text>
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </OverlayModal>
+
+      <OverlayModal
+        visible={showAddFriend}
+        title="Ket ban"
+        onClose={() => {
+          setShowAddFriend(false);
+          resetAddFriendState();
+        }}
+      >
+        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <TextInput
+            value={friendUsername}
+            onChangeText={(value) => {
+              setFriendUsername(value);
+              setSearchStatus("idle");
+              setSearchedUser(null);
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Nhap username can tim"
+            placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+            style={[
+              styles.textInput,
+              {
+                color: isDark ? "#f8fafc" : "#0f172a",
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          />
+
+          <Pressable
+            onPress={handleSearchUser}
+            disabled={searchStatus === "loading" || friendStoreLoading}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.primaryButtonText}>{searchStatus === "loading" ? "Dang tim..." : "Tim nguoi dung"}</Text>
+          </Pressable>
+
+          {searchStatus === "not_found" && (
+            <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              Khong tim thay nguoi dung phu hop.
+            </Text>
+          )}
+
+          {searchedUser && (
+            <View
+              style={[
+                styles.requestCard,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                },
+              ]}
+            >
+              <View style={styles.requestInfo}>
+                <UserAvatar name={searchedUser.displayName} avatarUrl={searchedUser.avatarUrl} size={46} />
+                <View style={styles.requestTextBlock}>
+                  <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                    {searchedUser.displayName}
+                  </Text>
+                  <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{searchedUser.username}</Text>
+                </View>
+              </View>
+
+              {searchedUserRelationship === "available" ? (
+                <>
+                  <TextInput
+                    value={friendRequestMessage}
+                    onChangeText={setFriendRequestMessage}
+                    placeholder="Loi nhan (khong bat buoc)"
+                    placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                    multiline
+                    style={[
+                      styles.textArea,
+                      {
+                        color: isDark ? "#f8fafc" : "#0f172a",
+                        backgroundColor: isDark ? "#111827" : "#ffffff",
+                        borderColor: isDark ? "#334155" : "#e2e8f0",
+                      },
+                    ]}
+                  />
+
+                  <Pressable
+                    onPress={handleSendFriendRequest}
+                    disabled={friendStoreLoading}
+                    style={styles.primaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {friendStoreLoading ? "Dang gui..." : "Gui loi moi ket ban"}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Text style={[styles.statusText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                  {searchedUserRelationship === "self" && "Ban khong the gui loi moi cho chinh minh."}
+                  {searchedUserRelationship === "friend" && "Nguoi nay da la ban cua ban."}
+                  {searchedUserRelationship === "sent" && "Ban da gui loi moi cho nguoi nay roi."}
+                  {searchedUserRelationship === "received" &&
+                    "Nguoi nay da gui loi moi cho ban. Hay mo cua so loi moi de chap nhan."}
+                </Text>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </OverlayModal>
+
+      <OverlayModal
+        visible={showNewMessage}
+        title="Tin nhan moi"
+        onClose={() => {
+          setShowNewMessage(false);
+          resetNewMessageState();
+        }}
+      >
+        <View style={styles.modalContent}>
+          <TextInput
+            value={newMessageQuery}
+            onChangeText={setNewMessageQuery}
+            placeholder="Tim theo ten hoac username"
+            placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+            style={[
+              styles.textInput,
+              {
+                color: isDark ? "#f8fafc" : "#0f172a",
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          />
+
+          <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false}>
+            {filteredFriendsForMessage.length === 0 ? (
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                {friends.length === 0
+                  ? "Ban chua co ban be nao de bat dau tro chuyen."
+                  : "Khong tim thay ban be phu hop."}
+              </Text>
+            ) : (
+              filteredFriendsForMessage.map((friend) => (
+                <Pressable
+                  key={friend._id}
+                  onPress={() => handleOpenConversation(friend)}
+                  style={({ pressed }) => [
+                    styles.friendRow,
+                    {
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                      opacity: pressed ? 0.92 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.requestInfo}>
+                    <UserAvatar name={friend.displayName} avatarUrl={friend.avatarUrl} size={42} />
+                    <View style={styles.requestTextBlock}>
+                      <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                        {friend.displayName}
+                      </Text>
+                      <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{friend.username}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Mo chat</Text>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </OverlayModal>
+
+      <OverlayModal
+        visible={showCreateGroup}
+        title="Tao nhom"
+        onClose={() => {
+          setShowCreateGroup(false);
+          resetCreateGroupState();
+        }}
+      >
+        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <TextInput
+            value={groupName}
+            onChangeText={setGroupName}
+            placeholder="Nhap ten nhom"
+            placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+            style={[
+              styles.textInput,
+              {
+                color: isDark ? "#f8fafc" : "#0f172a",
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          />
+
+          <TextInput
+            value={groupQuery}
+            onChangeText={setGroupQuery}
+            placeholder="Tim ban de them vao nhom"
+            placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+            style={[
+              styles.textInput,
+              {
+                color: isDark ? "#f8fafc" : "#0f172a",
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          />
+
+          {selectedGroupMembers.length > 0 && (
+            <View style={styles.selectedMembersWrap}>
+              {selectedGroupMembers.map((friend) => (
+                <Pressable
+                  key={friend._id}
+                  onPress={() => handleToggleGroupMember(friend)}
+                  style={[
+                    styles.selectedMemberChip,
+                    { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.selectedMemberText,
+                      { color: isDark ? "#ddd6fe" : "#6d28d9" },
+                    ]}
+                  >
+                    {friend.displayName}
                   </Text>
                 </Pressable>
-              </View>
-            </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+              ))}
+            </View>
+          )}
+
+          <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false}>
+            {filteredFriendsForGroup.length === 0 ? (
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                {friends.length === 0
+                  ? "Ban chua co ban be nao de tao nhom."
+                  : "Khong tim thay ban be phu hop."}
+              </Text>
+            ) : (
+              filteredFriendsForGroup.map((friend) => (
+                <Pressable
+                  key={friend._id}
+                  onPress={() => handleToggleGroupMember(friend)}
+                  style={({ pressed }) => [
+                    styles.friendRow,
+                    {
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                      opacity: pressed ? 0.92 : 1,
+                    },
+                  ]}
+                >
+                  <View style={styles.requestInfo}>
+                    <UserAvatar name={friend.displayName} avatarUrl={friend.avatarUrl} size={42} />
+                    <View style={styles.requestTextBlock}>
+                      <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                        {friend.displayName}
+                      </Text>
+                      <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{friend.username}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Them</Text>
+                </Pressable>
+              ))
+            )}
+          </ScrollView>
+
+          <Pressable onPress={handleCreateGroup} disabled={chatLoading} style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>{chatLoading ? "Dang tao..." : "Tao nhom chat"}</Text>
+          </Pressable>
+        </ScrollView>
+      </OverlayModal>
 
       <FriendListModal
         visible={showFriendList}
         onClose={() => setShowFriendList(false)}
-        onSelectFriend={(friend) => handleStartChat(friend._id)}
+        onSelectFriend={(friend) => {
+          void handleFriendListSelect(friend);
+        }}
       />
     </SafeAreaView>
   );
@@ -1072,219 +1262,191 @@ const [showCreateGroup, setShowCreateGroup] = useState(false);
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   keyboardAvoiding: { flex: 1 },
-  headerBackButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginLeft: 12 },
-  headerIconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", marginRight: 12 },
-  headerBadge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#ef4444", alignItems: "center", justifyContent: "center" },
+  headerTitleWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    maxWidth: 220,
+  },
+  headerTitleText: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  headerSubtitle: {
+    fontSize: 11,
+    fontWeight: "600",
+    marginTop: 2,
+  },
+  headerBackButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 12,
+  },
+  headerIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  headerBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "700" },
-  messageList: { flex: 1 },
   pinnedContainer: {
-    position: 'absolute',
+    position: "absolute",
     top: 10,
     left: 10,
     right: 10,
     zIndex: 1000,
     paddingHorizontal: 4,
   },
-  messageListContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 24 },
+  messageListContent: { paddingHorizontal: 14, paddingBottom: 24 },
   loadingMore: { paddingVertical: 10, alignItems: "center" },
-  conversationList: { paddingHorizontal: 16, paddingTop: 10 },
-  emptyMessages: { flex: 1, alignItems: "center", justifyContent: "center", marginTop: 50 },
-  headerMeta: {
-    fontSize: 13,
-    fontWeight: "500",
-    marginRight: 12,
-  },
-  listHeader: {
-    gap: 12,
-    marginBottom: 8,
-  },
-  searchRow: {
-    borderRadius: 16,
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-  },
-  sectionActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  sectionAction: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  sectionActionText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  groupSection: {
-    marginTop: 20,
-    gap: 12,
-  },
-  emptyState: {
+  emptyMessages: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 24,
     paddingTop: 80,
+    paddingHorizontal: 24,
+  },
+  emptyMessageText: { fontSize: 14, lineHeight: 20, textAlign: "center" },
+  blockedNotice: {
+    textAlign: "center",
+    color: "#ef4444",
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  conversationList: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 22 },
+  section: { gap: 12 },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     gap: 12,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+  sectionTitleBlock: { flex: 1, gap: 4 },
+  sectionTitle: { fontSize: 20, fontWeight: "800" },
+  sectionSubtitle: { fontSize: 13, lineHeight: 18 },
+  sectionActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 8,
   },
-  emptyText: {
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: "center",
+  sectionActionButton: {
+    minHeight: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
+  sectionActionText: { fontSize: 12, fontWeight: "700" },
+  emptySection: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 18 },
+  emptySectionText: { fontSize: 14, lineHeight: 20 },
   loaderState: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 12,
+    paddingHorizontal: 20,
   },
-  
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "flex-end",
+  modalRoot: { flex: 1, justifyContent: "center", paddingHorizontal: 16 },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
   },
-  modalCard: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 26,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: 12,
-  },
-  modalScrollContent: {
-    paddingHorizontal: 0,
+  modalKeyboard: { flex: 1, justifyContent: "center" },
+  modalCard: { borderRadius: 28, borderWidth: 1, maxHeight: "82%", overflow: "hidden" },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingTop: 18,
     paddingBottom: 12,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+  modalTitle: { fontSize: 19, fontWeight: "800" },
+  modalCloseButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  modalInput: {
-    borderWidth: 1,
+  modalContent: { paddingHorizontal: 18, paddingBottom: 20, gap: 12 },
+  modalSectionTitle: { fontSize: 15, fontWeight: "800" },
+  modalSecondarySection: { marginTop: 8 },
+  emptyModalText: { fontSize: 14, lineHeight: 20 },
+  requestCard: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 12 },
+  requestInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
+  requestTextBlock: { flex: 1, gap: 2 },
+  requestName: { fontSize: 15, fontWeight: "700" },
+  requestUsername: { fontSize: 13 },
+  requestActions: { flexDirection: "row", gap: 10 },
+  primaryButton: {
+    minHeight: 46,
     borderRadius: 16,
+    backgroundColor: "#7c3aed",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+  },
+  primaryButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
+  secondaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
   },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    marginTop: 6,
-  },
-  modalPrimary: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    paddingVertical: 12,
-  },
-  modalPrimaryText: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  modalGhost: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+  secondaryButtonText: { fontSize: 13, fontWeight: "700" },
+  pendingLabel: { fontSize: 13, fontWeight: "600" },
+  textInput: {
+    minHeight: 48,
     borderRadius: 16,
     borderWidth: 1,
-    paddingVertical: 12,
-  },
-  modalGhostText: {
+    paddingHorizontal: 14,
     fontSize: 14,
-    fontWeight: "700",
   },
-  modalHint: {
-    fontSize: 13,
+  textArea: {
+    minHeight: 96,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    textAlignVertical: "top",
   },
-  modalHintGroup: {
-    gap: 4,
-  },
-  modalLoading: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
+  statusText: { fontSize: 14, lineHeight: 20 },
+  friendList: { maxHeight: 320 },
   friendRow: {
     borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 6,
-  },
-  friendName: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  friendMeta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  requestRow: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
-    gap: 8,
-  },
-  requestInfo: {
-    gap: 2,
-  },
-  requestName: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  requestMeta: {
-    fontSize: 12,
-  },
-  requestMessage: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  requestActions: {
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
     flexDirection: "row",
-    gap: 8,
-    marginTop: 6,
-  },
-  requestButton: {
-    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 12,
-    paddingVertical: 8,
+    justifyContent: "space-between",
+    gap: 12,
   },
-  requestButtonText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  requestButtonTextPrimary: {
-    color: "#ffffff",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  linkText: { fontSize: 13, fontWeight: "800" },
+  selectedMembersWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  selectedMemberChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  selectedMemberText: { fontSize: 12, fontWeight: "700" },
 });

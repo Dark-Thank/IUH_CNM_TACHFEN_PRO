@@ -4,9 +4,11 @@ import { toast } from "@/lib/toast";
 import { chatService } from "@/services/chatServiec";
 import type { ChatState } from "@/types/store";
 
-import type { Message } from "@/types/chat";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+
+import type { Conversation, Message } from "@/types/chat";
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
@@ -23,6 +25,31 @@ const uniqueById = <T extends { _id: string }>(items: T[]) => {
     return true;
   });
 };
+
+const isUnauthorizedError = (error: any) => {
+  const status = error?.response?.status;
+  return status === 401 || status === 403;
+};
+
+const getConversationTimestamp = (conversation: Conversation) => {
+  const fallbackValue = "1970-01-01T00:00:00.000Z";
+
+  return new Date(
+    conversation.lastMessageAt ??
+    conversation.updatedAt ??
+    conversation.createdAt ??
+    fallbackValue
+  ).getTime();
+};
+
+const mergeConversationList = (
+  conversations: Conversation[],
+  nextConversation: Conversation
+) =>
+  uniqueById([
+    nextConversation,
+    ...conversations.filter((conversation) => conversation._id !== nextConversation._id),
+  ]).sort((left, right) => getConversationTimestamp(right) - getConversationTimestamp(left));
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -56,9 +83,22 @@ export const useChatStore = create<ChatState>()(
         try {
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
-          set({ conversations: uniqueById(conversations), convoLoading: false });
+          const sortedConversations = uniqueById(conversations).sort(
+            (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
+          );
+
+          set({
+            conversations: sortedConversations,
+            convoLoading: false,
+          });
+
+          sortedConversations.forEach((conversation) => {
+            socketEmitter.emit("join-conversation", conversation._id);
+          });
         } catch (error) {
-          console.error("Loi xay ra khi fetchConversations:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi fetchConversations:", error);
+          }
           set({ convoLoading: false });
         }
       },
@@ -108,7 +148,9 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi xay ra khi fetchMessages:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi fetchMessages:", error);
+          }
         } finally {
           set({ messageLoading: false });
         }
@@ -118,37 +160,19 @@ export const useChatStore = create<ChatState>()(
         try {
           const { activeConversationId } = get();
 
-          const formData = new FormData();
-
-          formData.append("recipientId", recipientId);
-          formData.append("content", content);
-
-          if (activeConversationId) {
-            formData.append("conversationId", activeConversationId);
-          }
-
-          if (files?.length) {
-            files.forEach((file) => {
-              formData.append("files", {
-                uri: file.uri,
-                name: file.name || "file.jpg",
-                type: file.type || "image/jpeg",
-              } as any);
-            });
-          }
-
           await chatService.sendDirectMessage(recipientId, {
-  content,
-  conversationId: activeConversationId || undefined,
-  files: files?.map(f => ({
-    uri: f.uri,
-    name: f.name,
-    type: f.type,
-  })) as any,
-});
+            content,
+            conversationId: activeConversationId || undefined,
+            files: files?.map((file) => ({
+              uri: file.uri,
+              name: file.name,
+              type: file.type,
+            })),
+          });
 
         } catch (error) {
           console.error("Loi xay ra khi gui direct message", error);
+          throw error;
         }
       },
 
@@ -171,6 +195,7 @@ export const useChatStore = create<ChatState>()(
           await chatService.sendGroupMessage(conversationId, formData);
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
+          throw error;
         }
       },
 
@@ -264,13 +289,13 @@ export const useChatStore = create<ChatState>()(
                 items: state.messages[convoId].items.map((m: Message) =>
                   m._id === messageId
                     ? {
-                        ...m,
-                        isPinned: !m.isPinned,
-                        ...(m.isPinned 
-                          ? { pinnedBy: undefined, pinnedAt: undefined }
-                          : { pinnedBy: userId, pinnedAt: new Date().toISOString() }
-                        )
-                      }
+                      ...m,
+                      isPinned: !m.isPinned,
+                      ...(m.isPinned
+                        ? { pinnedBy: undefined, pinnedAt: undefined }
+                        : { pinnedBy: userId, pinnedAt: new Date().toISOString() }
+                      )
+                    }
                     : m
                 ),
               },
@@ -287,10 +312,27 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateConversation: (conversation) => {
+        set((state) => {
+          const existingConversation = state.conversations.find(
+            (item) => item._id === conversation._id
+          );
+
+          if (!existingConversation) {
+            return state;
+          }
+
+          return {
+            conversations: mergeConversationList(state.conversations, {
+              ...existingConversation,
+              ...conversation,
+            }),
+          };
+        });
+      },
+
+      upsertConversation: (conversation) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c
-          ),
+          conversations: mergeConversationList(state.conversations, conversation),
         }));
       },
 
@@ -329,20 +371,16 @@ export const useChatStore = create<ChatState>()(
             ),
           }));
         } catch (error) {
-          console.error("Loi xay ra khi goi markAsSeen trong store:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi goi markAsSeen trong store:", error);
+          }
         }
       },
 
       addConvo: (convo) => {
         set((state) => {
-          const exists = state.conversations.some(
-            (c) => c._id.toString() === convo._id.toString()
-          );
-
           return {
-            conversations: exists
-              ? state.conversations
-              : uniqueById([convo, ...state.conversations]),
+            conversations: mergeConversationList(state.conversations, convo),
             activeConversationId: convo._id,
           };
         });

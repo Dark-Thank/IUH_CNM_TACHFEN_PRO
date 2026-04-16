@@ -2,6 +2,19 @@ import api from "@/lib/axios";
 import type { ConversationResponse, Message } from "@/types/chat";
 import { toast } from "sonner";
 
+const triggerBrowserDownload = (blob: Blob, fileName: string) => {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  window.URL.revokeObjectURL(objectUrl);
+};
+
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
@@ -23,25 +36,28 @@ export const chatService = {
     return { messages: res.data.messages, cursor: res.data.nextCursor };
   },
 
- async sendDirectMessage(formData: FormData) {
-  try {
-    const res = await api.post("/messages/direct", formData);
+  async sendDirectMessage(formData: FormData) {
+    try {
+      const res = await api.post("/messages/direct", formData);
 
-    return res.data.message;
-  } catch (error: any) {
-    if (error.response?.status === 403 && error.response.data?.message?.includes('chặn')) {
-      toast.error(error.response.data.message || "Bạn đã bị người dùng này chặn");
+      return res.data.message;
+    } catch (error: any) {
+      if (
+        error.response?.status === 403 &&
+        error.response.data?.message?.includes("chặn")
+      ) {
+        toast.error(error.response.data.message || "Bạn đã bị người dùng này chặn");
+      }
+
       throw error;
     }
-    throw error;
-  }
-},
+  },
 
   async sendGroupMessage(formData: FormData) {
-  const res = await api.post("/messages/group", formData);
+    const res = await api.post("/messages/group", formData);
 
-  return res.data.message;
-},
+    return res.data.message;
+  },
 
   async markAsSeen(conversationId: string) {
     const res = await api.patch(`/conversations/${conversationId}/seen`);
@@ -65,6 +81,14 @@ export const chatService = {
   async recallMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/recall`);
     return res.data;
+  },
+
+  async downloadMessageFile(messageId: string, fileIndex: number, fileName: string) {
+    const res = await api.get(`/messages/${messageId}/files/${fileIndex}`, {
+      responseType: "blob",
+    });
+
+    triggerBrowserDownload(res.data, fileName);
   },
 };
 

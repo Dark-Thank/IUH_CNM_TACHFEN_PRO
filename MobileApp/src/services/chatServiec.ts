@@ -1,14 +1,83 @@
+import { authSession } from "@/lib/authSession";
 import api from "@/lib/axios";
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import { toast } from "@/lib/toast";
 import type { ConversationResponse, Message } from "@/types/chat";
+
 import { useBlockStore } from "../stores/useBlockStore";
 
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+
+
 const pageLimit = 50;
+const attachmentDirectory = `${FileSystem.cacheDirectory ?? FileSystem.documentDirectory}attachments/`;
+
+const sanitizeAttachmentFileName = (value = "download") =>
+  value.replace(/[\\/:*?"<>|]/g, "-").trim() || "download";
+
+const ensureAttachmentDirectory = async () => {
+  const info = await FileSystem.getInfoAsync(attachmentDirectory);
+
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(attachmentDirectory, {
+      intermediates: true,
+    });
+  }
+
+  return attachmentDirectory;
+};
 
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
 }
+
+const parseJsonSafely = async (response: Response) => {
+  const text = await response.text();
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+};
+
+const postMultipart = async (path: string, formData: FormData) => {
+  const accessToken = authSession.getAccessToken();
+
+  if (!accessToken) {
+    throw new Error("Không tìm thấy access token");
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+    body: formData,
+  });
+
+  const data = await parseJsonSafely(response);
+
+  if (!response.ok) {
+    const error: any = new Error(
+      data?.message || `Yeu cau that bai voi ma ${response.status}`
+    );
+    error.response = {
+      status: response.status,
+      data,
+    };
+    throw error;
+  }
+
+  return data;
+};
 
 export const chatService = {
   // ======================
@@ -43,37 +112,40 @@ async sendDirectMessage(
   recipientId: string,
   options: {
     content?: string;
-    imgUrl?: string;
     conversationId?: string;
-    files?: File[]; // hoặc ReactNativeFile nếu RN
+    files?: Array<{
+      uri: string;
+      name?: string;
+      type?: string;
+    }>;
   } = {}
 ) {
   try {
-    const { content = "", imgUrl, conversationId, files } = options;
+    const { content = "", conversationId, files } = options;
 
-    // 👉 Nếu có file → dùng FormData
     if (files && files.length > 0) {
       const formData = new FormData();
 
       formData.append("recipientId", recipientId);
       formData.append("content", content);
       if (conversationId) formData.append("conversationId", conversationId);
-      if (imgUrl) formData.append("imgUrl", imgUrl);
 
-      files.forEach((file, index) => {
-        formData.append("files", file);
+      files.forEach((file) => {
+        formData.append("files", {
+          uri: file.uri,
+          name: file.name || "file.jpg",
+          type: file.type || "application/octet-stream",
+        } as any);
       });
 
-      const res = await api.post("/messages/direct", formData);
+      const data = await postMultipart("/messages/direct", formData);
 
-      return res.data.message;
+      return data.message;
     }
 
-    // 👉 Không có file → gửi JSON (nhẹ hơn)
     const res = await api.post("/messages/direct", {
       recipientId,
       content,
-      imgUrl,
       conversationId,
     });
 
@@ -109,9 +181,9 @@ async sendDirectMessage(
   async sendGroupMessage(conversationId: string, formData: FormData) {
     formData.append("conversationId", conversationId);
 
-    const res = await api.post("/messages/group", formData);
+    const data = await postMultipart("/messages/group", formData);
 
-    return res.data.message;
+    return data.message;
   },
 
   // ======================
@@ -147,5 +219,42 @@ async sendDirectMessage(
   async togglePinMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/pin`);
     return res.data.message;
+  },
+
+  async downloadMessageFile(
+    messageId: string,
+    fileIndex: number,
+    fileName: string,
+    mimeType?: string
+  ) {
+    const accessToken = authSession.getAccessToken();
+
+    if (!accessToken) {
+      throw new Error("Không tìm thấy access token");
+    }
+
+    const directory = await ensureAttachmentDirectory();
+    const localFileName = `${Date.now()}-${sanitizeAttachmentFileName(fileName)}`;
+    const fileUri = `${directory}${localFileName}`;
+    const downloadUrl = `${getApiBaseUrl()}/messages/${messageId}/files/${fileIndex}`;
+
+    const downloadResult = await FileSystem.downloadAsync(downloadUrl, fileUri, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (downloadResult.status !== 200) {
+      throw new Error(`Tải file thất bại với mã ${downloadResult.status}`);
+    }
+
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(downloadResult.uri, {
+        mimeType,
+        dialogTitle: fileName,
+      });
+    }
+
+    return downloadResult.uri;
   },
 };
