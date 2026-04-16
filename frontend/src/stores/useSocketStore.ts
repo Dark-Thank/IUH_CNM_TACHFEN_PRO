@@ -80,34 +80,42 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // message pinned
     socket.on("messagePinned", ({ messageId, isPinned, pinnedBy, pinnedAt }) => {
-      const updatePin = () => {
-        const chatStore = useChatStore.getState();
-        const { activeConversationId, messages } = chatStore;
-        if (!activeConversationId) return;
+      useChatStore.setState((state) => {
+        const { activeConversationId, messages } = state;
+        if (!activeConversationId) return state;
 
-        const convoMessages = messages[activeConversationId];
-        if (!convoMessages) return;
+        const convoKey = activeConversationId;
+        const convoMessages = messages[convoKey];
+        if (!convoMessages) return state;
 
         const updatedItems = convoMessages.items.map((m) =>
           m._id === messageId 
-            ? { ...m, isPinned, pinnedBy: pinnedBy, pinnedAt: pinnedAt?.toString() }
+            ? { ...m, isPinned, pinnedBy, pinnedAt: pinnedAt?.toString() }
             : m
         );
 
-        chatStore.messages[activeConversationId].items = updatedItems;
-      };
-      updatePin();
+        return {
+          ...state,
+          messages: {
+            ...messages,
+            [convoKey]: {
+              ...convoMessages,
+              items: updatedItems
+            }
+          }
+        };
+      });
     });
 
     // message recalled
     socket.on("messageRecalled", ({ messageId, content, isRecalled, recalledAt }) => {
-      const updateRecall = () => {
-        const chatStore = useChatStore.getState();
-        const { activeConversationId, messages } = chatStore;
-        if (!activeConversationId) return;
+      useChatStore.setState((state) => {
+        const { activeConversationId, messages } = state;
+        if (!activeConversationId) return state;
 
-        const convoMessages = messages[activeConversationId];
-        if (!convoMessages) return;
+        const convoKey = activeConversationId;
+        const convoMessages = messages[convoKey];
+        if (!convoMessages) return state;
 
         const updatedItems = convoMessages.items.map((m) =>
           m._id === messageId 
@@ -115,9 +123,44 @@ export const useSocketStore = create<SocketState>((set, get) => ({
             : m
         );
 
-        chatStore.messages[activeConversationId].items = updatedItems;
-      };
-      updateRecall();
+        return {
+          ...state,
+          messages: {
+            ...messages,
+            [convoKey]: {
+              ...convoMessages,
+              items: updatedItems
+            }
+          }
+        };
+      });
+    });
+
+    // update message (for pin/recall realtime)
+    socket.on("update-message", ({ message }) => {
+      useChatStore.setState((state) => {
+        const { activeConversationId, messages } = state;
+        if (!activeConversationId || !message.conversationId || message.conversationId.toString() !== activeConversationId) return state;
+
+        const convoKey = activeConversationId;
+        const convoMessages = messages[convoKey];
+        if (!convoMessages) return state;
+
+        const updatedItems = convoMessages.items.map((m) =>
+          m._id === message._id ? { ...m, ...message } : m
+        );
+
+        return {
+          ...state,
+          messages: {
+            ...messages,
+            [convoKey]: {
+              ...convoMessages,
+              items: updatedItems
+            }
+          }
+        };
+      });
     });
   },
 

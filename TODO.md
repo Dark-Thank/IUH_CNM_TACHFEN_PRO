@@ -1,12 +1,24 @@
-# Fix Nút Thu Hồi Tin Nhắn
+# Fix Realtime Pin/Recall Messages - TODO
 
-## ✅ Bước 1: Tạo TODO.md (Hoàn thành)
+**Progress:**
+- [x] 1. Phân tích project và xác định nguyên nhân (direct mutation không trigger re-render).
+- [x] 2. Tạo TODO.md với các bước plan.
+- [x] 3. Đọc useSocketStore.ts và confirm content.
+- [x] 4. Edit useSocketStore.ts lần 1: Thêm "update-message" handler.
+- [x] 5. Edit useSocketStore.ts lần 2: Fix tất cả handlers dùng setState() immutable để trigger UI re-render realtime.
 
-## ✅ Bước 2: Thêm socket listener 'messageRecalled' trong useSocketStore.ts (Hoàn thành)
+**Progress (updated):**
+- [x] 1. Phân tích project và xác định nguyên nhân (direct mutation không trigger re-render).
+- [x] 2. Tạo TODO.md với các bước plan.
+- [x] 3. Đọc useSocketStore.ts và confirm content.
+- [x] 4. Edit useSocketStore.ts lần 1: Thêm "update-message" handler.
+- [x] 5. Edit useSocketStore.ts lần 2: Fix tất cả handlers dùng setState() immutable để trigger UI re-render realtime.
+- [x] 6. Feedback: Cải thiện confirm dialog thu hồi tin nhắn từ "Thu hồi tin nhắn này?" → "Bạn có chắc muốn thu hồi tin nhắn này không?".
 
-## ✅ Bước 3: Cập nhật MessageItem.tsx hiển thị UI recalled (Hoàn thành)
+**Next: Test realtime!**
+1. `cd backend && npm start`
+2. `cd frontend && npm run dev`
+3. 2 tabs browser cùng conversation → ghim/thu hồi → check realtime.
 
-## ✅ Bước 4: Fix import recallMessage trong messageRoute.js (Backend import thiếu gây crash)
-
-## ✅ Bước 5: Hoàn thành task (Backend chạy OK, nút thu hồi full chức năng)
+**Hoàn thành khi test OK!**
 

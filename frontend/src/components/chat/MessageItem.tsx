@@ -11,6 +11,7 @@ import {
 import { Button } from "../ui/button";
 import { MoreVertical, Trash2 } from "lucide-react";
 import UserAvatar from "./UserAvatar";
+import RecallConfirmDialog from "./RecallConfirmDialog";
 import { useChatStore } from "@/stores/useChatStore";
 
 interface MessageItemProps {
@@ -28,7 +29,7 @@ const MessageItem = ({
   selectedConvo,
   lastMessageStatus,
 }: MessageItemProps) => {
-  const { togglePinMessage, recallMessage } = useChatStore();
+  const { togglePinMessage } = useChatStore();
 
   const prev =
     index + 1 < messages.length ? messages[index + 1] : undefined;
@@ -36,8 +37,8 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-      new Date(prev?.createdAt || 0).getTime() >
-      300000;
+    new Date(prev?.createdAt || 0).getTime() >
+    300000;
 
   const isGroupBreak = isShowTime || message.senderId !== prev?.senderId;
 
@@ -47,16 +48,6 @@ const MessageItem = ({
   );
 
   const isOwn = message.isOwn;
-
-  const handleRecall = async () => {
-    if (confirm("Thu hồi tin nhắn này?")) {
-      try {
-        await recallMessage(message._id);
-      } catch (error) {
-        console.error("Lỗi thu hồi:", error);
-      }
-    }
-  };
 
   return (
     <>
@@ -102,8 +93,8 @@ const MessageItem = ({
               message.isRecalled
                 ? "p-3 border rounded-lg bg-muted/50 text-muted-foreground"
                 : isOwn
-                ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
-                : "chat-bubble-received"
+                  ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
+                  : "chat-bubble-received"
             )}
           >
             {message.isRecalled ? (
@@ -165,13 +156,25 @@ const MessageItem = ({
                 📌 {message.isPinned ? "Bỏ ghim" : "Ghim tin nhắn"}
               </DropdownMenuItem>
 
+              {/* {isOwn && !message.isRecalled && (
+                <RecallConfirmDialog messageId={message._id}>
+                  <DropdownMenuItem className="gap-2 text-destructive cursor-pointer">
+                    <Trash2 className="h-4 w-4" />
+                    Thu hồi tin nhắn
+                  </DropdownMenuItem>
+                </RecallConfirmDialog>
+              )} */}
               {isOwn && !message.isRecalled && (
                 <DropdownMenuItem
-                  onClick={handleRecall}
-                  className="gap-2 text-destructive"
+                  className="p-0" // Xóa padding của menu item để con nó chiếm hết diện tích
+                  onSelect={(e) => e.preventDefault()} // NGĂN MENU ĐÓNG LẠI
                 >
-                  <Trash2 className="h-4 w-4" />
-                  Thu hồi tin nhắn
+                  <RecallConfirmDialog messageId={message._id}>
+                    <div className="flex items-center gap-2 px-2 py-1.5 text-destructive cursor-pointer w-full">
+                      <Trash2 className="h-4 w-4" />
+                      Thu hồi tin nhắn
+                    </div>
+                  </RecallConfirmDialog>
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
