@@ -132,29 +132,28 @@ export default function ChatAppScreen() {
     return (
       <SafeAreaView style={[styles.screen, { backgroundColor: isDark ? "#0f172a" : "#f8fafc" }]} edges={["left", "right"]}>
         <KeyboardAvoidingView style={styles.keyboardAvoiding} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 88 : 0}>
+          <View style={styles.pinnedContainer}>
+            {pinnedMessages.length > 0 && (
+              <PinnedSection 
+                pinnedMessages={pinnedMessages} 
+                onJump={(id) => {
+                  const index = messageItems.findIndex(m => m._id === id);
+                  if (index !== -1) flatListRef.current?.scrollToIndex({ index, animated: true });
+                }} 
+              />
+            )}
+          </View>
+          
           <FlatList
             ref={flatListRef}
             data={messageItems}
             keyExtractor={(item) => item._id}
-            contentContainerStyle={styles.messageListContent}
+            contentContainerStyle={[styles.messageListContent, { paddingTop: pinnedMessages.length > 0 ? 120 : 14 }]}
             onScroll={handleMessageScroll}
             scrollEventThrottle={16}
-            ListHeaderComponent={() => (
-              <>
-                {messageLoading && hasMoreMessages && (
-                  <View style={styles.loadingMore}><ActivityIndicator size="small" color="#8b5cf6" /></View>
-                )}
-                {pinnedMessages.length > 0 && (
-                  <PinnedSection 
-                    pinnedMessages={pinnedMessages} 
-                    onJump={(id) => {
-                      const index = messageItems.findIndex(m => m._id === id);
-                      if (index !== -1) flatListRef.current?.scrollToIndex({ index, animated: true });
-                    }} 
-                  />
-                )}
-              </>
-            )}
+            ListHeaderComponent={() => messageLoading && hasMoreMessages ? (
+              <View style={styles.loadingMore}><ActivityIndicator size="small" color="#8b5cf6" /></View>
+            ) : null}
             renderItem={({ item, index }) => (
               <MessageItem
                 message={item}
@@ -204,6 +203,14 @@ const styles = StyleSheet.create({
   headerBadge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#ef4444", alignItems: "center", justifyContent: "center" },
   headerBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "700" },
   messageList: { flex: 1 },
+  pinnedContainer: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    right: 10,
+    zIndex: 1000,
+    paddingHorizontal: 4,
+  },
   messageListContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 24 },
   loadingMore: { paddingVertical: 10, alignItems: "center" },
   conversationList: { paddingHorizontal: 16, paddingTop: 10 },

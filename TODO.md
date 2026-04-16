@@ -1,1 +1,18 @@
-# FIXED ALL ERRORS ✅&#10;&#10;## Backend - COMPLETE&#10;- [✅] Model/Endpoints/Socket ready&#10;&#10;## MobileApp - 5/6 ✅&#10;- [✅] types/chat.ts&#10;- [✅] services/chatServiec.ts&#10;- [✅] useChatStore.ts (recall/pin actions)&#10;- [✅] useSocketStore.ts (update-message listener)&#10;- [✅] MessageItem.tsx (long-press, render recalled/pinned/imgs)&#10;- [ ] ChatAppScreen.tsx (pinned sort/section - optional, works via store)&#10;&#10;## Features Ready&#10;1. Long-press own recent msg → Thu hồi (confirm, <2min)&#10;2. Long-press → Ghim/Bỏ ghim (toggle icon)&#10;3. Real-time sync via socket&#10;4. Recalled: "Tin nhắn đã thu hồi"&#10;5. Pinned: badge icon&#10;6. Img support (backend imgUrls[])&#10;&#10;**Test:** `cd MobileApp && npx expo start` (2 devices)&#10;- Send msg → long-press → thu hồi/ghim → check other device syncs instantly.&#10;&#10;No more errors. Run to test!
+# 🛠️ TODO: Fix Message Recall Backend
+
+## ✅ ALL STEPS COMPLETE! 🎉
+
+**Backend recall FIXED** - Files/content/images now cleared on recall.
+
+### Test:
+```
+cd backend && npm start
+```
+Send file → Recall → Filename disappears (empty fileUrls array)!
+
+**Result**: "Tin nhắn đã thu hồi" + NO filename shown ✅
+```
+
+
+```
+

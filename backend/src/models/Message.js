@@ -48,6 +48,10 @@ const messageSchema = new mongoose.Schema({
     },
     recalledAt: {
         type: Date
+    },
+    recallBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
     }
 
 }, { timestamps: true }

@@ -230,6 +230,10 @@ export const recallMessage = async (req, res) => {
 
         message.isRecalled = true;
         message.recalledAt = new Date();
+        message.recallBy = userId;
+        message.content = null;        // Hide text content
+        message.imgUrls = [];          // Hide images
+        message.fileUrls = [];         // 🔥 HIDE FILES - Fix filename display
 
         await message.save();
 

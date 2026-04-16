@@ -1,5 +1,5 @@
-import { Pin, ChevronDown, MessageCircle } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pin, ChevronDown, MessageCircle, X } from "lucide-react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Message } from "@/types/chat";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -12,17 +12,17 @@ interface PinnedSectionProps {
 
 export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
-  // useChatStore không còn được dùng trực tiếp ở đây nhưng vẫn nên giữ import cho tương lai
-  const togglePinMessage = useChatStore((state) => state.togglePinMessage);
+  const { togglePinMessage } = useChatStore();
   const { isDark } = useThemeStore();
 
   if (pinnedMessages.length === 0) return null;
 
-  // Lấy tin nhắn được ghim mới nhất để hiển thị
-  const latestPinnedMessage = pinnedMessages[pinnedMessages.length - 1];
+  // Sort pinned messages by pinnedAt (newest first)
+  const sortedPinned = [...pinnedMessages].sort((a, b) => 
+    new Date(b.pinnedAt || b.createdAt).getTime() - new Date(a.pinnedAt || a.createdAt).getTime()
+  );
 
-  // Định dạng thời gian cho tin nhắn
-  const formattedTime = new Date(latestPinnedMessage.createdAt).toLocaleTimeString('vi-VN', { 
+  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('vi-VN', { 
     hour: 'numeric', 
     minute: '2-digit' 
   });
@@ -48,31 +48,49 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
         />
       </Pressable>
 
-      {/* Ô CHI TIẾT TIN NHẮN (Hiển thị khi mở ra, giống hệt ảnh bạn vừa gửi) */}
-      {isOpen && latestPinnedMessage && (
-        <View style={[styles.detailDropdown, { backgroundColor: isDark ? "#1e2937" : "#ffffff" }]}>
-          <Pressable 
-            style={styles.messageDetailContainer} 
-            onPress={() => onJump(latestPinnedMessage._id)}
-          >
-            {/* Avatar/Icon đại diện cho tin nhắn */}
-            <View style={[styles.messageAvatar, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
-              <MessageCircle size={18} color={isDark ? "#c084fc" : "#8b5cf6"} />
-            </View>
-
-            {/* Nội dung và thời gian tin nhắn */}
-            <View style={styles.messageTextContainer}>
-              <Text 
-                style={[styles.messageContent, { color: isDark ? "#f8fafc" : "#1e2937" }]} 
-                numberOfLines={1}
-              >
-                {latestPinnedMessage.content || "[Hình ảnh]"}
-              </Text>
-              <Text style={[styles.messageTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                {formattedTime}
-              </Text>
-            </View>
-          </Pressable>
+      {/* 🔥 ALL PINNED MESSAGES LIST */}
+      {isOpen && (
+        <View style={[styles.pinnedListContainer, { backgroundColor: isDark ? "#1e2937" : "#ffffff" }]}>
+          <Text style={[styles.pinnedListTitle, { color: isDark ? "#f8fafc" : "#1e2937" }]}>
+            Tin nhắn đã ghim ({sortedPinned.length})
+          </Text>
+          <ScrollView style={styles.pinnedScroll} nestedScrollEnabled>
+            {sortedPinned.map((msg) => (
+              <View key={msg._id} style={styles.pinnedItem}>
+                {/* Preview */}
+                <Pressable 
+                  style={styles.pinnedPreview}
+                  onPress={() => onJump(msg._id)}
+                >
+                  <View style={[styles.miniAvatar, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
+                    <MessageCircle size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                  </View>
+                  <View style={styles.previewText}>
+                    <Text 
+                      style={[styles.previewContent, { color: isDark ? "#f8fafc" : "#1e2937" }]} 
+                      numberOfLines={1}
+                    >
+                      {msg.content || (msg.imgUrls?.length ? "[Hình ảnh]" : "[Tệp]")}
+                    </Text>
+                    <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                      {formatTime(msg.createdAt)}
+                    </Text>
+                  </View>
+                </Pressable>
+                
+                {/* UNPIN BUTTON */}
+                <Pressable 
+                  style={styles.unpinButton}
+                  onPress={() => {
+                    togglePinMessage(msg._id);
+                    setIsOpen(false); // Collapse after unpin
+                  }}
+                >
+                  <Text style={styles.unpinText}>Bỏ ghim</Text>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
     </View>
@@ -83,19 +101,19 @@ const styles = StyleSheet.create({
   container: {
     paddingTop: 8,
     paddingHorizontal: 10,
-    zIndex: 100, // Đảm bảo thanh ghim luôn nằm trên các tin nhắn khác
+    zIndex: 1000, // 🔥 Sticky on top always
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 25, // Tạo hình viên thuốc
+    borderRadius: 25,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },     // Stronger drop shadow
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 8,                               // 🔥 Sticky shadow effect
   },
   headerText: {
     flex: 1,
@@ -104,41 +122,71 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     marginLeft: 8,
   },
-  detailDropdown: {
-    marginTop: 4,
-    borderRadius: 15, // Bo góc cho khung chi tiết
-    borderWidth: 1, // Thêm khung viền giống ảnh
+  pinnedListContainer: {
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
-    overflow: "hidden", // Đảm bảo nội dung không tràn khỏi góc bo
+    maxHeight: 300, // Limit height
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 4,
+    shadowRadius: 4,
+    elevation: 5,
   },
-  messageDetailContainer: {
+  pinnedListTitle: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  pinnedScroll: {
+    maxHeight: 240,
+  },
+  pinnedItem: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 12, // Khoảng cách bên trong giống ảnh
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
   },
-  messageAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18, // Tạo hình tròn cho avatar
+  pinnedPreview: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  miniAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12, // Khoảng cách với phần chữ
+    marginRight: 12,
   },
-  messageTextContainer: {
+  previewText: {
     flex: 1,
-    justifyContent: "center",
   },
-  messageContent: {
+  previewContent: {
     fontSize: 14,
     fontWeight: "500",
-    marginBottom: 2, // Khoảng cách với dòng thời gian
+    marginBottom: 2,
   },
-  messageTime: {
+  previewTime: {
     fontSize: 12,
   },
-});
+  unpinButton: {
+    width: 60,
+    height: 22,
+    borderRadius: 5,
+    backgroundColor: "#afa9cf",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unpinText: {
+    fontSize: 12,
+    fontWeight: "500",
+    fontStyle: "italic",
+    color: "#dc2626",
+  },
+})
