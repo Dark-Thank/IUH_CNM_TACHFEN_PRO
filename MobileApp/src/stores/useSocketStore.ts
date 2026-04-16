@@ -1,17 +1,13 @@
 import type { SocketState } from "@/types/store";
 import { authSession } from "@/lib/authSession";
+import { getBackendOrigin } from "@/lib/backendUrl";
 import { socketEmitter } from "@/lib/socketEmitter";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
 import type { Socket } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
 
-const BACKEND_HOST = process.env.EXPO_PUBLIC_BACKEND_HOST ?? "192.168.100.247";
-const BACKEND_PORT = process.env.EXPO_PUBLIC_BACKEND_PORT ?? "5001";
-const configuredSocketUrl = process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
-
-const baseURL =
-  configuredSocketUrl || `http://${BACKEND_HOST}:${BACKEND_PORT}`;
+const baseURL = process.env.EXPO_PUBLIC_SOCKET_URL?.trim() || getBackendOrigin();
 
 let appStateSubscription: NativeEventSubscription | null = null;
 let currentAppState: AppStateStatus = "active";
