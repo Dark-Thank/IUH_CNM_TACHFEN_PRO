@@ -52,9 +52,15 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
         } catch (error: any) {
             console.error(error);
 
-            if (error.response?.status === 403) {
+            // if (error.response?.status === 403) {
+            //     setIsBlocked(true);
+            //     toast.error("Bạn đã bị chặn");
+
+            // toast.error("Lỗi gửi tin nhắn!");
+            // Check if error is due to being blocked
+            if (error.response?.status === 403 && error.response?.data?.message?.includes("chặn")) {
                 setIsBlocked(true);
-                toast.error("Bạn đã bị chặn");
+                // toast.error("Bạn đã bị chặn và không thể gửi tin nhắn");
             } else {
                 toast.error("Gửi tin nhắn thất bại!");
             }

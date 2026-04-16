@@ -2,6 +2,7 @@ import Block from "../models/Block.js";
 import Friend from "../models/Friend.js";
 import FriendRequest from "../models/FriendRequest.js";
 import User from "../models/User.js";
+import { io } from "../socket/index.js";
 
 
 export const sendFriendRequest = async (req, res) => {
@@ -227,11 +228,11 @@ export const blockFriend = async (req, res) => {
         }
 
         // Create block
-        await Block.create({
+        const newBlock = await Block.create({
             blocker: userId,
             blocked: friendId
         });
-
+        io.to(friendId.toString()).emit('user-blocked', { blockerId: userId });
         return res.status(200).json({ message: "Đã chặn bạn thành công" });
 
    } catch(error) {

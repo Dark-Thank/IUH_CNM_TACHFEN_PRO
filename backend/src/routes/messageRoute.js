@@ -1,15 +1,17 @@
 import express from 'express';
-import { sendDirectMessage, sendGroupMessage, togglePinMessage, recallMessage } from '../controllers/messageController.js';
-import { checkFriendship } from '../middlewares/friendMiddleware.js';
-import { checkGroupMembership } from '../middlewares/friendMiddleware.js';
-
+import { recallMessage, sendDirectMessage, sendGroupMessage, togglePinMessage } from '../controllers/messageController.js';
 import { protectedRoute } from '../middlewares/authMiddleware.js';
+import { checkBlock } from '../middlewares/blockMiddleware.js';
+import { upload } from "../middlewares/uploadMiddleware.js";
 
 const router = express.Router();
+const messageUpload = upload.fields([
+  { name: "files", maxCount: 10 },
+  { name: "images", maxCount: 10 },
+]);
 
 router.put('/:messageId/pin', protectedRoute, togglePinMessage);
 router.put('/:messageId/recall', protectedRoute, recallMessage);
-import { upload } from "../middlewares/uploadMiddleware.js";
 
 
 
@@ -17,14 +19,17 @@ import { upload } from "../middlewares/uploadMiddleware.js";
 router.post(
   "/direct",
   protectedRoute,
-  upload.array("files", 10),
+  messageUpload,
+  checkBlock,
+  //checkFriendship,
   sendDirectMessage
 );
 
 router.post(
   "/group",
   protectedRoute,
-  upload.array("files", 10),
+  messageUpload,
+  //checkGroupMembership,
   sendGroupMessage
 );
 

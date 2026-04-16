@@ -4,19 +4,20 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
 import { ImagePlus, Send, X } from "lucide-react-native";
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Image,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  ScrollView,
 } from "react-native";
 
-import * as ImagePicker from "expo-image-picker";
+
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 
 interface FileItem {
   uri: string;
@@ -24,13 +25,22 @@ interface FileItem {
   type: string;
 }
 
-interface MessageInputProps {
+// interface MessageInputProps {
+// interface MessageInputProps {
+//   selectedConvo: Conversation;
+// }
+interface Props {
   selectedConvo: Conversation;
+  disabled?: boolean;
 }
 
-export default function MessageInput({
-  selectedConvo,
-}: MessageInputProps) {
+
+// export default function MessageInput({
+//   selectedConvo,
+// }: MessageInputProps) {
+
+export default function MessageInput({ selectedConvo, disabled }: Props) {
+
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage } =
     useChatStore();
@@ -126,15 +136,26 @@ export default function MessageInput({
   // SEND MESSAGE
   // ======================
   const handleSend = async () => {
-    const trimmed = value.trim();
+  if (disabled) {
+    toast.error("Bạn không thể gửi tin nhắn trong cuộc trò chuyện này");
+    return;
+  }
+
+  if (sending) return;
+
+  const trimmed = value.trim();
 
     if (!trimmed && files.length === 0)
       return;
 
-    if (sending) return;
 
-    setSending(true);
-    setValue("");
+
+  // if (!trimmed || sending) {
+  //   return;
+  // }
+
+  setSending(true);
+  setValue("");
 
     try {
       if (selectedConvo.type === "direct") {
@@ -165,8 +186,29 @@ export default function MessageInput({
       );
     } finally {
       setSending(false);
-    }
-  };
+
+  // setSending(true);
+  // setValue("");
+
+  // try {
+  //   if (selectedConvo.type === "direct") {
+  //     if (!otherUser) {
+  //       throw new Error("Không tìm thấy người nhận.");
+  //     }
+
+  //     await sendDirectMessage(otherUser._id, trimmed);
+  //   } else {
+  //     await sendGroupMessage(selectedConvo._id, trimmed);
+
+  //   }
+  // } catch (error) {
+  //   console.error(error);
+  //   setValue(trimmed);
+  //   toast.error("Gửi tin nhắn thất bại. Hãy thử lại.");
+  // } finally {
+    // setSending(false);
+  }
+};
 
   return (
     <View
@@ -240,12 +282,14 @@ export default function MessageInput({
       {/* IMAGE BUTTON */}
       <Pressable
         onPress={pickImage}
+        disabled={disabled}
         style={[
           styles.iconButton,
           {
             backgroundColor: isDark
               ? "#1f2937"
               : "#f1f5f9",
+              opacity: disabled ? 0.5 : 1,
           },
         ]}
       >
@@ -258,6 +302,7 @@ export default function MessageInput({
           }
         />
       </Pressable>
+
 
       {/* INPUT */}
       <View
@@ -310,12 +355,18 @@ export default function MessageInput({
       {/* SEND BUTTON */}
       <Pressable
         onPress={handleSend}
+        disabled={
+  disabled ||
+  sending ||
+  (value.trim().length === 0 && files.length === 0)
+}
         style={[
           styles.sendButton,
           {
             backgroundColor:
-              value.trim().length > 0 ||
-              files.length > 0
+              !disabled &&
+  !sending &&
+  (value.trim().length > 0 || files.length > 0)
                 ? isDark
                   ? "#a855f7"
                   : "#8b5cf6"
@@ -325,11 +376,34 @@ export default function MessageInput({
           },
         ]}
       >
+        {/* <TextInput
+  value={value}
+  onChangeText={setValue}
+  placeholder={
+    disabled
+      ? "Bạn không thể trả lời cuộc trò chuyện này"
+      : "Soạn tin nhắn..."
+  }
+  editable={!disabled}
+  placeholderTextColor={placeholderColor}
+  multiline
+  style={[
+    styles.input,
+    {
+      color: disabled
+        ? "#9ca3af"
+        : isDark
+        ? "#f8fafc"
+        : "#0f172a",
+    },
+  ]}
+/> */}
         <Send
           size={18}
           color="#ffffff"
         />
       </Pressable>
+
     </View>
   );
 }

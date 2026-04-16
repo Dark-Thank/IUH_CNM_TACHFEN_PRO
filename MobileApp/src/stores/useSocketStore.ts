@@ -1,6 +1,6 @@
-import type { SocketState } from "@/types/store";
 import { authSession } from "@/lib/authSession";
 import { socketEmitter } from "@/lib/socketEmitter";
+import type { SocketState } from "@/types/store";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
 import type { Socket } from "socket.io-client";
 import { create } from "zustand";
@@ -151,6 +151,12 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on("new-group", (conversation: any) => {
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
+    });
+
+    socket.on("user-blocked", ({ blockerId }) => {
+      import('./useBlockStore').then((mod) => {
+        mod.useBlockStore.getState().setBlockedBy(blockerId);
+      });
     });
 
     socket.connect();

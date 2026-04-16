@@ -1,10 +1,13 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authSession } from "@/lib/authSession";
 import { socketEmitter } from "@/lib/socketEmitter";
-import { chatService } from "@/services/chatServiec";
 import { toast } from "@/lib/toast";
+import { chatService } from "@/services/chatServiec";
 import type { ChatState } from "@/types/store";
+
 import type { Message } from "@/types/chat";
+
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -134,7 +137,15 @@ export const useChatStore = create<ChatState>()(
             });
           }
 
-          await chatService.sendDirectMessage(formData);
+          await chatService.sendDirectMessage(recipientId, {
+  content,
+  conversationId: activeConversationId || undefined,
+  files: files?.map(f => ({
+    uri: f.uri,
+    name: f.name,
+    type: f.type,
+  })) as any,
+});
 
         } catch (error) {
           console.error("Loi xay ra khi gui direct message", error);

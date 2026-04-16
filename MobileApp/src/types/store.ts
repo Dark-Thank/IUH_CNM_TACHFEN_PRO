@@ -110,11 +110,17 @@ export interface FriendState {
   loading: boolean;
   receivedList: FriendRequest[];
   sentList: FriendRequest[];
+  blockedUsers: Set<string>;
+
+setBlockedUsers: (ids: string[]) => void;
+blockUser: (id: string) => void;
+unblockUser: (id: string) => void;
   searchByUsername: (username: string) => Promise<User | null>;
   addFriend: (to: string, message?: string) => Promise<string>;
   getAllFriendRequests: () => Promise<void>;
   acceptRequest: (requestId: string) => Promise<void>;
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
+  removeFriend: (friendId: string) => Promise<void>;
 }
 

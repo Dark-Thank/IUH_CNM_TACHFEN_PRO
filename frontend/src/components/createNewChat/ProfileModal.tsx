@@ -68,13 +68,13 @@ export const ProfileModal = ({
       setIsLoading(true);
       if (isBlocked) {
         await friendService.unblockFriend(friendId);
-        setIsBlocked(false);
         toast.success("Đã bỏ chặn bạn này");
       } else {
         await friendService.blockFriend(friendId);
-        setIsBlocked(true);
-        toast.success("Đã chặn bạn này");
+        toast.success("Bạn đã chặn người này. Không thể gửi tin nhắn.");
       }
+      const newStatus = await friendService.checkBlockStatus(friendId);
+      setIsBlocked(newStatus);
     } catch (error) {
       console.error("Lỗi khi thay đổi trạng thái chặn:", error);
       toast.error("Không thể thay đổi trạng thái chặn");

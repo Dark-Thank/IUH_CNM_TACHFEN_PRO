@@ -1,5 +1,6 @@
 import api from "@/lib/axios";
 import type { ConversationResponse, Message } from "@/types/chat";
+import { toast } from "sonner";
 
 interface FetchMessageProps {
   messages: Message[];
@@ -23,21 +24,21 @@ export const chatService = {
   },
 
  async sendDirectMessage(formData: FormData) {
-  const res = await api.post("/messages/direct", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  try {
+    const res = await api.post("/messages/direct", formData);
 
-  return res.data.message;
+    return res.data.message;
+  } catch (error: any) {
+    if (error.response?.status === 403 && error.response.data?.message?.includes('chặn')) {
+      toast.error(error.response.data.message || "Bạn đã bị người dùng này chặn");
+      throw error;
+    }
+    throw error;
+  }
 },
 
   async sendGroupMessage(formData: FormData) {
-  const res = await api.post("/messages/group", formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
+  const res = await api.post("/messages/group", formData);
 
   return res.data.message;
 },

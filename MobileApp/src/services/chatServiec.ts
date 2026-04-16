@@ -1,5 +1,7 @@
 import api from "@/lib/axios";
+import { toast } from "@/lib/toast";
 import type { ConversationResponse, Message } from "@/types/chat";
+import { useBlockStore } from "../stores/useBlockStore";
 
 const pageLimit = 50;
 
@@ -37,18 +39,69 @@ export const chatService = {
     };
   },
 
-  // ======================
-  // DIRECT MESSAGE (UPLOAD FILES)
-  // ======================
-  async sendDirectMessage(formData: FormData) {
-    const res = await api.post("/messages/direct", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+async sendDirectMessage(
+  recipientId: string,
+  options: {
+    content?: string;
+    imgUrl?: string;
+    conversationId?: string;
+    files?: File[]; // hoặc ReactNativeFile nếu RN
+  } = {}
+) {
+  try {
+    const { content = "", imgUrl, conversationId, files } = options;
+
+    // 👉 Nếu có file → dùng FormData
+    if (files && files.length > 0) {
+      const formData = new FormData();
+
+      formData.append("recipientId", recipientId);
+      formData.append("content", content);
+      if (conversationId) formData.append("conversationId", conversationId);
+      if (imgUrl) formData.append("imgUrl", imgUrl);
+
+      files.forEach((file, index) => {
+        formData.append("files", file);
+      });
+
+      const res = await api.post("/messages/direct", formData);
+
+      return res.data.message;
+    }
+
+    // 👉 Không có file → gửi JSON (nhẹ hơn)
+    const res = await api.post("/messages/direct", {
+      recipientId,
+      content,
+      imgUrl,
+      conversationId,
     });
 
     return res.data.message;
-  },
+
+  } catch (error: any) {
+    // ✅ Handle bị block
+    if (error.response?.status === 403) {
+      const data = error.response.data;
+
+      if (
+        data.message?.includes("chặn") ||
+        data.type === "YOU_ARE_BLOCKED"
+      ) {
+        toast.error("Bạn đã bị người dùng này chặn");
+
+        // update store nếu có
+        try {
+          useBlockStore.getState().setBlockedBy(recipientId);
+        } catch {}
+
+        return;
+      }
+    }
+
+    throw error;
+  }
+},
 
   // ======================
   // GROUP MESSAGE (UPLOAD FILES)
@@ -56,11 +109,7 @@ export const chatService = {
   async sendGroupMessage(conversationId: string, formData: FormData) {
     formData.append("conversationId", conversationId);
 
-    const res = await api.post("/messages/group", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
-    });
+    const res = await api.post("/messages/group", formData);
 
     return res.data.message;
   },

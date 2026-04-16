@@ -26,7 +26,7 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
   const { createConversation } = useChatStore();
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
-  const [allBlockedUsers, setAllBlockedUsers] = useState<Friend[]>([]);
+  // const [allBlockedUsers, setAllBlockedUsers] = useState<Friend[]>([]);
   const [activeTab, setActiveTab] = useState("friends");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -82,7 +82,7 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
           newSet.delete(friendId);
           return newSet;
         });
-        setAllBlockedUsers(prev => prev.filter(u => u._id !== friendId));
+// setAllBlockedUsers(prev => prev.filter(u => u._id !== friendId));
         toast.success(`Đã bỏ chặn ${displayName}`);
       } else {
         await friendService.blockFriend(friendId);
@@ -97,21 +97,21 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
     }
   };
 
-  const handleUnblockFromList = async (userId: string, displayName: string) => {
-    try {
-      await friendService.unblockFriend(userId);
-      setBlockedUsers(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(userId);
-        return newSet;
-      });
-      setAllBlockedUsers(prev => prev.filter(u => u._id !== userId));
-      toast.success(`Đã bỏ chặn ${displayName}`);
-    } catch (error) {
-      console.error("Lỗi khi bỏ chặn:", error);
-      toast.error("Không thể bỏ chặn");
-    }
-  };
+  // const handleUnblockFromList = async (userId: string, displayName: string) => {
+    //   try {
+    //     await friendService.unblockFriend(userId);
+    //     setBlockedUsers(prev => {
+    //       const newSet = new Set(prev);
+    //       newSet.delete(userId);
+    //       return newSet;
+    //     });
+    //     setAllBlockedUsers(prev => prev.filter(u => u._id !== userId));
+    //     toast.success(`Đã bỏ chặn ${displayName}`);
+    //   } catch (error) {
+    //     console.error("Lỗi khi bỏ chặn:", error);
+    //     toast.error("Không thể bỏ chặn");
+    //   }
+    // };
 
   // Nhóm bạn bè theo chữ cái đầu
   const groupedFriends = friends
@@ -148,9 +148,8 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
       </DialogHeader>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-1">
           <TabsTrigger value="friends">Bạn bè</TabsTrigger>
-          <TabsTrigger value="blocked">Chặn ({allBlockedUsers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="friends" className="space-y-4">
@@ -271,57 +270,7 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
           </div>
         </TabsContent>
 
-        <TabsContent value="blocked" className="space-y-4">
-          {/* blocked users list */}
-          <div className="space-y-4">
-            <h1 className="text-sm font-semibold text-muted-foreground mb-3 uppercase tracking-wide">
-              danh sách chặn
-            </h1>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {allBlockedUsers.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <Users className="size-12 mx-auto mb-3 opacity-50" />
-                  Chưa chặn ai
-                </div>
-              ) : (
-                allBlockedUsers.map((user) => (
-                  <Card
-                    key={user._id}
-                    className="p-3 transition-smooth hover:shadow-soft glass hover:bg-muted/30 flex flex-row items-center gap-3 w-full"
-                  >
-                    {/* avatar */}
-                    <div className="w-10 h-10 flex-shrink-0">
-                      <UserAvatar
-                        type="sidebar"
-                        name={user.displayName}
-                        avatarUrl={user.avatarUrl}
-                      />
-                    </div>
-
-                    {/* info */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <h2 className="font-semibold text-sm truncate">
-                        {user.displayName}
-                      </h2>
-                      <span className="text-sm text-muted-foreground truncate">
-                        @{user.username}
-                      </span>
-                    </div>
-
-                    {/* unblock button */}
-                    <button
-                      onClick={() => handleUnblockFromList(user._id, user.displayName)}
-                      className="px-3 py-1 text-xs font-medium rounded-md transition-colors hover:bg-accent text-foreground"
-                    >
-                      Bỏ chặn
-                    </button>
-                  </Card>
-                ))
-              )}
-            </div>
-          </div>
-        </TabsContent>
+        {/* No blocked tab - removed as requested */}
       </Tabs>
     </DialogContent>
   );

@@ -113,7 +113,7 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
                     <div className="p-4 pb-3 bg-primary-foreground">
                         <div className="px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
                             <AlertCircle className="size-4 flex-shrink-0" />
-                            <span>Bạn đã bị chặn. Không thể gửi tin nhắn.</span>
+                            <span>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
                         </div>
                     </div>
                 )}
@@ -135,7 +135,7 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
             {isBlocked && (
                 <div className="mb-3 px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
                     <AlertCircle className="size-4 flex-shrink-0" />
-                    <span>Bạn đã bị chặn. Không thể gửi tin nhắn.</span>
+                    <span>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
                 </div>
             )}
             <div

@@ -11,22 +11,23 @@ import {
     sendFriendRequest,
     unblockFriend
 } from "../controllers/friendController.js";
+import { protectedRoute } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
 router.post('/requests', sendFriendRequest);
 
-router.post('/requests/:requestId/accept', acceptFriendRequest);
-router.post('/requests/:requestId/decline', declineFriendRequest);
+router.post('/requests/:requestId/accept', protectedRoute, acceptFriendRequest);
+router.post('/requests/:requestId/decline', protectedRoute, declineFriendRequest);
 
-router.post('/:friendId/block', blockFriend);
-router.post('/:friendId/unblock', unblockFriend);
-router.get('/:friendId/block-status', checkBlockStatus);
+router.post('/:friendId/block', protectedRoute, blockFriend);
+router.post('/:friendId/unblock', protectedRoute, unblockFriend);
+router.get('/:friendId/block-status', protectedRoute, checkBlockStatus);
 
-router.get('/', getAllFriends);
-router.get('/blocked', getBlockedUsers);
-router.get('/requests', getFriendRequests);
+router.get('/', protectedRoute, getAllFriends);
+router.get('/blocked', protectedRoute, getBlockedUsers);
+router.get('/requests', protectedRoute, getFriendRequests);
 
-router.delete('/:friendId', removeFriend);
+router.delete('/:friendId', protectedRoute, removeFriend);
 
 export default router;

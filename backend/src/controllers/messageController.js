@@ -3,20 +3,38 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
 
-import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import { uploadFileFromBuffer, uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
-import { uploadFileFromBuffer } from "../middlewares/uploadMiddleware.js";
+
+const getUploadedFiles = (req) => {
+  if (!req.files) {
+    return [];
+  }
+
+  if (Array.isArray(req.files)) {
+    return req.files;
+  }
+
+  return [
+    ...(req.files.files || []),
+    ...(req.files.images || []),
+  ];
+};
+
 export const sendDirectMessage = async (req, res) => {
     try {
 
+      console.log("REQ.USER:", req.user);   // 👈 THÊM Ở ĐÂY
+    console.log("BODY:", req.body);  
         const { recipientId, content, conversationId } = req.body;
         const senderId = req.user._id;
+        const uploadedFiles = getUploadedFiles(req);
         
 
         let conversation;
 
 
-        if (!content && (!req.files || req.files.length === 0)) {
+        if (!content && uploadedFiles.length === 0) {
             return res.status(400).json({ message: "Tin nhắn rỗng" });
         }
 
@@ -48,8 +66,8 @@ export const sendDirectMessage = async (req, res) => {
         let imageUrls = [];
 let fileUrls = [];
 
-if (req.files?.length > 0) {
-  const uploadPromises = req.files.map((file) => {
+if (uploadedFiles.length > 0) {
+  const uploadPromises = uploadedFiles.map((file) => {
     if (file.mimetype.startsWith("image/")) {
       return uploadImageFromBuffer(file.buffer, {
         folder: "moji_chat/messages",
@@ -65,7 +83,7 @@ if (req.files?.length > 0) {
   const results = await Promise.all(uploadPromises);
 
   results.forEach((result, index) => {
-    const file = req.files[index];
+    const file = uploadedFiles[index];
 
     // 🔥 FIX: validate secure_url
     if (!result?.secure_url) return;
@@ -101,7 +119,7 @@ if (req.files?.length > 0) {
 
     } catch (error) {
         console.error("Lỗi khi gửi tin nhắn trực tiếp", error);
-        console.log("FILES:", req.files);
+        console.log("FILES:", getUploadedFiles(req));
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };
@@ -111,8 +129,9 @@ export const sendGroupMessage = async (req, res) => {
     const { content } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
+    const uploadedFiles = getUploadedFiles(req);
 
-    if (!content && (!req.files || req.files.length === 0)) {
+    if (!content && uploadedFiles.length === 0) {
       return res.status(400).json({ message: "Tin nhắn rỗng" });
     }
 
@@ -120,8 +139,8 @@ export const sendGroupMessage = async (req, res) => {
     let fileUrls = [];
 
     // FIX: thêm xử lý FILE giống direct
-    if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map((file) => {
+    if (uploadedFiles.length > 0) {
+      const uploadPromises = uploadedFiles.map((file) => {
         if (file.mimetype.startsWith("image/")) {
           return uploadImageFromBuffer(file.buffer, {
             folder: "moji_chat/messages",
@@ -136,7 +155,11 @@ export const sendGroupMessage = async (req, res) => {
       const results = await Promise.all(uploadPromises);
 
       results.forEach((result, index) => {
-        const file = req.files[index];
+        const file = uploadedFiles[index];
+
+        if (!result?.secure_url) {
+          return;
+        }
 
         if (file.mimetype.startsWith("image/")) {
           imageUrls.push(result.secure_url);

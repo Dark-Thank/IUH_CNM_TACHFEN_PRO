@@ -21,8 +21,10 @@ try {
   console.log("[MobileApp] API_URL=", API_URL);
 } catch (e) { }
 
-api.interceptors.request.use((config) => {
+api.interceptors.request.use( async (config) => {
   const accessToken = authSession.getAccessToken();
+
+  console.log("TOKEN TRƯỚC KHI GỬI:", accessToken);
 
   if (accessToken) {
     const authorization = `Bearer ${accessToken}`;
@@ -66,9 +68,12 @@ api.interceptors.response.use(
 
     originalRequest._retryCount = originalRequest._retryCount || 0;
 
-    const shouldRefresh =
-      (error.response?.status === 401 || error.response?.status === 403) &&
-      originalRequest._retryCount < 4;
+    const status = error.response?.status;
+    const data = error.response?.data || {};
+    const message = data.message || '';
+    const type = data.type || '';
+    const isBlockError = status === 403 && (message.includes('chặn') || type === 'YOU_ARE_BLOCKED');
+    const shouldRefresh = status === 401 && originalRequest._retryCount < 4 || (!isBlockError && status === 403 && originalRequest._retryCount < 4);
 
     if (shouldRefresh) {
       originalRequest._retryCount += 1;
