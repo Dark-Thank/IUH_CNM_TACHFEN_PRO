@@ -49,7 +49,12 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
-  imgUrl?: string | null;
+  imgUrls: string[];
+  isRecalled?: boolean;
+  recalledAt?: string | null;
+  isPinned?: boolean;
+  pinnedBy?: string;
+  pinnedAt?: string | null;
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;

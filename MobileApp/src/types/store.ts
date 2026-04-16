@@ -40,8 +40,8 @@ export interface ChatState {
     string,
     {
       items: Message[];
-      hasMore: boolean; // infinite-scroll
-      nextCursor?: string | null; // phân trang
+      hasMore: boolean;
+      nextCursor?: string | null;
     }
   >;
   activeConversationId: string | null;
@@ -63,9 +63,9 @@ export interface ChatState {
     content: string,
     imgUrl?: string
   ) => Promise<void>;
-  // add message
   addMessage: (message: Message) => Promise<void>;
-  // update convo
+  recallMessage: (messageId: string) => Promise<void>;
+  togglePinMessage: (messageId: string) => Promise<void>;
   updateConversation: (conversation: Partial<Conversation> & { _id: string }) => void;
   markAsSeen: () => Promise<void>;
   addConvo: (convo: Conversation) => void;
@@ -85,7 +85,6 @@ export interface SocketState {
   registerAppStateListener: () => void;
   unregisterAppStateListener: () => void;
 }
-
 
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
@@ -109,3 +108,4 @@ export interface FriendState {
   declineRequest: (requestId: string) => Promise<void>;
   getFriends: () => Promise<void>;
 }
+

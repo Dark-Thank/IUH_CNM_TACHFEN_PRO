@@ -18,7 +18,6 @@ let currentAppState: AppStateStatus = "active";
 
 const isAppActive = () => {
   const appState = AppState.currentState;
-
   return appState === "active" || appState === "unknown";
 };
 
@@ -29,7 +28,7 @@ const refreshChatAfterForeground = async () => {
   await fetchConversations();
 
   if (activeConversationId) {
-    await fetchMessages(activeConversationId);
+    await fetchMessages(activeConversationId ?? "");
     await markAsSeen();
   }
 };
@@ -57,11 +56,6 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       return;
     }
 
-    // Dynamically require socket.io-client at runtime to ensure Metro/webpack
-    // picks the browser build for web and avoids node-only modules like 'fs'.
-    // Use runtime require instead of static import to prevent bundlers
-    // from pulling Node-specific entry points.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const socketLib: any = (typeof window !== "undefined" && typeof document !== "undefined")
       ? require("socket.io-client/dist/socket.io.js")
       : require("socket.io-client");
@@ -139,7 +133,22 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useChatStore.getState().updateConversation(updated);
     });
 
-    socket.on("new-group", (conversation) => {
+    socket.on("update-message", ({ message }: { message: any }) => {
+      const chatStore = useChatStore.getState();
+      const activeConvoId = chatStore.activeConversationId;
+
+      if (activeConvoId === message.conversationId) {
+        chatStore.fetchMessages(activeConvoId ?? "");
+      }
+
+      Object.entries(chatStore.messages).forEach(([convoId, msgData]) => {
+        if (convoId === message.conversationId) {
+          console.log("Updated message in convo:", convoId);
+        }
+      });
+    });
+
+    socket.on("new-group", (conversation: any) => {
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
     });
@@ -190,3 +199,4 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 }));
 
 socketEmitter.setSocketGetter(() => useSocketStore.getState().socket);
+
