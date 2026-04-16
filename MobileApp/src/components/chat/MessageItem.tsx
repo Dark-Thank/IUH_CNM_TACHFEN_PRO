@@ -1,13 +1,20 @@
+import { useState } from "react";
+import {
+  Alert,
+  Image,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Pin } from "lucide-react-native";
 import { formatMessageTime } from "@/lib/utils";
-import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
-import { toast } from "@/lib/toast";
+import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation, Message, Participant } from "@/types/chat";
-import { Pin } from "lucide-react-native";
-import { Alert, Image, Pressable, StyleSheet, Text, View, Modal } from "react-native";
 import UserAvatar from "./UserAvatar";
-import { useState } from "react";
 
 interface MessageItemProps {
   message: Message;
@@ -31,58 +38,73 @@ export default function MessageItem({
   const { recallMessage, togglePinMessage } = useChatStore();
   const currentUserId = user?._id;
 
-  const isOwn = !!message.isOwn || message.senderId === currentUserId;
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [showActions, setShowActions] = useState(false);
 
-  const previousCreatedAt = previousMessage?.createdAt
-    ? new Date(previousMessage.createdAt).getTime()
+  const previous = previousMessage ?? messages[index - 1];
+  const previousCreatedAt = previous?.createdAt
+    ? new Date(previous.createdAt).getTime()
     : 0;
   const currentCreatedAt = new Date(message.createdAt).getTime();
 
-  const isShowTime = !previousMessage || currentCreatedAt - previousCreatedAt > 300000;
-  const isGroupBreak = isShowTime || message.senderId !== previousMessage?.senderId;
+  const isOwn = !!message.isOwn || message.senderId === currentUserId;
+  const isShowTime = !previous || currentCreatedAt - previousCreatedAt > 300000;
+  const isGroupBreak = isShowTime || message.senderId !== previous?.senderId;
 
   const participant = selectedConvo.participants.find(
-    (p: Participant) => p._id === message.senderId
+    (item: Participant) => item._id === message.senderId
   );
 
+  const canTogglePin = !message.isRecalled;
+  const canRecall =
+    isOwn &&
+    !message.isRecalled &&
+    currentCreatedAt > Date.now() - 2 * 60 * 1000;
+
+  const closeActions = () => setShowActions(false);
+
   const handleLongPress = () => {
-    if (message.isRecalled) return; // Không cho thao tác trên tin nhắn đã thu hồi
-
-    const now = new Date();
-    const msgTime = new Date(message.createdAt);
-    const twoMinsAgo = new Date(now.getTime() - 2 * 60 * 1000);
-
-    const isRecentOwn = isOwn && msgTime > twoMinsAgo;
-    const actions = [];
-
-    if (isRecentOwn) {
-      actions.push({
-        text: "Thu hồi",
-        style: "destructive" as const,
-        onPress: () => {
-          Alert.alert("Thu hồi", "Tin nhắn sẽ bị thu hồi cho tất cả thành viên. Tiếp tục?", [
-            { text: "Hủy", style: "cancel" },
-            { text: "Thu hồi", style: "destructive", onPress: () => recallMessage(message._id) },
-          ]);
-        },
-      });
+    if (!canTogglePin && !canRecall) {
+      return;
     }
 
-    actions.push({
-      text: message.isPinned ? "Bỏ ghim" : "Ghim tin nhắn",
-      onPress: () => togglePinMessage(message._id),
-    });
+    setShowActions(true);
+  };
 
-    Alert.alert("Tùy chọn tin nhắn", "", [...actions, { text: "Hủy", style: "cancel" }]);
+  const handleTogglePin = () => {
+    closeActions();
+    void togglePinMessage(message._id);
+  };
+
+  const handleRecall = () => {
+    closeActions();
+    Alert.alert(
+      "Thu hoi",
+      "Tin nhan se bi thu hoi cho tat ca thanh vien. Tiep tuc?",
+      [
+        { text: "Huy", style: "cancel" },
+        {
+          text: "Thu hoi",
+          style: "destructive",
+          onPress: () => {
+            void recallMessage(message._id);
+          },
+        },
+      ]
+    );
   };
 
   const renderContent = () => {
     if (message.isRecalled) {
       return (
         <View style={styles.recalledBubble}>
-          <Text style={[styles.recalledText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-            Tin nhắn đã thu hồi
+          <Text
+            style={[
+              styles.recalledText,
+              { color: isDark ? "#94a3b8" : "#64748b" },
+            ]}
+          >
+            Tin nhan da thu hoi
           </Text>
         </View>
       );
@@ -91,20 +113,35 @@ export default function MessageItem({
     return (
       <View>
         {message.content ? (
-          <Text style={[styles.messageText, { color: isOwn ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" }]}>
+          <Text
+            style={[
+              styles.messageText,
+              { color: isOwn ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+            ]}
+          >
             {message.content}
           </Text>
         ) : null}
 
         {message.imgUrls?.map((url, idx) => (
-          <Pressable key={idx} onPress={() => setPreviewImage(url)} style={styles.imageContainer}>
-            <Image source={{ uri: url }} style={styles.messageImage} resizeMode="cover" />
+          <Pressable
+            key={idx}
+            onPress={() => setPreviewImage(url)}
+            style={styles.imageContainer}
+          >
+            <Image
+              source={{ uri: url }}
+              style={styles.messageImage}
+              resizeMode="cover"
+            />
           </Pressable>
         ))}
 
         {message.fileUrls?.map((file, idx) => (
           <Pressable key={idx} style={styles.fileBox}>
-            <Text style={{ color: isDark ? "#cbd5e1" : "#0f172a" }}>📎 {file.name}</Text>
+            <Text style={{ color: isDark ? "#cbd5e1" : "#0f172a" }}>
+              File: {file.name}
+            </Text>
           </Pressable>
         ))}
       </View>
@@ -112,74 +149,114 @@ export default function MessageItem({
   };
 
   const renderPinIcon = () => {
-    if (message.isPinned && !message.isRecalled) {
-      return (
-        <View style={styles.pinIconContainer}>
-          <Pin size={12} color={isOwn ? "#ffffff80" : isDark ? "#94a3b8" : "#64748b"} />
-        </View>
-      );
+    if (!message.isPinned || message.isRecalled) {
+      return null;
     }
-    return null;
+
+    return (
+      <View style={styles.pinIconContainer}>
+        <Pin
+          size={12}
+          color={isOwn ? "#ffffff80" : isDark ? "#94a3b8" : "#64748b"}
+        />
+      </View>
+    );
   };
 
   return (
     <View style={styles.wrapper}>
-      {/* THỜI GIAN */}
-      {isShowTime && (
-        <Text style={[styles.timeText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+      {isShowTime ? (
+        <Text
+          style={[styles.timeText, { color: isDark ? "#94a3b8" : "#64748b" }]}
+        >
           {formatMessageTime(new Date(message.createdAt))}
         </Text>
-      )}
+      ) : null}
 
-      <View style={[styles.row, { justifyContent: isOwn ? "flex-end" : "flex-start" }]}>
-        {!isOwn && (
+      <View
+        style={[
+          styles.row,
+          { justifyContent: isOwn ? "flex-end" : "flex-start" },
+        ]}
+      >
+        {!isOwn ? (
           <View style={styles.avatarSlot}>
-            {isGroupBreak && (
+            {isGroupBreak ? (
               <UserAvatar
                 name={participant?.displayName ?? "User"}
                 avatarUrl={participant?.avatarUrl}
                 size={30}
               />
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        <View style={[styles.messageColumn, { alignItems: isOwn ? "flex-end" : "flex-start" }]}>
-          <Pressable 
-            onLongPress={handleLongPress} 
+        <View
+          style={[
+            styles.messageColumn,
+            { alignItems: isOwn ? "flex-end" : "flex-start" },
+          ]}
+        >
+          <Pressable
+            onLongPress={handleLongPress}
+            delayLongPress={260}
             style={[
               styles.bubble,
               isOwn
                 ? { backgroundColor: isDark ? "#a855f7" : "#8b5cf6" }
-                : { 
-                    backgroundColor: isDark ? "#1f2937" : "#ffffff", 
-                    borderColor: isDark ? "#334155" : "#e2e8f0", 
-                    borderWidth: 1 
-                  }
+                : {
+                    backgroundColor: isDark ? "#1f2937" : "#ffffff",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                    borderWidth: 1,
+                  },
             ]}
           >
             {renderContent()}
             {renderPinIcon()}
           </Pressable>
 
-          {/* TRẠNG THÁI ĐÃ XEM */}
-          {isOwn && message._id === selectedConvo.lastMessage?._id && (
-            <View style={[styles.statusPill, { 
-              backgroundColor: lastMessageStatus === "seen" ? (isDark ? "#312e81" : "#ede9fe") : (isDark ? "#1f2937" : "#e2e8f0")
-            }]}>
-              <Text style={{ 
-                fontSize: 10, 
-                color: lastMessageStatus === "seen" ? (isDark ? "#c4b5fd" : "#6d28d9") : (isDark ? "#94a3b8" : "#64748b")
-              }}>
-                {lastMessageStatus === "seen" ? "Đã xem" : "Đã gửi"}
+          {isOwn && message._id === selectedConvo.lastMessage?._id ? (
+            <View
+              style={[
+                styles.statusPill,
+                {
+                  backgroundColor:
+                    lastMessageStatus === "seen"
+                      ? isDark
+                        ? "#312e81"
+                        : "#ede9fe"
+                      : isDark
+                        ? "#1f2937"
+                        : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  fontSize: 10,
+                  color:
+                    lastMessageStatus === "seen"
+                      ? isDark
+                        ? "#c4b5fd"
+                        : "#6d28d9"
+                      : isDark
+                        ? "#94a3b8"
+                        : "#64748b",
+                }}
+              >
+                {lastMessageStatus === "seen" ? "Da xem" : "Da gui"}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
       </View>
 
-      {/* MODAL XEM ẢNH */}
-      <Modal visible={!!previewImage} transparent animationType="fade">
+      <Modal
+        visible={!!previewImage}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewImage(null)}
+      >
         <Pressable style={styles.modal} onPress={() => setPreviewImage(null)}>
           <Image
             source={{ uri: previewImage ?? "" }}
@@ -187,6 +264,97 @@ export default function MessageItem({
             resizeMode="contain"
           />
         </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showActions}
+        transparent
+        animationType="fade"
+        onRequestClose={closeActions}
+      >
+        <View style={styles.actionRoot}>
+          <Pressable style={styles.actionBackdrop} onPress={closeActions} />
+
+          <View
+            style={[
+              styles.actionSheet,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.actionTitle,
+                { color: isDark ? "#f8fafc" : "#0f172a" },
+              ]}
+            >
+              Tuy chon tin nhan
+            </Text>
+
+            {canTogglePin ? (
+              <Pressable
+                onPress={handleTogglePin}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    { color: isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  {message.isPinned ? "Bo ghim" : "Ghim tin nhan"}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {canRecall ? (
+              <Pressable
+                onPress={handleRecall}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#2b1216" : "#fef2f2",
+                    borderColor: isDark ? "#7f1d1d" : "#fecaca",
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.actionButtonText, styles.actionDangerText]}
+                >
+                  Thu hoi
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={closeActions}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  { color: isDark ? "#cbd5e1" : "#475569" },
+                ]}
+              >
+                Dong
+              </Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -198,15 +366,74 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   avatarSlot: { width: 34, alignItems: "center" },
   messageColumn: { maxWidth: "78%" },
-  bubble: { borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, position: "relative" },
+  bubble: {
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    position: "relative",
+  },
   messageText: { fontSize: 15, lineHeight: 21 },
   recalledBubble: { minWidth: 120 },
   recalledText: { fontSize: 14, fontStyle: "italic" },
   imageContainer: { marginTop: 4 },
   messageImage: { width: 200, height: 200, borderRadius: 12 },
   pinIconContainer: { position: "absolute", top: 4, right: 4 },
-  statusPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, marginTop: 2 },
-  fileBox: { marginTop: 6, padding: 10, borderRadius: 10, backgroundColor: "#00000010" },
-  modal: { flex: 1, backgroundColor: "rgba(0,0,0,0.9)", justifyContent: "center", alignItems: "center" },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 2,
+  },
+  fileBox: {
+    marginTop: 6,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#00000010",
+  },
+  modal: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.9)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   fullImage: { width: "100%", height: "100%" },
+  actionRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  actionBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+  },
+  actionSheet: {
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  actionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  actionButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  actionDangerText: {
+    color: "#ef4444",
+  },
 });

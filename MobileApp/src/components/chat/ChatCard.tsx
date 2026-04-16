@@ -9,6 +9,7 @@ interface ChatCardProps {
   conversation: Conversation;
   currentUserId?: string;
   isActive?: boolean;
+  isOnline?: boolean;
   onPress: (conversationId: string) => void;
 }
 
@@ -44,6 +45,7 @@ export default function ChatCard({
   conversation,
   currentUserId,
   isActive = false,
+  isOnline = false,
   onPress,
 }: ChatCardProps) {
   const { isDark } = useThemeStore();
@@ -95,6 +97,8 @@ export default function ChatCard({
             name={otherUser?.displayName || "Moji"}
             avatarUrl={otherUser?.avatarUrl}
             size={46}
+            isOnline={isOnline}
+            showPresence
           />
         )}
       </View>

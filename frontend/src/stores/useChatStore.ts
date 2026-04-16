@@ -1,9 +1,28 @@
 import { chatService } from "@/services/chatServiec";
+import type { Conversation } from "@/types/chat";
 import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
+
+const getConversationTimestamp = (conversation: Conversation) => {
+  const fallbackValue = "1970-01-01T00:00:00.000Z";
+
+  return new Date(
+    conversation.lastMessageAt ??
+    conversation.updatedAt ??
+    conversation.createdAt ??
+    fallbackValue
+  ).getTime();
+};
+
+const mergeConversationList = (
+  conversations: Conversation[],
+  nextConversation: Conversation
+) =>
+  [nextConversation, ...conversations.filter((conversation) => conversation._id !== nextConversation._id)]
+    .sort((left, right) => getConversationTimestamp(right) - getConversationTimestamp(left));
 
 
 
@@ -32,7 +51,12 @@ export const useChatStore = create<ChatState>()(
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
 
-          set({ conversations, convoLoading: false });
+          set({
+            conversations: conversations.sort(
+              (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
+            ),
+            convoLoading: false,
+          });
         } catch (error) {
           console.error("Lỗi xảy ra khi fetchConversations:", error);
           set({ convoLoading: false });
@@ -139,13 +163,15 @@ export const useChatStore = create<ChatState>()(
               return state;
             }
 
+            const currentConversationMessages = state.messages[convoId];
+
             return {
               messages: {
                 ...state.messages,
                 [convoId]: {
                   items: [...prevItems, message],
-                  hasMore: state.messages[convoId].hasMore,
-                  nextCursor: state.messages[convoId].nextCursor ?? undefined,
+                  hasMore: currentConversationMessages?.hasMore ?? false,
+                  nextCursor: currentConversationMessages?.nextCursor ?? undefined,
                 },
               },
             };
@@ -155,10 +181,27 @@ export const useChatStore = create<ChatState>()(
         }
       },
       updateConversation: (conversation: any) => {
+        set((state) => {
+          const existingConversation = state.conversations.find(
+            (item) => item._id === conversation._id
+          );
+
+          if (!existingConversation) {
+            return state;
+          }
+
+          return {
+            conversations: mergeConversationList(state.conversations, {
+              ...existingConversation,
+              ...conversation,
+            }),
+          };
+        });
+      },
+
+      upsertConversation: (conversation) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c
-          ),
+          conversations: mergeConversationList(state.conversations, conversation),
         }));
       },
 
@@ -200,18 +243,10 @@ export const useChatStore = create<ChatState>()(
         }
       },
       addConvo: (convo) => {
-        set((state) => {
-          const exists = state.conversations.some(
-            (c) => c._id.toString() === convo._id.toString()
-          );
-
-          return {
-            conversations: exists
-              ? state.conversations
-              : [convo, ...state.conversations],
-            activeConversationId: convo._id,
-          };
-        });
+        set((state) => ({
+          conversations: mergeConversationList(state.conversations, convo),
+          activeConversationId: convo._id,
+        }));
       },
       createConversation: async (type, name, memberIds) => {
         try {

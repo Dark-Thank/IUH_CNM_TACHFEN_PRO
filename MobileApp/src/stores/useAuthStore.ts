@@ -7,6 +7,24 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
 
+const getAuthErrorMessage = (error: any, fallbackMessage: string) => {
+  const serverMessage = error?.response?.data?.message;
+
+  if (typeof serverMessage === "string" && serverMessage.trim()) {
+    return serverMessage;
+  }
+
+  if (error?.code === "ECONNABORTED") {
+    return "Khong the ket noi backend trong 10 giay. Hay kiem tra server va EXPO_PUBLIC_BACKEND_HOST.";
+  }
+
+  if (!error?.response) {
+    return "Khong ket noi duoc toi backend. Hay kiem tra dien thoai cung mang Wi-Fi va IP backend trong MobileApp/.env.";
+  }
+
+  return fallbackMessage;
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -51,8 +69,10 @@ export const useAuthStore = create<AuthState>()(
           toast.success(successMsg);
           return { ok: true } as const;
         } catch (error: any) {
-          // Prefer backend error message when available
-          const message = error?.response?.data?.message ?? "Dang ky khong thanh cong.";
+          const message = getAuthErrorMessage(
+            error,
+            "Dang ky khong thanh cong."
+          );
 
           // Avoid noisy Axios stack traces for expected client errors (4xx)
           const status = error?.response?.status;
@@ -99,7 +119,10 @@ export const useAuthStore = create<AuthState>()(
         } catch (error) {
           console.error(error);
           // Hiển thị message cụ thể từ backend nếu có
-          const serverMessage = (error as any)?.response?.data?.message || (error as any)?.message;
+          const serverMessage = getAuthErrorMessage(
+            error,
+            "Ten dang nhap hoac mat khau khong trung khop."
+          );
           toast.error(serverMessage || "Tên đăng nhập hoặc mật khẩu không trùng khớp.");
           // Không throw error ra ngoài để tránh RN alert mặc định
           return null;
