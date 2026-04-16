@@ -10,35 +10,24 @@ export const friendService = {
     const res = await api.post("/friends/requests", { to, message });
     return res.data.message;
   },
+
   async getAllFriendRequest() {
-    try {
-      const res = await api.get("/friends/requests");
-      const { sent, received } = res.data;
-      return { sent, received };
-    } catch (error) {
-      console.error("Lỗi khi gửi getAllFriendRequest", error);
-    }
+    const res = await api.get("/friends/requests");
+    const { sent, received } = res.data;
+    return { sent, received };
   },
 
   async acceptRequest(requestId: string) {
-    try {
-      const res = await api.post(`/friends/requests/${requestId}/accept`);
-      return res.data.requestAcceptedBy;
-    } catch (error) {
-      console.error("Lỗi khi gửi acceptRequest", error);
-    }
+    const res = await api.post(`/friends/requests/${requestId}/accept`);
+    return res.data.requestAcceptedBy;
   },
 
   async declineRequest(requestId: string) {
-    try {
-      await api.post(`/friends/requests/${requestId}/decline`);
-    } catch (error) {
-      console.error("Lỗi khi gửi declineRequest", error);
-    }
+    await api.post(`/friends/requests/${requestId}/decline`);
   },
 
   async getFriendList() {
     const res = await api.get("/friends");
     return res.data.friends;
   },
-}
+};

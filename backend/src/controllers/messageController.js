@@ -4,14 +4,18 @@ import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
 
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
-import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
+import {
+    emitConversationUpsert,
+    emitNewMessage,
+    getConversationParticipantIds,
+    updateConversationAfterCreateMessage
+} from "../utils/messageHelper.js";
 import { uploadFileFromBuffer } from "../middlewares/uploadMiddleware.js";
 export const sendDirectMessage = async (req, res) => {
     try {
 
         const { recipientId, content, conversationId } = req.body;
         const senderId = req.user._id;
-        
 
         let conversation;
 
@@ -45,6 +49,9 @@ export const sendDirectMessage = async (req, res) => {
                 unreadCounts: new Map(),
             });
         }
+
+        const isFirstMessageInConversation = !conversation.lastMessage?._id;
+
         let imageUrls = [];
 let fileUrls = [];
 
@@ -94,7 +101,29 @@ if (req.files?.length > 0) {
         updateConversationAfterCreateMessage(conversation, message, senderId);
         await conversation.save();
 
-        emitNewMessage(io, conversation, message);
+        let extraRooms = [];
+
+        if (isFirstMessageInConversation) {
+            await conversation.populate([
+                {
+                    path: "participants.userId",
+                    select: "displayName avatarUrl",
+                },
+                {
+                    path: "seenBy",
+                    select: "displayName avatarUrl",
+                },
+                {
+                    path: "lastMessage.senderId",
+                    select: "displayName avatarUrl",
+                },
+            ]);
+
+            emitConversationUpsert(io, conversation);
+            extraRooms = getConversationParticipantIds(conversation);
+        }
+
+        emitNewMessage(io, conversation, message, extraRooms);
 
         return res.status(201).json({ message });
         

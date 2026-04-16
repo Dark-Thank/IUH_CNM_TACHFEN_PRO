@@ -13,6 +13,7 @@ const API_URL =
 const api = axios.create({
   baseURL: API_URL,
   withCredentials: true,
+  timeout: 10000,
 });
 
 // Helpful debug: show computed API URL in Metro logs when the app starts

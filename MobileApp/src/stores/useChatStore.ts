@@ -4,7 +4,7 @@ import { socketEmitter } from "@/lib/socketEmitter";
 import { chatService } from "@/services/chatServiec";
 import { toast } from "@/lib/toast";
 import type { ChatState } from "@/types/store";
-import type { Message } from "@/types/chat";
+import type { Conversation, Message } from "@/types/chat";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
@@ -20,6 +20,31 @@ const uniqueById = <T extends { _id: string }>(items: T[]) => {
     return true;
   });
 };
+
+const isUnauthorizedError = (error: any) => {
+  const status = error?.response?.status;
+  return status === 401 || status === 403;
+};
+
+const getConversationTimestamp = (conversation: Conversation) => {
+  const fallbackValue = "1970-01-01T00:00:00.000Z";
+
+  return new Date(
+    conversation.lastMessageAt ??
+    conversation.updatedAt ??
+    conversation.createdAt ??
+    fallbackValue
+  ).getTime();
+};
+
+const mergeConversationList = (
+  conversations: Conversation[],
+  nextConversation: Conversation
+) =>
+  uniqueById([
+    nextConversation,
+    ...conversations.filter((conversation) => conversation._id !== nextConversation._id),
+  ]).sort((left, right) => getConversationTimestamp(right) - getConversationTimestamp(left));
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -53,9 +78,16 @@ export const useChatStore = create<ChatState>()(
         try {
           set({ convoLoading: true });
           const { conversations } = await chatService.fetchConversations();
-          set({ conversations: uniqueById(conversations), convoLoading: false });
+          set({
+            conversations: uniqueById(conversations).sort(
+              (left, right) => getConversationTimestamp(right) - getConversationTimestamp(left)
+            ),
+            convoLoading: false,
+          });
         } catch (error) {
-          console.error("Loi xay ra khi fetchConversations:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi fetchConversations:", error);
+          }
           set({ convoLoading: false });
         }
       },
@@ -105,7 +137,9 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi xay ra khi fetchMessages:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi fetchMessages:", error);
+          }
         } finally {
           set({ messageLoading: false });
         }
@@ -276,10 +310,27 @@ export const useChatStore = create<ChatState>()(
       },
 
       updateConversation: (conversation) => {
+        set((state) => {
+          const existingConversation = state.conversations.find(
+            (item) => item._id === conversation._id
+          );
+
+          if (!existingConversation) {
+            return state;
+          }
+
+          return {
+            conversations: mergeConversationList(state.conversations, {
+              ...existingConversation,
+              ...conversation,
+            }),
+          };
+        });
+      },
+
+      upsertConversation: (conversation) => {
         set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c._id === conversation._id ? { ...c, ...conversation } : c
-          ),
+          conversations: mergeConversationList(state.conversations, conversation),
         }));
       },
 
@@ -318,20 +369,16 @@ export const useChatStore = create<ChatState>()(
             ),
           }));
         } catch (error) {
-          console.error("Loi xay ra khi goi markAsSeen trong store:", error);
+          if (!isUnauthorizedError(error)) {
+            console.error("Loi xay ra khi goi markAsSeen trong store:", error);
+          }
         }
       },
 
       addConvo: (convo) => {
         set((state) => {
-          const exists = state.conversations.some(
-            (c) => c._id.toString() === convo._id.toString()
-          );
-
           return {
-            conversations: exists
-              ? state.conversations
-              : uniqueById([convo, ...state.conversations]),
+            conversations: mergeConversationList(state.conversations, convo),
             activeConversationId: convo._id,
           };
         });

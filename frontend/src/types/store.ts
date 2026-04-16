@@ -57,6 +57,7 @@ export interface ChatState {
   addMessage: (message: Message) => Promise<void>;
 
   // update convo
+  upsertConversation: (conversation: Conversation) => void;
   updateConversation: (conversation: unknown) => void;
   markAsSeen: () => Promise<void>;
   addConvo:(convo: Conversation) => void;

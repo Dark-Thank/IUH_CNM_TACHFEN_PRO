@@ -31,6 +31,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       set({ onlineUsers: userIds });
     });
 
+    socket.on("conversation-upsert", (conversation) => {
+      useChatStore.getState().upsertConversation(conversation);
+      socket.emit("join-conversation", conversation._id);
+    });
+
     // new message
     socket.on("new-message", ({ message, conversation, unreadCounts }) => {
       useChatStore.getState().addMessage(message);
