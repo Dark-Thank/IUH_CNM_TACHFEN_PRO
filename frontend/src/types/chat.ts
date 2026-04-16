@@ -50,9 +50,16 @@ export interface Message {
   senderId: string;
   content: string | null;
 
-  imgUrls?: string[]; // FIX HERE
+  imgUrls?: string[];
 
- 
+  
+  fileUrls?: {
+    url: string;
+    name: string;
+    size: number;
+    type: string;
+  }[];
+
   isPinned?: boolean;
   pinnedBy?: string;
   pinnedAt?: string;
@@ -62,6 +69,5 @@ export interface Message {
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
-
 }
 

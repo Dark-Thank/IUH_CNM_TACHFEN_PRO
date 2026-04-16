@@ -1,20 +1,29 @@
 import api from "@/lib/axios";
 import type { ConversationResponse, Message } from "@/types/chat";
 
+const pageLimit = 50;
+
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
 }
 
-const pageLimit = 50;
-
 export const chatService = {
+  // ======================
+  // CONVERSATIONS
+  // ======================
   async fetchConversations(): Promise<ConversationResponse> {
     const res = await api.get("/conversations");
     return res.data;
   },
 
-  async fetchMessages(id: string, cursor?: string): Promise<FetchMessageProps> {
+  // ======================
+  // MESSAGES
+  // ======================
+  async fetchMessages(
+    id: string,
+    cursor?: string
+  ): Promise<FetchMessageProps> {
     const res = await api.get(`/conversations/${id}/messages`, {
       params: {
         limit: pageLimit,
@@ -22,49 +31,62 @@ export const chatService = {
       },
     });
 
-    return { messages: res.data.messages, cursor: res.data.nextCursor };
+    return {
+      messages: res.data.messages,
+      cursor: res.data.nextCursor,
+    };
   },
 
-  async sendDirectMessage(
-    recipientId: string,
-    content: string = "",
-    imgUrl?: string,
-    conversationId?: string
-  ) {
-    const res = await api.post("/messages/direct", {
-      recipientId,
-      content,
-      imgUrl,
-      conversationId,
+  // ======================
+  // DIRECT MESSAGE (UPLOAD FILES)
+  // ======================
+  async sendDirectMessage(formData: FormData) {
+    const res = await api.post("/messages/direct", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     });
 
     return res.data.message;
   },
 
-  async sendGroupMessage(
-    conversationId: string,
-    content: string = "",
-    imgUrl?: string
-  ) {
-    const res = await api.post("/messages/group", {
-      conversationId,
-      content,
-      imgUrl,
+  // ======================
+  // GROUP MESSAGE (UPLOAD FILES)
+  // ======================
+  async sendGroupMessage(conversationId: string, formData: FormData) {
+    formData.append("conversationId", conversationId);
+
+    const res = await api.post("/messages/group", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
     });
+
     return res.data.message;
   },
 
+  // ======================
+  // MARK AS SEEN
+  // ======================
   async markAsSeen(conversationId: string) {
     const res = await api.patch(`/conversations/${conversationId}/seen`);
     return res.data;
   },
 
+  // ======================
+  // CREATE CONVERSATION
+  // ======================
   async createConversation(
     type: "direct" | "group",
     name: string,
     memberIds: string[]
   ) {
-    const res = await api.post("/conversations", { type, name, memberIds });
+    const res = await api.post("/conversations", {
+      type,
+      name,
+      memberIds,
+    });
+
     return res.data.conversation;
   },
 

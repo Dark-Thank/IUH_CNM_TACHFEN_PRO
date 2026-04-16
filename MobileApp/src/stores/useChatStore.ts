@@ -111,34 +111,53 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendDirectMessage: async (recipientId, content, imgUrl) => {
+      sendDirectMessage: async (recipientId, content, files) => {
         try {
           const { activeConversationId } = get();
-          await chatService.sendDirectMessage(
-            recipientId,
-            content,
-            imgUrl,
-            activeConversationId || undefined
-          );
 
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c._id === activeConversationId ? { ...c, seenBy: [] } : c
-            ),
-          }));
+          const formData = new FormData();
+
+          formData.append("recipientId", recipientId);
+          formData.append("content", content);
+
+          if (activeConversationId) {
+            formData.append("conversationId", activeConversationId);
+          }
+
+          if (files?.length) {
+            files.forEach((file) => {
+              formData.append("files", {
+                uri: file.uri,
+                name: file.name || "file.jpg",
+                type: file.type || "image/jpeg",
+              } as any);
+            });
+          }
+
+          await chatService.sendDirectMessage(formData);
+
         } catch (error) {
           console.error("Loi xay ra khi gui direct message", error);
         }
       },
 
-      sendGroupMessage: async (conversationId, content, imgUrl) => {
+      sendGroupMessage: async (conversationId, content, files) => {
         try {
-          await chatService.sendGroupMessage(conversationId, content, imgUrl);
-          set((state) => ({
-            conversations: state.conversations.map((c) =>
-              c._id === get().activeConversationId ? { ...c, seenBy: [] } : c
-            ),
-          }));
+          const formData = new FormData();
+
+          formData.append("content", content);
+
+          if (files?.length) {
+            files.forEach((file) => {
+              formData.append("files", {
+                uri: file.uri,
+                name: file.name || "file.jpg",
+                type: file.type || "image/jpeg",
+              } as any);
+            });
+          }
+
+          await chatService.sendGroupMessage(conversationId, formData);
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
         }
@@ -289,12 +308,12 @@ export const useChatStore = create<ChatState>()(
             conversations: state.conversations.map((c) =>
               c._id === activeConversationId && c.lastMessage
                 ? {
-                    ...c,
-                    unreadCounts: {
-                      ...c.unreadCounts,
-                      [currentUserId]: 0,
-                    },
-                  }
+                  ...c,
+                  unreadCounts: {
+                    ...c.unreadCounts,
+                    [currentUserId]: 0,
+                  },
+                }
                 : c
             ),
           }));

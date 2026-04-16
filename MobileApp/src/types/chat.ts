@@ -49,13 +49,20 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
-  imgUrls: string[];
   isRecalled?: boolean;
   recalledAt?: string | null;
   isPinned?: boolean;
   pinnedBy?: string;
   pinnedAt?: string | null;
   updatedAt?: string | null;
+
+  imgUrls?: string[];
+  fileUrls?: {
+    url: string;
+    name: string;
+    size?: number;
+    type?: string;
+  }[];
   createdAt: string;
   isOwn?: boolean;
 }

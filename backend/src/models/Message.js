@@ -21,7 +21,15 @@ const messageSchema = new mongoose.Schema({
     imgUrls: {
         type: [String],
         default: [],
-    },  
+    },
+   fileUrls: [
+  {
+    url: { type: String },
+    name: { type: String },
+    size: { type: Number },
+    type: { type: String },
+  },
+],
 
     isPinned: {
         type: Boolean,
@@ -40,14 +48,13 @@ const messageSchema = new mongoose.Schema({
     },
     recalledAt: {
         type: Date
-    }  
+    }
 
 }, { timestamps: true }
 
 );
 
-messageSchema.index({conversationId: 1, createdAt: -1 });
-
-const Message = mongoose.model("Message", messageSchema);
+messageSchema.index({ conversationId: 1, createdAt: -1 });
+const Message = mongoose.models.Message || mongoose.model("Message", messageSchema);
 
 export default Message;

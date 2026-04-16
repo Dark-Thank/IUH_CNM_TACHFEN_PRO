@@ -118,14 +118,13 @@ const MessageItem = ({
                 )}
 
                 {/* IMAGES */}
-                {message.imgUrls?.length > 0 && (
+                {(message.imgUrls || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {message.imgUrls.map((url, index) => (
+                    {(message.imgUrls || []).map((url, index) => (
                       <img
                         key={index}
                         src={url}
-                        alt="image"
-                        className="max-w-[200px] rounded-lg object-cover cursor-pointer hover:scale-105 transition"
+                        className="max-w-[200px] rounded-lg"
                       />
                     ))}
                   </div>
@@ -133,7 +132,22 @@ const MessageItem = ({
               </>
             )}
           </Card>
-
+          {/* FILES */}
+          {/* FILES */}
+{(message.fileUrls || []).length > 0 && (
+  <div className="mt-2 space-y-1">
+    {message.fileUrls!.map((file, index) => (
+      <a
+        key={index}
+        href={file.url}
+        target="_blank"
+        className="block text-sm text-blue-500 underline"
+      >
+        📎 {file.name}
+      </a>
+    ))}
+  </div>
+)}
           {/* ACTION MENU */}
           <DropdownMenu>
             <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 flex-shrink-0 self-center">

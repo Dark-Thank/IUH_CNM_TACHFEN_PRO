@@ -56,13 +56,22 @@ export interface ChatState {
   sendDirectMessage: (
     recipientId: string,
     content: string,
-    imgUrl?: string
+    files?: {
+      uri: string;
+      name?: string;
+      type?: string;
+    }[]
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
     content: string,
-    imgUrl?: string
+    files?: {
+      uri: string;
+      name?: string;
+      type?: string;
+    }[]
   ) => Promise<void>;
+  // add message
   addMessage: (message: Message) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;

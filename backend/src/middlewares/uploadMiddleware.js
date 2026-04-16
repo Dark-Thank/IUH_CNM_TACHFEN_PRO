@@ -9,10 +9,26 @@ cloudinary.config({
 export const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 1024 * 1024 * 5, 
+    fileSize: 1024 * 1024 * 10, 
   },
 });
+export const uploadFileFromBuffer = (buffer, options = {}) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "moji_chat/files",
+        resource_type: "auto", 
+        ...options,
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
 
+    uploadStream.end(buffer);
+  });
+};
 export const uploadImageFromBuffer = (buffer, options) => {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
