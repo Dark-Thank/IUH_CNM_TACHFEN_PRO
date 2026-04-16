@@ -49,8 +49,16 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
-  imgUrl?: string | null;
-  updatedAt?: string | null;
+
+  imgUrls?: string[];
+  fileUrls?: {
+    url: string;
+    name: string;
+    size?: number;
+    type?: string;
+  }[];
+
   createdAt: string;
+  updatedAt?: string | null;
   isOwn?: boolean;
 }

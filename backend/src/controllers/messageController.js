@@ -5,13 +5,13 @@ import { io } from "../socket/index.js";
 
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
-
+import { uploadFileFromBuffer } from "../middlewares/uploadMiddleware.js";
 export const sendDirectMessage = async (req, res) => {
     try {
-        
+
         const { recipientId, content, conversationId } = req.body;
         const senderId = req.user._id;
-
+        
 
         let conversation;
 
@@ -45,29 +45,49 @@ export const sendDirectMessage = async (req, res) => {
                 unreadCounts: new Map(),
             });
         }
-
-        //  upload nhiều ảnh
         let imageUrls = [];
+let fileUrls = [];
 
-        if (req.files && req.files.length > 0) {
-            const uploadPromises = req.files.map((file) =>
-                uploadImageFromBuffer(file.buffer, {
-                    folder: "moji_chat/messages",
-                    transformation: [{ width: 800, crop: "limit" }],
-                })
-            );
+if (req.files?.length > 0) {
+  const uploadPromises = req.files.map((file) => {
+    if (file.mimetype.startsWith("image/")) {
+      return uploadImageFromBuffer(file.buffer, {
+        folder: "moji_chat/messages",
+        transformation: [{ width: 800, crop: "limit" }],
+      });
+    } else {
+      return uploadFileFromBuffer(file.buffer, {
+        folder: "moji_chat/files",
+      });
+    }
+  });
 
-            const results = await Promise.all(uploadPromises);
-            imageUrls = results.map((r) => r.secure_url);
-        }
+  const results = await Promise.all(uploadPromises);
 
+  results.forEach((result, index) => {
+    const file = req.files[index];
+
+    // 🔥 FIX: validate secure_url
+    if (!result?.secure_url) return;
+
+    if (file.mimetype.startsWith("image/")) {
+      imageUrls.push(result.secure_url);
+    } else {
+      fileUrls.push({
+        url: result.secure_url,
+        name: file.originalname,
+        size: file.size,
+        type: file.mimetype,
+      });
+    }
+  });
+}
         const message = await Message.create({
             conversationId: conversation._id,
             senderId,
             content,
-
             imgUrls: imageUrls, //  đổi sang mảng
-
+            fileUrls,
 
         });
 
@@ -77,50 +97,74 @@ export const sendDirectMessage = async (req, res) => {
         emitNewMessage(io, conversation, message);
 
         return res.status(201).json({ message });
+        
 
     } catch (error) {
         console.error("Lỗi khi gửi tin nhắn trực tiếp", error);
+        console.log("FILES:", req.files);
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };
 
 export const sendGroupMessage = async (req, res) => {
-    try {
-        const { content } = req.body;
-        const senderId = req.user._id;
-        const conversation = req.conversation;
+  try {
+    const { content } = req.body;
+    const senderId = req.user._id;
+    const conversation = req.conversation;
 
-        if (!content && (!req.files || req.files.length === 0)) {
-            return res.status(400).json({ message: "Tin nhắn rỗng" });
+    if (!content && (!req.files || req.files.length === 0)) {
+      return res.status(400).json({ message: "Tin nhắn rỗng" });
+    }
+
+    let imageUrls = [];
+    let fileUrls = [];
+
+    // FIX: thêm xử lý FILE giống direct
+    if (req.files && req.files.length > 0) {
+      const uploadPromises = req.files.map((file) => {
+        if (file.mimetype.startsWith("image/")) {
+          return uploadImageFromBuffer(file.buffer, {
+            folder: "moji_chat/messages",
+          });
+        } else {
+          return uploadFileFromBuffer(file.buffer, {
+            folder: "moji_chat/files",
+          });
         }
+      });
 
-        let imageUrls = [];
+      const results = await Promise.all(uploadPromises);
 
-        if (req.files && req.files.length > 0) {
-            const uploadPromises = req.files.map((file) =>
-                uploadImageFromBuffer(file.buffer, {
-                    folder: "moji_chat/messages",
-                })
-            );
+      results.forEach((result, index) => {
+        const file = req.files[index];
 
-            const results = await Promise.all(uploadPromises);
-            imageUrls = results.map(r => r.secure_url);
+        if (file.mimetype.startsWith("image/")) {
+          imageUrls.push(result.secure_url);
+        } else {
+          fileUrls.push({
+            url: result.secure_url,
+            name: file.originalname,
+            size: file.size,
+            type: file.mimetype,
+          });
         }
+      });
+    }
 
-        const message = await Message.create({
-            conversationId: conversation._id, //  FIX QUAN TRỌNG
-            senderId,
-            content,
+    const message = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      content,
+      imgUrls: imageUrls,
+      fileUrls,
+    });
 
-            imgUrls: imageUrls,
-
-        });
 
         updateConversationAfterCreateMessage(conversation, message, senderId);
 
         await conversation.save();
         emitNewMessage(io, conversation, message);
-
+        
         return res.status(201).json({ message });
 
     } catch (error) {

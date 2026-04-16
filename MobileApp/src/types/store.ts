@@ -54,15 +54,23 @@ export interface ChatState {
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
   sendDirectMessage: (
-    recipientId: string,
-    content: string,
-    imgUrl?: string
-  ) => Promise<void>;
+  recipientId: string,
+  content: string,
+  files?: {
+    uri: string;
+    name?: string;
+    type?: string;
+  }[]
+) => Promise<void>;
   sendGroupMessage: (
-    conversationId: string,
-    content: string,
-    imgUrl?: string
-  ) => Promise<void>;
+  conversationId: string,
+  content: string,
+  files?: {
+    uri: string;
+    name?: string;
+    type?: string;
+  }[]
+) => Promise<void>;
   // add message
   addMessage: (message: Message) => Promise<void>;
   // update convo

@@ -16,15 +16,15 @@ import { upload } from "../middlewares/uploadMiddleware.js";
 
 router.post(
   "/direct",
-  upload.array("images", 10),     
-  //checkFriendship,
+  protectedRoute,
+  upload.array("files", 10),
   sendDirectMessage
 );
 
 router.post(
   "/group",
-  upload.array("images", 10),
-  //checkGroupMembership,
+  protectedRoute,
+  upload.array("files", 10),
   sendGroupMessage
 );
 

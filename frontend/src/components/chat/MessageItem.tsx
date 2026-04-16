@@ -36,8 +36,8 @@ const MessageItem = ({
   const isShowTime =
     index === 0 ||
     new Date(message.createdAt).getTime() -
-      new Date(prev?.createdAt || 0).getTime() >
-      300000;
+    new Date(prev?.createdAt || 0).getTime() >
+    300000;
 
   const isGroupBreak = isShowTime || message.senderId !== prev?.senderId;
 
@@ -102,8 +102,8 @@ const MessageItem = ({
               message.isRecalled
                 ? "p-3 border rounded-lg bg-muted/50 text-muted-foreground"
                 : isOwn
-                ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
-                : "chat-bubble-received"
+                  ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
+                  : "chat-bubble-received"
             )}
           >
             {message.isRecalled ? (
@@ -127,14 +127,13 @@ const MessageItem = ({
                 )}
 
                 {/* IMAGES */}
-                {message.imgUrls?.length > 0 && (
+                {(message.imgUrls || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {message.imgUrls.map((url, index) => (
+                    {(message.imgUrls || []).map((url, index) => (
                       <img
                         key={index}
                         src={url}
-                        alt="image"
-                        className="max-w-[200px] rounded-lg object-cover cursor-pointer hover:scale-105 transition"
+                        className="max-w-[200px] rounded-lg"
                       />
                     ))}
                   </div>
@@ -142,7 +141,22 @@ const MessageItem = ({
               </>
             )}
           </Card>
-
+          {/* FILES */}
+          {/* FILES */}
+{(message.fileUrls || []).length > 0 && (
+  <div className="mt-2 space-y-1">
+    {message.fileUrls!.map((file, index) => (
+      <a
+        key={index}
+        href={file.url}
+        target="_blank"
+        className="block text-sm text-blue-500 underline"
+      >
+        📎 {file.name}
+      </a>
+    ))}
+  </div>
+)}
           {/* ACTION MENU */}
           <DropdownMenu>
             <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 flex-shrink-0 self-center">
