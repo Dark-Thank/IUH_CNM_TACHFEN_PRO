@@ -12,6 +12,15 @@ const baseURL = process.env.EXPO_PUBLIC_SOCKET_URL?.trim() || getBackendOrigin()
 let appStateSubscription: NativeEventSubscription | null = null;
 let currentAppState: AppStateStatus = "active";
 
+const joinKnownConversations = (socket: Socket) => {
+  useChatStore
+    .getState()
+    .conversations
+    .forEach((conversation) => {
+      socket.emit("join-conversation", conversation._id);
+    });
+};
+
 const isAppActive = () => {
   const appState = AppState.currentState;
   return appState === "active" || appState === "unknown";
@@ -61,7 +70,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const socket: Socket = ioClient(baseURL, {
       auth: { token: accessToken },
       autoConnect: false,
-      transports: ["websocket"],
+      transports: ["polling", "websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
@@ -74,6 +83,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     socket.on("connect", () => {
       console.log("Da ket noi voi socket");
       set({ isConnected: true });
+      joinKnownConversations(socket);
     });
 
     socket.on("disconnect", (reason) => {

@@ -13,19 +13,17 @@ import conversationRoute from "./routes/conversationRoute.js";
 import friendRoute from "./routes/friendRoute.js";
 import messageRoute from "./routes/messageRoute.js";
 import userRoute from "./routes/userRoute.js";
+import { buildCorsOptions, getAllowedOrigins } from "./utils/cors.js";
 
 dotenv.config();
 
 const PORT = process.env.PORT || 5001;
 
 app.use(cors({
-  origin: "http://localhost:5173",
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  credentials: true,
+  ...buildCorsOptions(),
 }));
 
 app.use(cookieParser());
-app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 app.use(express.json());
 
 cloudinary.config({
@@ -47,6 +45,7 @@ app.use("/api/conversations", conversationRoute);
 
 const bootstrapServer = async () => {
   try {
+    console.log("Allowed CORS origins:", getAllowedOrigins());
     await connectDB();
     await initializeSocketInfrastructure();
 

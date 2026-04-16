@@ -6,6 +6,15 @@ import { useChatStore } from "./useChatStore";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
 
+const joinKnownConversations = (socket: Socket) => {
+  useChatStore
+    .getState()
+    .conversations
+    .forEach((conversation) => {
+      socket.emit("join-conversation", conversation._id);
+    });
+};
+
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
   onlineUsers: [],
@@ -13,17 +22,45 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
 
-    if (existingSocket) return; // tránh tạo nhiều socket
+    if (!accessToken) {
+      return;
+    }
+
+    if (existingSocket) {
+      existingSocket.auth = { token: accessToken };
+
+      if (!existingSocket.connected) {
+        existingSocket.connect();
+      }
+
+      return;
+    }
 
     const socket: Socket = io(baseURL, {
       auth: { token: accessToken },
-      transports: ["websocket"],
+      withCredentials: true,
+      transports: ["polling", "websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     set({ socket });
 
     socket.on("connect", () => {
       console.log("Đã kết nối với socket");
+      joinKnownConversations(socket);
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("Socket đã ngắt kết nối:", reason);
+      set({ onlineUsers: [] });
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("Lỗi kết nối socket:", error.message);
     });
 
     // online users
@@ -65,7 +102,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // read message
-    socket.on("read-message", ({conversation, lastMessage}) =>{
+    socket.on("read-message", ({ conversation, lastMessage }) => {
       const updated = {
         _id: conversation._id,
         lastMessage,
@@ -94,7 +131,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         if (!convoMessages) return state;
 
         const updatedItems = convoMessages.items.map((m) =>
-          m._id === messageId 
+          m._id === messageId
             ? { ...m, isPinned, pinnedBy, pinnedAt: pinnedAt?.toString() }
             : m
         );
@@ -123,7 +160,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         if (!convoMessages) return state;
 
         const updatedItems = convoMessages.items.map((m) =>
-          m._id === messageId 
+          m._id === messageId
             ? { ...m, content, isRecalled, recalledAt }
             : m
         );
@@ -173,6 +210,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   disconnectSocket: () => {
     const socket = get().socket;
     if (socket) {
+      socket.removeAllListeners();
       socket.disconnect();
       set({ socket: null });
     }

@@ -6,16 +6,14 @@ import { createClient } from "redis";
 import { Server } from "socket.io";
 import { getUserConversationsForSocketIO } from "../controllers/conversationController.js";
 import { socketAuthMiddleware } from "../middlewares/socketAuthMiddleware.js";
+import { buildCorsOptions } from "../utils/cors.js";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: process.env.CLIENT_URL,
-        credentials: true,
-    },
+    cors: buildCorsOptions(),
 });
 
 const REDIS_URL = process.env.REDIS_URL?.trim();
