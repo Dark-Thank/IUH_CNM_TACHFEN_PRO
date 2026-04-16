@@ -1,12 +1,12 @@
-import { useCallback } from "react";
 import { useChatStore } from "@/stores/useChatStore";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { AlertCircle } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import PinnedSection from "./PinnedSection";
 
-const ChatWindowBody = () => {
+const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
     const {
         activeConversationId,
         conversations,
@@ -108,8 +108,18 @@ const ChatWindowBody = () => {
 
     if (!messages?.length) {
         return (
-            <div className="flex h-full items-center justify-center text-muted-foreground ">
-                Chưa có tin nhắn nào trong cuộc trò chuyện này.
+            <div className="flex h-full flex-col overflow-hidden">
+                {isBlocked && (
+                    <div className="p-4 pb-3 bg-primary-foreground">
+                        <div className="px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
+                            <AlertCircle className="size-4 flex-shrink-0" />
+                            <span>Bạn đã bị chặn. Không thể gửi tin nhắn.</span>
+                        </div>
+                    </div>
+                )}
+                <div className="flex h-full items-center justify-center text-muted-foreground bg-primary-foreground">
+                    Chưa có tin nhắn nào trong cuộc trò chuyện này.
+                </div>
             </div>
         );
     }
@@ -121,6 +131,12 @@ const ChatWindowBody = () => {
                     pinnedMessages={pinnedMessages} 
                     onJump={scrollToMessage} 
                 />
+                )}
+            {isBlocked && (
+                <div className="mb-3 px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
+                    <AlertCircle className="size-4 flex-shrink-0" />
+                    <span>Bạn đã bị chặn. Không thể gửi tin nhắn.</span>
+                </div>
             )}
             <div
             id="scrollableDiv"

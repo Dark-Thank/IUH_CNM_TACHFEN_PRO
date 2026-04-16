@@ -1,5 +1,6 @@
-import User from "../models/User.js";
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
+import User from "../models/User.js";
+
 export const authMe = async (req, res) => {
   try {
     const user = req.user; // lấy từ authMiddleware
@@ -31,6 +32,29 @@ export const searchUserByUsername = async (req, res) => {
     return res.status(200).json({ user });
   } catch (error) {
     console.error("Lỗi xảy ra khi searchUserByUsername", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
+export const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ message: "Cần cung cấp userId." });
+    }
+
+    const user = await User.findById(userId).select(
+      "_id displayName username avatarUrl email bio phone createdAt"
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
+    }
+
+    return res.status(200).json({ user });
+  } catch (error) {
+    console.error("Lỗi xảy ra khi getUserById", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
@@ -67,11 +91,63 @@ export const uploadAvatar = async (req, res) => {
   }
 };
 
+export const updateMe = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { displayName, email, bio, phone } = req.body;
+    const updates = {};
+
+    if (typeof displayName === "string") {
+      const trimmed = displayName.trim();
+      if (!trimmed) {
+        return res.status(400).json({ message: "Display name khong duoc de trong." });
+      }
+      updates.displayName = trimmed;
+    }
+
+    if (typeof email === "string") {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail) {
+        return res.status(400).json({ message: "Email khong duoc de trong." });
+      }
+      updates.email = trimmedEmail;
+    }
+
+    if (typeof bio === "string") {
+      updates.bio = bio.trim();
+    }
+
+    if (typeof phone === "string") {
+      const trimmedPhone = phone.trim();
+      updates.phone = trimmedPhone === "" ? null : trimmedPhone;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ message: "Khong co truong nao de cap nhat." });
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updates,
+      { new: true, runValidators: true }
+    ).select("_id username email displayName avatarUrl bio phone createdAt updatedAt");
+
+    return res.status(200).json({ user: updatedUser });
+  } catch (error) {
+    console.error("Loi khi updateMe", error);
+
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "Email da ton tai." });
+    }
+
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
 
 export const test = async (req, res) => {
   return res.sendStatus(204);
 };
-
 export const changePassword = async (req, res) => {
   try {
     const userId = req.user._id; // protectedRoute đã gắn user (không chứa hashedPassword)

@@ -1,16 +1,23 @@
-import { useChatStore } from '@/stores/useChatStore';
-import { useState } from 'react';
-import type { Conversation } from "@/types/chat";
 import { useAuthStore } from '@/stores/useAuthStore';
-import { Button } from '../ui/button';
+import { useChatStore } from '@/stores/useChatStore';
+import type { Conversation } from "@/types/chat";
 import { ImagePlus, Send } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '../ui/button';
 import { Input } from "../ui/input";
 import EmmojiPicker from './EmmojiPicker';
-import { toast } from 'sonner';
 
-const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
+const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedConvo: Conversation, isBlocked: boolean }) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage } = useChatStore();
+
+    const [isBlocked, setIsBlocked] = useState(false);
+
+    // Sync the prop value to local state
+    useEffect(() => {
+        setIsBlocked(propIsBlocked);
+    }, [propIsBlocked]);
 
     const [value, setValue] = useState("");
     const [images, setImages] = useState<File[]>([]);
@@ -38,14 +45,20 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
             } else {
                 await sendGroupMessage(selectedConvo._id, formData);
             }
-
             setValue("");
             setImages([]);
 
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
             toast.error("Lỗi gửi tin nhắn!");
-        }
+            // Check if error is due to being blocked
+            if (error.response?.status === 403 && error.response?.data?.message?.includes("chặn")) {
+                setIsBlocked(true);
+                toast.error("Bạn đã bị chặn và không thể gửi tin nhắn");
+            } else {
+                toast.error("Lỗi xảy ra khi gửi tin nhắn. Bạn hãy thử lại!");
+            }
+        } 
     };
 
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -109,8 +122,9 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
                         value={value}
                         onChange={(e) => setValue(e.target.value)}
                         onKeyDown={handleKeyPress}
-                        placeholder="Soạn tin nhắn..."
-                        className="pr-16"
+                        placeholder={isBlocked ? "Bạn không thể nhắn tin..." : "Soạn tin nhắn..."}
+                        disabled={isBlocked}
+                        className="pr-20 h-9 bg-white border-border/50 focus:border-primary/50 transition-smooth resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                     />
 
                     <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -125,12 +139,12 @@ const MessageInput = ({ selectedConvo }: { selectedConvo: Conversation }) => {
                 {/* SEND BUTTON */}
                 <Button
                     onClick={sendMessage}
-                    disabled={!value.trim() && images.length === 0}
+                    disabled={!value.trim() && images.length === 0 || isBlocked}
                 >
                     <Send className="size-4 text-white" />
                 </Button>
-
             </div>
+        
         </div>
     );
 };

@@ -1,3 +1,4 @@
+import Block from "../models/Block.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
@@ -17,10 +18,26 @@ export const createConversation = async (req, res) => {
         let conversation;
         if (type === 'direct') {
             const participantId = memberIds[0];
-            conversation = await Conversation.findOne({
-                type: 'direct',
-                "participants.userId": { $all: [userId, participantId] },
+
+            // Check if participant has blocked the user
+            const isBlocked = await Block.findOne({ 
+                blocker: participantId, 
+                blocked: userId 
             });
+
+            if (isBlocked) {
+                return res.status(403).json({ message: "Bạn không thể tạo cuộc trò chuyện với người dùng này vì đã bị chặn" });
+            }
+
+            conversation = await Conversation.findOne({
+                type: "direct",
+                participants: {
+                    $all: [
+                    { $elemMatch: { userId } },
+                    { $elemMatch: { userId: participantId } }
+                    ]
+                }
+});
 
             if (!conversation) {
                 conversation = new Conversation({

@@ -4,7 +4,8 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useAuthStore } from "./useAuthStore";
 import { useSocketStore } from "./useSocketStore";
-import type { Message } from "@/types/chat";
+
+
 
 export const useChatStore = create<ChatState>()(
   persist(
@@ -100,7 +101,8 @@ export const useChatStore = create<ChatState>()(
           await chatService.sendDirectMessage(data);
 
         } catch (error) {
-          console.error(error);
+          console.error("Lỗi xảy ra khi gửi direct message", error);
+          throw error;
         }
       },
       sendGroupMessage: async (conversationId, formData?: FormData) => {
@@ -112,7 +114,8 @@ export const useChatStore = create<ChatState>()(
           await chatService.sendGroupMessage(data);
 
         } catch (error) {
-          console.error(error);
+          console.error("Lỗi xảy ra gửi group message", error);
+          throw error;
         }
       },
       addMessage: async (message) => {
