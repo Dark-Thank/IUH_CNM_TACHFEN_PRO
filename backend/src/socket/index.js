@@ -18,6 +18,25 @@ const io = new Server(server, {
 
 const REDIS_URL = process.env.REDIS_URL?.trim();
 let socketInfrastructureReady = false;
+const REDIS_CONNECT_TIMEOUT_MS = 5000;
+
+const withTimeout = (promise, timeoutMs, label) =>
+    Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            setTimeout(() => {
+                reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+            }, timeoutMs);
+        }),
+    ]);
+
+const closeRedisClientSafely = (client) => {
+    if (!client?.isOpen) {
+        return;
+    }
+
+    client.destroy();
+};
 
 const getSocketUserId = (socket) => {
     const dataUserId = socket?.data?.userId;
@@ -58,17 +77,33 @@ export const initializeSocketInfrastructure = async () => {
         return;
     }
 
-    const pubClient = createClient({ url: REDIS_URL });
+    const pubClient = createClient({
+        url: REDIS_URL,
+        socket: {
+            connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+            reconnectStrategy: false,
+        },
+    });
     const subClient = pubClient.duplicate();
 
     try {
-        await Promise.all([pubClient.connect(), subClient.connect()]);
+        await withTimeout(
+            Promise.all([pubClient.connect(), subClient.connect()]),
+            REDIS_CONNECT_TIMEOUT_MS,
+            "Socket.IO Redis adapter"
+        );
         io.adapter(createAdapter(pubClient, subClient));
         socketInfrastructureReady = true;
         console.log("Socket.IO Redis adapter is enabled");
     } catch (error) {
-        await Promise.allSettled([pubClient.quit(), subClient.quit()]);
-        throw error;
+        socketInfrastructureReady = true;
+        console.warn(
+            "Socket.IO Redis adapter is unavailable, continuing in single-instance mode:",
+            error.message
+        );
+
+        closeRedisClientSafely(pubClient);
+        closeRedisClientSafely(subClient);
     }
 };
 
