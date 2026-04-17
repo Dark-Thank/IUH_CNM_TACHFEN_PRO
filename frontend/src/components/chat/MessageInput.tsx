@@ -51,6 +51,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
 
         } catch (error: any) {
             console.error(error);
+            const serverMessage = error.response?.data?.message;
 
             // if (error.response?.status === 403) {
             //     setIsBlocked(true);
@@ -62,7 +63,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                 setIsBlocked(true);
                 // toast.error("Bạn đã bị chặn và không thể gửi tin nhắn");
             } else {
-                toast.error("Gửi tin nhắn thất bại!");
+                toast.error(serverMessage || "Gửi tin nhắn thất bại!");
             }
         }
     };

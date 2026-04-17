@@ -2,18 +2,46 @@ import multer from "multer";
 import path from "path";
 import { randomUUID } from "crypto";
 import { v2 as cloudinary } from "cloudinary";
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+export const MAX_UPLOAD_FILE_SIZE_MB = Number(process.env.MAX_UPLOAD_FILE_SIZE_MB || 10);
+const MAX_UPLOAD_FILE_SIZE_BYTES = 1024 * 1024 * MAX_UPLOAD_FILE_SIZE_MB;
+
+export const getUploadFileSizeLimitMessage = () =>
+  `Không cho phép người dùng gửi file quá ${MAX_UPLOAD_FILE_SIZE_MB} MB.`;
+
 export const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 1024 * 1024 * 10,
+    fileSize: MAX_UPLOAD_FILE_SIZE_BYTES,
   },
 });
+
+export const withUploadErrorHandling = (uploadMiddleware) => (req, res, next) => {
+  uploadMiddleware(req, res, (error) => {
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        code: "FILE_TOO_LARGE",
+        message: getUploadFileSizeLimitMessage(),
+        maxFileSizeMb: MAX_UPLOAD_FILE_SIZE_MB,
+      });
+    }
+
+    if (error instanceof multer.MulterError) {
+      return res.status(400).json({
+        code: error.code,
+        message: error.message,
+      });
+    }
+
+    return next(error);
+  });
+};
 
 const sanitizeFileName = (value = "file") =>
   value

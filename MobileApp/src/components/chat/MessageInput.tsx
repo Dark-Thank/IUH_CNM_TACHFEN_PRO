@@ -136,26 +136,26 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
   // SEND MESSAGE
   // ======================
   const handleSend = async () => {
-  if (disabled) {
-    toast.error("Bạn không thể gửi tin nhắn trong cuộc trò chuyện này");
-    return;
-  }
+    if (disabled) {
+      toast.error("Bạn không thể gửi tin nhắn trong cuộc trò chuyện này");
+      return;
+    }
 
-  if (sending) return;
+    if (sending) return;
 
-  const trimmed = value.trim();
+    const trimmed = value.trim();
 
     if (!trimmed && files.length === 0)
       return;
 
 
 
-  // if (!trimmed || sending) {
-  //   return;
-  // }
+    // if (!trimmed || sending) {
+    //   return;
+    // }
 
-  setSending(true);
-  setValue("");
+    setSending(true);
+    setValue("");
 
     try {
       if (selectedConvo.type === "direct") {
@@ -181,34 +181,35 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
     } catch (error) {
       console.error(error);
       setValue(trimmed);
+      const serverMessage = (error as any)?.response?.data?.message;
       toast.error(
-        "Gửi tin nhắn thất bại"
+        serverMessage || "Gửi tin nhắn thất bại"
       );
     } finally {
       setSending(false);
 
-  // setSending(true);
-  // setValue("");
+      // setSending(true);
+      // setValue("");
 
-  // try {
-  //   if (selectedConvo.type === "direct") {
-  //     if (!otherUser) {
-  //       throw new Error("Không tìm thấy người nhận.");
-  //     }
+      // try {
+      //   if (selectedConvo.type === "direct") {
+      //     if (!otherUser) {
+      //       throw new Error("Không tìm thấy người nhận.");
+      //     }
 
-  //     await sendDirectMessage(otherUser._id, trimmed);
-  //   } else {
-  //     await sendGroupMessage(selectedConvo._id, trimmed);
+      //     await sendDirectMessage(otherUser._id, trimmed);
+      //   } else {
+      //     await sendGroupMessage(selectedConvo._id, trimmed);
 
-  //   }
-  // } catch (error) {
-  //   console.error(error);
-  //   setValue(trimmed);
-  //   toast.error("Gửi tin nhắn thất bại. Hãy thử lại.");
-  // } finally {
-    // setSending(false);
-  }
-};
+      //   }
+      // } catch (error) {
+      //   console.error(error);
+      //   setValue(trimmed);
+      //   toast.error("Gửi tin nhắn thất bại. Hãy thử lại.");
+      // } finally {
+      // setSending(false);
+    }
+  };
 
   return (
     <View
@@ -289,7 +290,7 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
             backgroundColor: isDark
               ? "#1f2937"
               : "#f1f5f9",
-              opacity: disabled ? 0.5 : 1,
+            opacity: disabled ? 0.5 : 1,
           },
         ]}
       >
@@ -356,23 +357,23 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
       <Pressable
         onPress={handleSend}
         disabled={
-  disabled ||
-  sending ||
-  (value.trim().length === 0 && files.length === 0)
-}
+          disabled ||
+          sending ||
+          (value.trim().length === 0 && files.length === 0)
+        }
         style={[
           styles.sendButton,
           {
             backgroundColor:
               !disabled &&
-  !sending &&
-  (value.trim().length > 0 || files.length > 0)
+                !sending &&
+                (value.trim().length > 0 || files.length > 0)
                 ? isDark
                   ? "#a855f7"
                   : "#8b5cf6"
                 : isDark
-                ? "#374151"
-                : "#cbd5e1",
+                  ? "#374151"
+                  : "#cbd5e1",
           },
         ]}
       >
