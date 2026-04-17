@@ -14,11 +14,13 @@ export const userService = {
   },
   updateProfile: async (payload: {
     displayName?: string;
-    email?: string;
     bio?: string;
-    phone?: string;
   }) => {
     const res = await api.patch("/users/me", payload);
     return res.data.user;
+  },
+  deleteAccount: async () => {
+    const res = await api.delete("/users/me");
+    return res.data;
   },
 };

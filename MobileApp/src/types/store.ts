@@ -100,10 +100,9 @@ export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
   updateProfile: (payload: {
     displayName?: string;
-    email?: string;
     bio?: string;
-    phone?: string;
   }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 export interface FriendState {

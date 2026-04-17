@@ -1,10 +1,7 @@
-import { useAuthStore } from "@/stores/useAuthStore";
-import { useUserStore } from "@/stores/useUserStore";
-import { useThemeStore } from "@/stores/useThemeStore";
-import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react-native";
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,10 +10,14 @@ import {
   Switch,
   Text,
   TextInput,
-  Image,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
+import { ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react-native";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useThemeStore } from "@/stores/useThemeStore";
+import { useUserStore } from "@/stores/useUserStore";
 
 const ACCOUNT_SHEET_SNAP_POINTS = ["85%"];
 
@@ -24,12 +25,11 @@ export default function SettingsScreen() {
   const accountSheetRef = useRef<BottomSheetModal>(null);
   const { isDark, toggleTheme } = useThemeStore();
   const { user, loading, signOut } = useAuthStore();
-  const { updateProfile } = useUserStore();
+  const { updateProfile, deleteAccount } = useUserStore();
   const [displayName, setDisplayName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [bio, setBio] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const colors = {
     background: isDark ? "#0f172a" : "#f8fafc",
@@ -42,22 +42,25 @@ export default function SettingsScreen() {
     primary: isDark ? "#c084fc" : "#7c3aed",
   };
 
-  const openAccountSheet = () => {
+  const syncFormWithUser = () => {
     setDisplayName(user?.displayName || "");
-    setEmail(user?.email || "");
-    setPhone(user?.phone || "");
     setBio(user?.bio || "");
+  };
+
+  const openAccountSheet = () => {
+    syncFormWithUser();
     accountSheetRef.current?.present();
   };
 
   useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || "");
-      setEmail(user.email || "");
-      setPhone(user.phone || "");
-      setBio(user.bio || "");
-    }
-  }, [user]);
+    syncFormWithUser();
+  }, [user?._id, user?.displayName, user?.bio]);
+
+  const trimmedDisplayName = displayName.trim();
+  const trimmedBio = bio.trim();
+  const hasChanges =
+    trimmedDisplayName !== (user?.displayName ?? "").trim() ||
+    trimmedBio !== (user?.bio ?? "").trim();
 
   const handleSignOut = async () => {
     accountSheetRef.current?.dismiss();
@@ -65,22 +68,51 @@ export default function SettingsScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!displayName.trim()) {
-      return;
-    }
-
-    if (!email.trim()) {
+    if (!trimmedDisplayName || !hasChanges) {
       return;
     }
 
     setSaving(true);
-    await updateProfile({
-      displayName: displayName.trim(),
-      email: email.trim(),
-      phone: phone.trim(),
-      bio: bio.trim(),
-    });
-    setSaving(false);
+
+    try {
+      await updateProfile({
+        displayName: trimmedDisplayName,
+        bio: trimmedBio,
+      });
+    } catch (error) {
+      console.error("Khong the cap nhat profile", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Xoa tai khoan",
+      "Toan bo du lieu lien quan den tai khoan se bi xoa. Ban co chac chan muon tiep tuc?",
+      [
+        {
+          text: "Huy",
+          style: "cancel",
+        },
+        {
+          text: "Xoa",
+          style: "destructive",
+          onPress: async () => {
+            accountSheetRef.current?.dismiss();
+            setDeleting(true);
+
+            try {
+              await deleteAccount();
+            } catch (error) {
+              console.error("Khong the xoa tai khoan", error);
+            } finally {
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -104,6 +136,7 @@ export default function SettingsScreen() {
               </Text>
             )}
           </View>
+
           <View style={styles.profileText}>
             <Text style={[styles.profileName, { color: colors.text }]}>
               {user?.displayName || "Moji user"}
@@ -121,25 +154,22 @@ export default function SettingsScreen() {
           ]}
         >
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Giao diện
-            </Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao dien</Text>
           </View>
+
           <View style={styles.settingRow}>
-            <View
-              style={[styles.settingIcon, { backgroundColor: colors.cardSoft }]}
-            >
+            <View style={[styles.settingIcon, { backgroundColor: colors.cardSoft }]}>
               {isDark ? (
                 <Moon size={20} color={colors.primary} />
               ) : (
                 <Sun size={20} color={colors.primary} />
               )}
             </View>
+
             <View style={styles.settingText}>
-              <Text style={[styles.settingTitle, { color: colors.text }]}>
-                Dark mode
-              </Text>
+              <Text style={[styles.settingTitle, { color: colors.text }]}>Dark mode</Text>
             </View>
+
             <Switch value={isDark} onValueChange={toggleTheme} />
           </View>
         </View>
@@ -155,30 +185,34 @@ export default function SettingsScreen() {
           <View style={[styles.settingIcon, { backgroundColor: colors.cardSoft }]}>
             <UserRound size={20} color={colors.primary} />
           </View>
+
           <View style={styles.settingText}>
-            <Text style={[styles.settingTitle, { color: colors.text }]}>
-              Tài khoản
-            </Text>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>Tai khoan</Text>
             <Text style={[styles.settingDesc, { color: colors.muted }]}>
-              Xem và sửa thông tin tài khoản của bạn
+              Xem va sua thong tin tai khoan cua ban
             </Text>
           </View>
+
           <ChevronRight size={20} color={colors.muted} />
         </Pressable>
       </ScrollView>
+
       <Pressable
-            onPress={handleSignOut}
-            disabled={loading}
-            style={[
-              styles.signOutButton,
-              { backgroundColor: colors.danger, opacity: loading ? 0.6 : 1 },
-            ]}
-          >
-            <LogOut size={19} color="#ffffff" />
-            <Text style={styles.signOutText}>
-              {loading ? "Đang đăng xuất..." : "Đăng xuất"}
-            </Text>
-          </Pressable>
+        onPress={handleSignOut}
+        disabled={loading || deleting}
+        style={[
+          styles.signOutButton,
+          {
+            backgroundColor: colors.danger,
+            opacity: loading || deleting ? 0.6 : 1,
+          },
+        ]}
+      >
+        <LogOut size={19} color="#ffffff" />
+        <Text style={styles.signOutText}>
+          {loading ? "Dang dang xuat..." : "Dang xuat"}
+        </Text>
+      </Pressable>
 
       <BottomSheetModal
         ref={accountSheetRef}
@@ -187,28 +221,22 @@ export default function SettingsScreen() {
         handleIndicatorStyle={{ backgroundColor: colors.muted }}
       >
         <BottomSheetView style={styles.sheetContent}>
-          <Text style={[styles.sheetTitle, { color: colors.text }]}>
-            Tài khoản
-          </Text>
-          
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>Tai khoan</Text>
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
             <Text style={[styles.infoLabel, { color: colors.muted }]}>Email</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user?.email || "Chưa có email"}
+              {user?.email || "Chua co email"}
             </Text>
           </View>
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
-            <Text style={[styles.infoLabel, { color: colors.muted }]}>
-              Tên đăng nhập
-            </Text>
+            <Text style={[styles.infoLabel, { color: colors.muted }]}>Username</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user?.username || "Chưa cập nhật"}
+              {user?.username || "Chua cap nhat"}
             </Text>
           </View>
 
-          
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
             <Text style={[styles.infoLabel, { color: colors.muted }]}>Avatar</Text>
             <View style={styles.avatarRow}>
@@ -221,6 +249,7 @@ export default function SettingsScreen() {
                   </Text>
                 )}
               </View>
+
               <Text style={[styles.infoValue, { color: colors.text }]}>
                 {user?.avatarUrl ? "Da co avatar" : "Chua co avatar"}
               </Text>
@@ -231,48 +260,30 @@ export default function SettingsScreen() {
             behavior={Platform.OS === "ios" ? "padding" : "height"}
             keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
           >
-            <ScrollView contentContainerStyle={styles.formContent} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              contentContainerStyle={styles.formContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.muted }]}>Tên hiển thị</Text>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>
+                  Ten hien thi
+                </Text>
                 <TextInput
                   value={displayName}
                   onChangeText={setDisplayName}
                   style={[
                     styles.input,
-                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.cardSoft,
+                    },
                   ]}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.muted }]}>Email</Text>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  style={[
-                    styles.input,
-                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.muted }]}>Số điện thoại</Text>
-                <TextInput
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  style={[
-                    styles.input,
-                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
-                  ]}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.muted }]}>Giới thiệu</Text>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Gioi thieu</Text>
                 <TextInput
                   value={bio}
                   onChangeText={setBio}
@@ -280,23 +291,56 @@ export default function SettingsScreen() {
                   style={[
                     styles.input,
                     styles.inputMultiline,
-                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.cardSoft },
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.cardSoft,
+                    },
                   ]}
                 />
               </View>
 
               <Pressable
                 onPress={handleSaveProfile}
-                disabled={saving}
+                disabled={saving || deleting || !trimmedDisplayName || !hasChanges}
                 style={[
                   styles.saveButton,
-                  { backgroundColor: colors.primary, opacity: saving ? 0.6 : 1 },
+                  {
+                    backgroundColor: colors.primary,
+                    opacity:
+                      saving || deleting || !trimmedDisplayName || !hasChanges ? 0.6 : 1,
+                  },
                 ]}
               >
                 <Text style={styles.saveButtonText}>
-                  {saving ? "Dang luu..." : "Luu thong tin"}
+                  {saving ? "Dang luu..." : "Luu thay doi"}
                 </Text>
               </Pressable>
+
+              <View style={[styles.dangerZone, { borderColor: colors.border }]}>
+                <Text style={[styles.dangerTitle, { color: colors.danger }]}>
+                  Khu vuc nguy hiem
+                </Text>
+                <Text style={[styles.dangerDesc, { color: colors.muted }]}>
+                  Xoa tai khoan se xoa du lieu lien quan den ban trong he thong.
+                </Text>
+
+                <Pressable
+                  onPress={handleDeleteAccount}
+                  disabled={deleting || saving}
+                  style={[
+                    styles.deleteButton,
+                    {
+                      backgroundColor: colors.danger,
+                      opacity: deleting || saving ? 0.6 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={styles.deleteButtonText}>
+                    {deleting ? "Dang xoa tai khoan..." : "Xoa tai khoan"}
+                  </Text>
+                </Pressable>
+              </View>
             </ScrollView>
           </KeyboardAvoidingView>
         </BottomSheetView>
@@ -398,10 +442,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "800",
   },
-  sheetSubtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
   infoBox: {
     borderWidth: 1,
     borderRadius: 18,
@@ -467,6 +507,32 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   saveButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  dangerZone: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 8,
+    gap: 10,
+  },
+  dangerTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  dangerDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  deleteButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    paddingVertical: 12,
+  },
+  deleteButtonText: {
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "800",

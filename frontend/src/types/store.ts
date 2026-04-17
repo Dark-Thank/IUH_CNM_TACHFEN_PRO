@@ -77,6 +77,11 @@ export interface SocketState {
 
 export interface UserState {
   updateAvatarUrl: (formData: FormData) => Promise<void>;
+  updateProfile: (payload: {
+    displayName?: string;
+    bio?: string;
+  }) => Promise<void>;
+  deleteAccount: () => Promise<void>;
 }
 
 export interface FriendState {

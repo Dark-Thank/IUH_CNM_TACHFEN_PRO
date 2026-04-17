@@ -2,6 +2,7 @@ import express from "express";
 import {
   authMe,
   changePassword,
+  deleteMe,
   getUserById,
   requestChangePassword,
   searchUserByUsername,
@@ -15,6 +16,8 @@ const router = express.Router();
 const avatarUpload = withUploadErrorHandling(upload.single("file"));
 
 router.get("/me", protectedRoute, authMe);
+router.patch("/me", protectedRoute, updateMe);
+router.delete("/me", protectedRoute, deleteMe);
 router.get("/search", protectedRoute, searchUserByUsername);
 router.post("/uploadAvatar", protectedRoute, avatarUpload, uploadAvatar);
 router.post("/change-password", protectedRoute, changePassword);

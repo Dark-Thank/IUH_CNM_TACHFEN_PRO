@@ -12,4 +12,15 @@ export const userService = {
 
     return res.data;
   },
+  updateProfile: async (payload: {
+    displayName?: string;
+    bio?: string;
+  }) => {
+    const res = await api.patch("/users/me", payload);
+    return res.data.user;
+  },
+  deleteAccount: async () => {
+    const res = await api.delete("/users/me");
+    return res.data;
+  },
 };
