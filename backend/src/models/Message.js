@@ -52,9 +52,14 @@ const messageSchema = new mongoose.Schema({
     recallBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
-    }
+    },
+    deletedForUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+    }]
 
 }, { timestamps: true }
+
 
 );
 

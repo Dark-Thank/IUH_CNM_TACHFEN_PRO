@@ -83,6 +83,11 @@ export const chatService = {
     return res.data;
   },
 
+  async deleteMessageForMe(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/delete-for-me`);
+    return res.data;
+  },
+
   async downloadMessageFile(messageId: string, fileIndex: number, fileName: string) {
     const res = await api.get(`/messages/${messageId}/files/${fileIndex}`, {
       responseType: "blob",
@@ -91,4 +96,6 @@ export const chatService = {
     triggerBrowserDownload(res.data, fileName);
   },
 };
+
+
 

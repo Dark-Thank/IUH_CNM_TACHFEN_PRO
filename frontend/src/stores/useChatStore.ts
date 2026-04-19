@@ -344,6 +344,39 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi khi thu hồi tin nhắn:", error);
         }
       },
+
+      deleteMessageForMe: async (messageId: string) => {
+        try {
+          const { activeConversationId, messages } = get();
+          if (!activeConversationId) return;
+
+          const data = await chatService.deleteMessageForMe(messageId);
+
+          set((state) => {
+            const convoMessages = state.messages[activeConversationId];
+            if (!convoMessages) return state;
+
+            const updatedItems = convoMessages.items.map((m) =>
+              m._id === messageId
+                ? { ...m, ...data }
+                : m
+            );
+
+            return {
+              ...state,
+              messages: {
+                ...state.messages,
+                [activeConversationId]: {
+                  ...convoMessages,
+                  items: updatedItems,
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Lỗi khi xóa tin nhắn cho tôi:", error);
+        }
+      },
     }),
 
     {
@@ -352,4 +385,5 @@ export const useChatStore = create<ChatState>()(
     }
   )
 );
+
 

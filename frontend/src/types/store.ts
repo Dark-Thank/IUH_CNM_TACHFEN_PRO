@@ -53,6 +53,8 @@ export interface ChatState {
   sendGroupMessage: (conversationId: string, formData: FormData) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
+  deleteMessageForMe: (messageId: string) => Promise<void>;
+
 
   addMessage: (message: Message) => Promise<void>;
 

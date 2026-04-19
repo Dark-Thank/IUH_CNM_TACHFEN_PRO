@@ -13,7 +13,9 @@ import { MoreVertical, Trash2 } from "lucide-react";
 import UserAvatar from "./UserAvatar";
 import RecallConfirmDialog from "./RecallConfirmDialog";
 import { useChatStore } from "@/stores/useChatStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { chatService } from "@/services/chatServiec";
+
 
 interface MessageItemProps {
   message: Message;
@@ -30,7 +32,9 @@ const MessageItem = ({
   selectedConvo,
   lastMessageStatus,
 }: MessageItemProps) => {
-  const { togglePinMessage } = useChatStore();
+  const { togglePinMessage, deleteMessageForMe } = useChatStore();
+  const { user } = useAuthStore();
+
 
   const handleDownloadFile = async (fileIndex: number, fileName: string) => {
     try {
@@ -117,7 +121,12 @@ const MessageItem = ({
                   </p>
                 )}
               </div>
+            ) : message.deletedForUsers?.includes(user?._id || "") ? (
+              <div className="text-sm italic text-center py-1">
+                <p>Bạn đã xóa tin nhắn này</p>
+              </div>
             ) : (
+
               <>
                 {/* TEXT */}
                 {message.content && (
@@ -200,8 +209,21 @@ const MessageItem = ({
                   </RecallConfirmDialog>
                 </DropdownMenuItem>
               )}
+{!message.isRecalled && (
+                <DropdownMenuItem 
+                  className="gap-2 text-destructive/80 hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    await deleteMessageForMe(message._id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Xóa tin nhắn
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
+
 
           {/* STATUS */}
           {isOwn &&

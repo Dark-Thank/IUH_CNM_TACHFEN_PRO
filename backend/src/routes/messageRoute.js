@@ -1,11 +1,13 @@
 import express from 'express';
 import {
+  deleteMessageForMe,
   downloadMessageFile,
   recallMessage,
   sendDirectMessage,
   sendGroupMessage,
   togglePinMessage,
 } from '../controllers/messageController.js';
+
 import { protectedRoute } from '../middlewares/authMiddleware.js';
 import { checkBlock } from '../middlewares/blockMiddleware.js';
 import { checkGroupMembership } from '../middlewares/friendMiddleware.js';
@@ -21,7 +23,9 @@ const messageUpload = withUploadErrorHandling(
 
 router.put('/:messageId/pin', protectedRoute, togglePinMessage);
 router.put('/:messageId/recall', protectedRoute, recallMessage);
+router.put('/:messageId/delete-for-me', protectedRoute, deleteMessageForMe);
 router.get('/:messageId/files/:fileIndex', protectedRoute, downloadMessageFile);
+
 
 router.post(
   "/direct",
