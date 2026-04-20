@@ -344,6 +344,30 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi khi thu hồi tin nhắn:", error);
         }
       },
+      reactToMessage: async (messageId: string, emoji: string) => {
+        const updatedMessage = await chatService.reactToMessage(messageId, emoji);
+
+        set((state) => {
+          const convoId = state.activeConversationId;
+          if (!convoId) return state;
+
+          const convoMessages = state.messages[convoId];
+
+          if (!convoMessages) return state;
+
+          return {
+            messages: {
+              ...state.messages,
+              [convoId]: {
+                ...convoMessages,
+                items: convoMessages.items.map((m) =>
+                  m._id === messageId ? updatedMessage : m
+                ),
+              },
+            },
+          };
+        });
+      },
     }),
 
     {

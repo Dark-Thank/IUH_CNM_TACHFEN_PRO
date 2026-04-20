@@ -10,7 +10,7 @@ import { protectedRoute } from '../middlewares/authMiddleware.js';
 import { checkBlock } from '../middlewares/blockMiddleware.js';
 import { checkGroupMembership } from '../middlewares/friendMiddleware.js';
 import { upload, withUploadErrorHandling } from "../middlewares/uploadMiddleware.js";
-
+import { toggleReaction } from "../controllers/messageController.js";
 const router = express.Router();
 const messageUpload = withUploadErrorHandling(
   upload.fields([
@@ -22,7 +22,7 @@ const messageUpload = withUploadErrorHandling(
 router.put('/:messageId/pin', protectedRoute, togglePinMessage);
 router.put('/:messageId/recall', protectedRoute, recallMessage);
 router.get('/:messageId/files/:fileIndex', protectedRoute, downloadMessageFile);
-
+router.post("/:messageId/reaction", protectedRoute, toggleReaction);
 router.post(
   "/direct",
   protectedRoute,

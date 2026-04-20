@@ -22,14 +22,14 @@ const messageSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
-   fileUrls: [
-  {
-    url: { type: String },
-    name: { type: String },
-    size: { type: Number },
-    type: { type: String },
-  },
-],
+    fileUrls: [
+        {
+            url: { type: String },
+            name: { type: String },
+            size: { type: Number },
+            type: { type: String },
+        },
+    ],
 
     isPinned: {
         type: Boolean,
@@ -48,6 +48,16 @@ const messageSchema = new mongoose.Schema({
     },
     recalledAt: {
         type: Date
+    },
+    reactions: {
+        type: Map,
+        of: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ],
+        default: {}
     },
     recallBy: {
         type: mongoose.Schema.Types.ObjectId,
