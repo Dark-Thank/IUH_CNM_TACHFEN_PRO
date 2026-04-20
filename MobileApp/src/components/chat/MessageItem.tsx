@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+
 } from "react-native";
 import { Pin } from "lucide-react-native";
 import { chatService } from "@/services/chatServiec";
@@ -36,8 +37,9 @@ export default function MessageItem({
 }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
-  const { recallMessage, togglePinMessage } = useChatStore();
+  const { recallMessage, togglePinMessage, deleteMessageForMe } = useChatStore();
   const currentUserId = user?._id;
+
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
@@ -56,21 +58,26 @@ export default function MessageItem({
     (item: Participant) => item._id === message.senderId
   );
 
-  const canTogglePin = !message.isRecalled;
+  const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
+  const canTogglePin = !message.isRecalled && !isDeletedForMe;
   const canRecall =
     isOwn &&
     !message.isRecalled &&
+    !isDeletedForMe &&
     currentCreatedAt > Date.now() - 2 * 60 * 1000;
+  const canDeleteForMe = !message.isRecalled && !isDeletedForMe;
+
 
   const closeActions = () => setShowActions(false);
 
   const handleLongPress = () => {
-    if (!canTogglePin && !canRecall) {
+    if (!canTogglePin && !canRecall && !canDeleteForMe) {
       return;
     }
 
     setShowActions(true);
   };
+
 
   const handleTogglePin = () => {
     closeActions();
@@ -129,6 +136,21 @@ export default function MessageItem({
       );
     }
 
+    if (isDeletedForMe) {
+      return (
+        <View style={styles.recalledBubble}>
+          <Text
+            style={[
+              styles.recalledText,
+              { color: isDark ? "#94a3b8" : "#64748b" },
+            ]}
+          >
+            Bạn đã xóa tin nhắn này
+          </Text>
+        </View>
+      );
+    }
+
     return (
       <View>
         {message.content ? (
@@ -170,6 +192,7 @@ export default function MessageItem({
       </View>
     );
   };
+
 
   const renderPinIcon = () => {
     if (!message.isPinned || message.isRecalled) {
@@ -357,6 +380,28 @@ export default function MessageItem({
               </Pressable>
             ) : null}
 
+            {canDeleteForMe ? (
+              <Pressable
+                onPress={() => {
+                  closeActions();
+                  void deleteMessageForMe(message._id);
+                }}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#2b1216" : "#fef2f2",
+                    borderColor: isDark ? "#7f1d1d" : "#fecaca",
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.actionButtonText, styles.actionDangerText]}
+                >
+                  Xóa cho tôi
+                </Text>
+              </Pressable>
+            ) : null}
+
             <Pressable
               onPress={closeActions}
               style={[
@@ -376,6 +421,7 @@ export default function MessageItem({
                 Dong
               </Text>
             </Pressable>
+
           </View>
         </View>
       </Modal>

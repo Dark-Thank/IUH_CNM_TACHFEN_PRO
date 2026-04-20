@@ -49,6 +49,7 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  deletedForUsers: string[];
   isRecalled?: boolean;
   recalledAt?: string | null;
   isPinned?: boolean;

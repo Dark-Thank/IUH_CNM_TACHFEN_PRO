@@ -221,6 +221,7 @@ async sendDirectMessage(
     return res.data.message;
   },
 
+
   async downloadMessageFile(
     messageId: string,
     fileIndex: number,
@@ -257,4 +258,10 @@ async sendDirectMessage(
 
     return downloadResult.uri;
   },
+
+  async deleteMessageForMe(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/delete-for-me`);
+    return res.data;
+  },
 };
+

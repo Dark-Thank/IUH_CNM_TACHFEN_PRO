@@ -404,7 +404,64 @@ export const useChatStore = create<ChatState>()(
           set({ loading: false });
         }
       },
+
+      deleteMessageForMe: async (messageId: string) => {
+        const { messages, activeConversationId, fetchMessages } = get();
+        const convoId = activeConversationId!;
+        const currentUserId = authSession.getCurrentUserId()!;
+
+        // Optimistic update
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [convoId]: {
+              ...state.messages[convoId],
+              items: state.messages[convoId].items.map((m: Message) =>
+                m._id === messageId
+                  ? {
+                      ...m,
+                      deletedForUsers: [...(m.deletedForUsers || []), currentUserId]
+                    }
+                  : m
+              ),
+            },
+          },
+        }));
+
+        try {
+          await chatService.deleteMessageForMe(messageId);
+        } catch (error) {
+          console.error("Lỗi xóa tin nhắn:", error);
+          toast.error("Xóa tin nhắn thất bại");
+          fetchMessages(convoId);
+        }
+      },
+
+      updateMessage: (messageId: string, updatedMessage: Partial<Message>) => {
+        const { messages } = get();
+        
+        set((state) => {
+          const updatedMessages: { [key: string]: any } = {};
+          
+          Object.entries(state.messages).forEach(([convoId, convoData]) => {
+            if (convoData && 'items' in convoData) {
+              const items = convoData.items.map((m: Message) =>
+                m._id === messageId ? { ...m, ...updatedMessage } : m
+              );
+              updatedMessages[convoId] = {
+                ...convoData,
+                items
+              };
+            }
+          });
+          
+          return Object.keys(updatedMessages).length > 0
+            ? { messages: { ...state.messages, ...updatedMessages } }
+            : state;
+        });
+      },
     }),
+
     {
       name: "chat-storage",
       storage: createJSONStorage(() => AsyncStorage),

@@ -75,6 +75,8 @@ export interface ChatState {
   addMessage: (message: Message) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
+  deleteMessageForMe: (messageId: string) => Promise<void>;
+  updateMessage: (messageId: string, updatedMessage: Partial<Message>) => void;
   upsertConversation: (conversation: Conversation) => void;
   updateConversation: (conversation: Partial<Conversation> & { _id: string }) => void;
   markAsSeen: () => Promise<void>;
