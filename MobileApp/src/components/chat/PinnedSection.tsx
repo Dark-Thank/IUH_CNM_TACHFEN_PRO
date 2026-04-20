@@ -1,5 +1,5 @@
-import { Pin, ChevronDown, MessageCircle, X } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pin, ChevronDown, MessageCircle, FileText } from "lucide-react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Message } from "@/types/chat";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
@@ -9,6 +9,32 @@ interface PinnedSectionProps {
   pinnedMessages: Message[];
   onJump: (id: string) => void;
 }
+
+const getPinnedPreview = (message: Message) => {
+  if (message.isRecalled) {
+    return { type: "text" as const, label: "Tin nhan da thu hoi" };
+  }
+
+  if (message.imgUrls?.length) {
+    return {
+      type: "image" as const,
+      label: message.imgUrls.length > 1 ? `${message.imgUrls.length} hinh anh` : "Hinh anh",
+      src: message.imgUrls[0],
+    };
+  }
+
+  if (message.fileUrls?.length) {
+    return {
+      type: "file" as const,
+      label: message.fileUrls[0].name || "Tep dinh kem",
+    };
+  }
+
+  return {
+    type: "text" as const,
+    label: (message.content ?? "Tin nhan khong co noi dung").trim() || "Tin nhan khong co noi dung",
+  };
+};
 
 export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -55,23 +81,40 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
             Tin nhắn đã ghim ({sortedPinned.length})
           </Text>
           <ScrollView style={styles.pinnedScroll} nestedScrollEnabled>
-            {sortedPinned.map((msg) => (
+            {sortedPinned.map((msg) => {
+              const preview = getPinnedPreview(msg);
+
+              return (
               <View key={msg._id} style={styles.pinnedItem}>
                 {/* Preview */}
                 <Pressable 
                   style={styles.pinnedPreview}
                   onPress={() => onJump(msg._id)}
                 >
-                  <View style={[styles.miniAvatar, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
-                    <MessageCircle size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                  <View style={[styles.miniAvatar, styles.previewMedia, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
+                    {preview.type === "image" && preview.src ? (
+                      <Image source={{ uri: preview.src }} style={styles.previewImage} resizeMode="cover" />
+                    ) : preview.type === "file" ? (
+                      <FileText size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                    ) : (
+                      <MessageCircle size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                    )}
                   </View>
                   <View style={styles.previewText}>
                     <Text 
                       style={[styles.previewContent, { color: isDark ? "#f8fafc" : "#1e2937" }]} 
                       numberOfLines={1}
                     >
-                      {msg.content || (msg.imgUrls?.length ? "[Hình ảnh]" : "[Tệp]")}
+                      {preview.label}
                     </Text>
+                    {preview.type === "file" ? (
+                      <View style={styles.fileMetaRow}>
+                        <FileText size={12} color={isDark ? "#94a3b8" : "#64748b"} />
+                        <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                          Tep dinh kem
+                        </Text>
+                      </View>
+                    ) : null}
                     <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                       {formatTime(msg.createdAt)}
                     </Text>
@@ -89,7 +132,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
                   <Text style={styles.unpinText}>Bỏ ghim</Text>
                 </Pressable>
               </View>
-            ))}
+            )})}
           </ScrollView>
         </View>
       )}
@@ -164,12 +207,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
+  previewMedia: {
+    overflow: "hidden",
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+  },
   previewText: {
     flex: 1,
   },
   previewContent: {
     fontSize: 14,
     fontWeight: "500",
+    marginBottom: 2,
+  },
+  fileMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     marginBottom: 2,
   },
   previewTime: {

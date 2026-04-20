@@ -18,7 +18,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronLeft, Menu, X } from "lucide-react-native";
+import { Bell, ChevronDown, ChevronLeft, Menu, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -47,6 +47,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 const TOP_LOAD_THRESHOLD = 72;
 const EMPTY_TYPING_USERS: { userId: string; displayName: string }[] = [];
+const SCROLL_TO_LATEST_DISTANCE = 180;
 
 type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
 type SearchStatus = "idle" | "loading" | "not_found" | "found";
@@ -214,6 +215,7 @@ export default function ChatAppScreen() {
   const [groupQuery, setGroupQuery] = useState("");
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [showScrollToLatest, setShowScrollToLatest] = useState(false);
 
   const {
     friends,
@@ -673,12 +675,27 @@ export default function ChatAppScreen() {
       flatListRef.current?.scrollToEnd({ animated: true });
     }, 60);
 
+    setShowScrollToLatest(false);
+
     return () => clearTimeout(timeout);
   }, [latestMessageId, selectedConvo]);
 
+  useEffect(() => {
+    setShowScrollToLatest(false);
+  }, [selectedConversationId]);
+
+  const handleScrollToLatest = useCallback(() => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+    setShowScrollToLatest(false);
+  }, []);
+
   const handleMessageScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset } = event.nativeEvent;
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      const distanceFromBottom =
+        contentSize.height - layoutMeasurement.height - contentOffset.y;
+
+      setShowScrollToLatest(distanceFromBottom > SCROLL_TO_LATEST_DISTANCE);
 
       if (
         contentOffset.y <= TOP_LOAD_THRESHOLD &&
@@ -892,6 +909,19 @@ export default function ChatAppScreen() {
             <Text style={[styles.typingNotice, { color: isDark ? "#94a3b8" : "#64748b" }]}>
               {typingLabel}
             </Text>
+          ) : null}
+
+          {showScrollToLatest ? (
+            <Pressable
+              onPress={handleScrollToLatest}
+              style={[
+                styles.scrollToLatestButton,
+                { backgroundColor: isDark ? "rgba(15, 23, 42, 0.92)" : "rgba(255, 255, 255, 0.96)" },
+              ]}
+            >
+              <ChevronDown size={18} color={isDark ? "#f8fafc" : "#0f172a"} />
+              <Text style={[styles.scrollToLatestText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin moi nhat</Text>
+            </Pressable>
           ) : null}
 
           <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
@@ -1509,6 +1539,29 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     fontSize: 13,
     fontStyle: "italic",
+  },
+  scrollToLatestButton: {
+    position: "absolute",
+    right: 16,
+    bottom: 74,
+    zIndex: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(124, 58, 237, 0.28)",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    shadowColor: "#020617",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  scrollToLatestText: {
+    fontSize: 13,
+    fontWeight: "800",
   },
   conversationList: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 22 },
   section: { gap: 12 },
