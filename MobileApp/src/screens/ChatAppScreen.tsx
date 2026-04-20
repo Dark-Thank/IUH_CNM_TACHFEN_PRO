@@ -194,6 +194,7 @@ export default function ChatAppScreen() {
   const { user } = useAuthStore();
   const onlineUsers = useSocketStore((state) => state.onlineUsers);
   const flatListRef = useRef<FlatList<Message>>(null);
+  const isCreatingGroupRef = useRef(false);
 
   const [showRequests, setShowRequests] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -211,6 +212,7 @@ export default function ChatAppScreen() {
   const [groupName, setGroupName] = useState("");
   const [groupQuery, setGroupQuery] = useState("");
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
 
   const {
     friends,
@@ -581,6 +583,10 @@ export default function ChatAppScreen() {
   }, []);
 
   const handleCreateGroup = useCallback(async () => {
+    if (isCreatingGroupRef.current || isCreatingGroup || chatLoading) {
+      return;
+    }
+
     if (!groupName.trim()) {
       toast.warning("Nhap ten nhom truoc khi tao.");
       return;
@@ -591,15 +597,23 @@ export default function ChatAppScreen() {
       return;
     }
 
-    await createConversation(
-      "group",
-      groupName.trim(),
-      selectedGroupMembers.map((friend) => friend._id)
-    );
+    isCreatingGroupRef.current = true;
+    setIsCreatingGroup(true);
 
-    setShowCreateGroup(false);
-    resetCreateGroupState();
-  }, [createConversation, groupName, resetCreateGroupState, selectedGroupMembers]);
+    try {
+      await createConversation(
+        "group",
+        groupName.trim(),
+        selectedGroupMembers.map((friend) => friend._id)
+      );
+
+      setShowCreateGroup(false);
+      resetCreateGroupState();
+    } finally {
+      isCreatingGroupRef.current = false;
+      setIsCreatingGroup(false);
+    }
+  }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupMembers]);
 
   useEffect(() => {
     if (!selectedConversationId || messages[selectedConversationId]) {
@@ -1384,8 +1398,14 @@ export default function ChatAppScreen() {
             )}
           </ScrollView>
 
-          <Pressable onPress={handleCreateGroup} disabled={chatLoading} style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>{chatLoading ? "Dang tao..." : "Tao nhom chat"}</Text>
+          <Pressable
+            onPress={handleCreateGroup}
+            disabled={chatLoading || isCreatingGroup}
+            style={styles.primaryButton}
+          >
+            <Text style={styles.primaryButtonText}>
+              {chatLoading || isCreatingGroup ? "Dang tao..." : "Tao nhom chat"}
+            </Text>
           </Pressable>
         </ScrollView>
       </OverlayModal>

@@ -94,7 +94,7 @@ export default function ChatCard({
           </View>
         ) : (
           <UserAvatar
-            name={otherUser?.displayName || "Moji"}
+            name={otherUser?.displayName || "Tachfen"}
             avatarUrl={otherUser?.avatarUrl}
             size={46}
             isOnline={isOnline}

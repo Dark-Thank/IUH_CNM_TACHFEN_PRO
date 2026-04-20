@@ -1,5 +1,5 @@
 import { useFriendStore } from "@/stores/useFriendStore";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -20,11 +20,20 @@ import { toast } from "sonner";
 
 
 const NewGroupChatModal = () => {
+  const submitLockRef = useRef(false);
+  const [open, setOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { loading, createConversation } = useChatStore();
+
+  const resetForm = () => {
+    setGroupName("");
+    setSearch("");
+    setInvitedUsers([]);
+  };
 
   const handleGetFriends = async () => {
     await getFriends();
@@ -37,13 +46,22 @@ const NewGroupChatModal = () => {
     const handleRemoveFriend = (friend: Friend) => {
     setInvitedUsers(invitedUsers.filter((u) => u._id !== friend._id));
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     try {
       e.preventDefault();
+
+        if (submitLockRef.current || isSubmitting || loading) {
+          return;
+        }
+
       if (invitedUsers.length === 0) {
         toast.warning("Bạn phải mời ít nhất 1 thành viên vào nhóm");
         return;
       }
+
+        submitLockRef.current = true;
+        setIsSubmitting(true);
 
       await createConversation(
         "group",
@@ -51,10 +69,13 @@ const NewGroupChatModal = () => {
         invitedUsers.map((u) => u._id)
       );
 
-      setSearch("");
-      setInvitedUsers([]);
+        resetForm();
+        setOpen(false);
     } catch (error) {
       console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
+      } finally {
+        submitLockRef.current = false;
+        setIsSubmitting(false);
     }
   };
 
@@ -66,7 +87,16 @@ const NewGroupChatModal = () => {
       !invitedUsers.some((u) => u._id === friend._id)
   );
   return (
-    <Dialog>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+
+        if (!nextOpen) {
+          resetForm();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="ghost"
@@ -140,10 +170,10 @@ const NewGroupChatModal = () => {
           <DialogFooter>
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || isSubmitting}
               className="flex-1 bg-gradient-chat text-white hover:opacity-90 transition-smooth"
             >
-              {loading ? (
+              {loading || isSubmitting ? (
                 <span>Đang tạo...</span>
               ) : (
                 <>

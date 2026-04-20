@@ -139,7 +139,7 @@ export default function SettingsScreen() {
 
           <View style={styles.profileText}>
             <Text style={[styles.profileName, { color: colors.text }]}>
-              {user?.displayName || "Moji user"}
+              {user?.displayName || "Tachfen user"}
             </Text>
             <Text style={[styles.profileMeta, { color: colors.muted }]}>
               @{user?.username || "username"}

@@ -12,7 +12,7 @@ const UserAvatar = ({ type, name, avatarUrl, className }: IUserAvatarProps) => {
   const bgColor = !avatarUrl ? "bg-blue-500" : "";
 
   if (!name) {
-    name = "Moji";
+    name = "TACHFEN";
   }
 
   return (

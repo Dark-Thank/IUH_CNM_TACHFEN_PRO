@@ -227,7 +227,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
                     setUsername(value);
                     setErrors((current) => ({ ...current, username: undefined }));
                   }}
-                  placeholder="moji"
+                  placeholder="Tachfen"
                   placeholderTextColor={colors.placeholder}
                   autoCapitalize="none"
                   autoCorrect={false}

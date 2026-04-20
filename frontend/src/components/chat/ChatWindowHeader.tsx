@@ -86,7 +86,7 @@ const ChatWindowHeader = ({
                 <>
                   <UserAvatar
                     type="sidebar"
-                    name={otherUser.displayName || "Moji"}
+                    name={otherUser.displayName || "TACHFEN"}
                     avatarUrl={otherUser.avatarUrl || undefined}
                   />
                   <StatusBadge

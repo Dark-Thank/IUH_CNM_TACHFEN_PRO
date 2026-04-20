@@ -12,7 +12,7 @@ const ChatWelcomeScreen = () => {
                         <span className="text-3xl">💬</span>
                     </div>
                     <h2 className="text-2xl font-bold mb-2 bg-gradient-chat bg-clip-text text-transparent">
-                        Chào mừng bạn đến với Moji!
+                        Chào mừng bạn đến với TACHFEN!
                     </h2>
                     <p className="text-muted-foreground">
                         Chọn một cuộc hội thoại để bắt đầu chat!
