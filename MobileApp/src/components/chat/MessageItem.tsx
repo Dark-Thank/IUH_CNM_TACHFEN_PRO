@@ -14,6 +14,7 @@ import {
   StyleSheet,
   Text,
   View,
+
 } from "react-native";
 import UserAvatar from "./UserAvatar";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
@@ -49,8 +50,16 @@ export default function MessageItem({
 }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, recallMessage, togglePinMessage, updateMessage } = useChatStore();
+  const {
+    conversations,
+    forwardMessage,
+    recallMessage,
+    togglePinMessage,
+    deleteMessageForMe,
+    updateMessage,
+  } = useChatStore();
   const currentUserId = user?._id;
+
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
@@ -70,18 +79,23 @@ export default function MessageItem({
     (item: Participant) => item._id === message.senderId
   );
 
-  const canTogglePin = !message.isRecalled;
-  const isDeletedForCurrentUser = message.deletedForUsers?.includes(currentUserId || "") ?? false;
-  const canForward = !message.isRecalled && !isDeletedForCurrentUser && Boolean(
+  const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
+  const canTogglePin = !message.isRecalled && !isDeletedForMe;
+  const canForward = !message.isRecalled && !isDeletedForMe && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
   const canRecall =
     isOwn &&
     !message.isRecalled &&
+    !isDeletedForMe &&
     currentCreatedAt > Date.now() - 2 * 60 * 1000;
   const availableConversations = conversations.filter(
     (conversation) => conversation._id !== message.conversationId
   );
+  const canDeleteForMe = !message.isRecalled && !isDeletedForMe;
+  const voiceAttachment = getVoiceAttachment(message);
+  const isVoice = isVoiceMessage(message);
+  const otherFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
 
   const closeActions = () => setShowActions(false);
 
@@ -184,7 +198,7 @@ export default function MessageItem({
       );
     }
 
-    if (isDeletedForCurrentUser) {
+    if (isDeletedForMe) {
       return (
         <View style={styles.recalledBubble}>
           <Text
@@ -198,10 +212,6 @@ export default function MessageItem({
         </View>
       );
     }
-
-    const voiceAttachment = getVoiceAttachment(message);
-    const isVoice = isVoiceMessage(message);
-    const otherFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
 
     return (
       <View>
@@ -286,9 +296,6 @@ export default function MessageItem({
       </View>
     );
   };
-  {
-
-  }
   const renderPinIcon = () => {
     if (!message.isPinned || message.isRecalled) {
       return null;
@@ -538,6 +545,28 @@ export default function MessageItem({
               </Pressable>
             ) : null}
 
+            {canDeleteForMe ? (
+              <Pressable
+                onPress={() => {
+                  closeActions();
+                  void deleteMessageForMe(message._id);
+                }}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#2b1216" : "#fef2f2",
+                    borderColor: isDark ? "#7f1d1d" : "#fecaca",
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.actionButtonText, styles.actionDangerText]}
+                >
+                  Xóa cho tôi
+                </Text>
+              </Pressable>
+            ) : null}
+
             <Pressable
               onPress={closeActions}
               style={[
@@ -557,6 +586,7 @@ export default function MessageItem({
                 Dong
               </Text>
             </Pressable>
+
           </View>
         </View>
       </Modal>

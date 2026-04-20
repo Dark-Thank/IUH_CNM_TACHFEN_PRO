@@ -51,7 +51,10 @@ export interface ChatState {
   messageLoading: boolean;
   loading: boolean;
   reset: () => void;
-  updateMessage: (message: Message) => void;
+  updateMessage: {
+    (message: Message): void;
+    (messageId: string, updatedMessage: Partial<Message>): void;
+  };
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
@@ -80,6 +83,7 @@ export interface ChatState {
   addMessage: (message: Message) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
+  deleteMessageForMe: (messageId: string) => Promise<void>;
   upsertConversation: (conversation: Conversation) => void;
   updateConversation: (conversation: Partial<Conversation> & { _id: string }) => void;
   markAsSeen: () => Promise<void>;

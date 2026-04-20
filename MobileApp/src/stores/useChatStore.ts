@@ -161,40 +161,69 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
-updateMessage: (updatedMessage?: Message) => {
-  if (!updatedMessage?._id || !updatedMessage?.conversationId) {
-    return;
-  }
+      updateMessage: (messageOrId: Message | string, updatedMessage?: Partial<Message>) => {
+        const patch = typeof messageOrId === "string"
+          ? { _id: messageOrId, ...(updatedMessage ?? {}) }
+          : messageOrId;
 
-  const convoId = updatedMessage.conversationId;
+        if (!patch?._id) {
+          return;
+        }
 
-  set((state) => {
-    const current = state.messages[convoId];
-    if (!current) return {};
+        set((state) => {
+          if (patch.conversationId) {
+            const convoId = patch.conversationId;
+            const current = state.messages[convoId];
 
-    const exists = current.items.some(
-      (msg) => msg._id === updatedMessage._id
-    );
+            if (!current) {
+              return state;
+            }
 
-    return {
-      
-      messages: {
-        ...state.messages,
-        [convoId]: {
-          ...current,
-          items: exists
-            ? current.items.map((msg) =>
-                msg._id === updatedMessage._id
-                  ? { ...msg, ...updatedMessage }
+            const exists = current.items.some((msg) => msg._id === patch._id);
+
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...current,
+                  items: exists
+                    ? current.items.map((msg) =>
+                      msg._id === patch._id
+                        ? { ...msg, ...patch }
+                        : msg
+                    )
+                    : [patch as Message, ...current.items],
+                },
+              },
+            };
+          }
+
+          const nextMessages: typeof state.messages = {};
+          let found = false;
+
+          Object.entries(state.messages).forEach(([convoId, convoData]) => {
+            const exists = convoData.items.some((msg) => msg._id === patch._id);
+
+            if (!exists) {
+              return;
+            }
+
+            found = true;
+            nextMessages[convoId] = {
+              ...convoData,
+              items: convoData.items.map((msg) =>
+                msg._id === patch._id
+                  ? { ...msg, ...patch }
                   : msg
-              )
-            : [updatedMessage, ...current.items],
-        },
+              ),
+            };
+          });
+
+          return found
+            ? { messages: { ...state.messages, ...nextMessages } }
+            : state;
+        });
       },
-      
-    };
-  });
-},
 
       sendDirectMessage: async (recipientId, content, files, voiceDurationSeconds) => {
         try {
@@ -483,7 +512,41 @@ updateMessage: (updatedMessage?: Message) => {
           set({ loading: false });
         }
       },
+
+      deleteMessageForMe: async (messageId: string) => {
+        const { messages, activeConversationId, fetchMessages } = get();
+        const convoId = activeConversationId!;
+        const currentUserId = authSession.getCurrentUserId()!;
+
+        // Optimistic update
+        set((state) => ({
+          messages: {
+            ...state.messages,
+            [convoId]: {
+              ...state.messages[convoId],
+              items: state.messages[convoId].items.map((m: Message) =>
+                m._id === messageId
+                  ? {
+                    ...m,
+                    deletedForUsers: [...(m.deletedForUsers || []), currentUserId]
+                  }
+                  : m
+              ),
+            },
+          },
+        }));
+
+        try {
+          await chatService.deleteMessageForMe(messageId);
+        } catch (error) {
+          console.error("Lỗi xóa tin nhắn:", error);
+          toast.error("Xóa tin nhắn thất bại");
+          fetchMessages(convoId);
+        }
+      },
+
     }),
+
     {
       name: "chat-storage",
       storage: createJSONStorage(() => AsyncStorage),

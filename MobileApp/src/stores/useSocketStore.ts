@@ -183,17 +183,9 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("update-message", ({ message }: { message: any }) => {
       const chatStore = useChatStore.getState();
-      const activeConvoId = chatStore.activeConversationId;
-
-      if (activeConvoId === message.conversationId) {
-        chatStore.fetchMessages(activeConvoId ?? "");
-      }
-
-      Object.entries(chatStore.messages).forEach(([convoId, msgData]) => {
-        if (convoId === message.conversationId) {
-          console.log("Updated message in convo:", convoId);
-        }
-      });
+      
+      // Update message in all conversations where it exists
+      chatStore.updateMessage(message._id, message);
     });
 
     socket.on("new-group", (conversation: any) => {

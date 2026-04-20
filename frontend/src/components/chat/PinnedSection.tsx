@@ -113,14 +113,11 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
               </div>
 
               <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={(event) => event.stopPropagation()}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-4 top-4 h-8 w-8 p-0 rounded-full opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:bg-background"
-                  >
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
+                <DropdownMenuTrigger
+                  className="absolute right-4 top-4 h-8 w-8 p-0 rounded-full opacity-0 transition-all shadow-sm group-hover:opacity-100 hover:bg-background inline-flex items-center justify-center"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <MoreVertical className="h-4 w-4" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
                   <DropdownMenuItem
