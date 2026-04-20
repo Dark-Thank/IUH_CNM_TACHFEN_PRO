@@ -2,6 +2,7 @@ import type { SocketState } from "@/types/store";
 import { io, type Socket } from "socket.io-client";
 import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
+import { useCallStore } from "./useCallStore";
 import { useChatStore } from "./useChatStore";
 
 const baseURL = import.meta.env.VITE_SOCKET_URL;
@@ -241,11 +242,45 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         };
       });
     });
+
+    socket.on("call:invite", (payload) => {
+      useCallStore.getState().receiveIncomingCall(payload);
+    });
+
+    socket.on("call:accept", (payload) => {
+      void useCallStore.getState().handleCallAccepted(payload);
+    });
+
+    socket.on("call:decline", (payload) => {
+      useCallStore.getState().handleCallDeclined(payload);
+    });
+
+    socket.on("call:end", (payload) => {
+      useCallStore.getState().handleCallEnded(payload);
+    });
+
+    socket.on("call:state", (payload) => {
+      useCallStore.getState().handleCallState(payload);
+    });
+
+    socket.on("call:offer", (payload) => {
+      void useCallStore.getState().handleRemoteOffer(payload);
+    });
+
+    socket.on("call:answer", (payload) => {
+      void useCallStore.getState().handleRemoteAnswer(payload);
+    });
+
+    socket.on("call:ice-candidate", (payload) => {
+      void useCallStore.getState().handleRemoteIceCandidate(payload);
+    });
   },
 
 
   disconnectSocket: () => {
     const socket = get().socket;
+    useCallStore.getState().resetCall();
+
     if (socket) {
       socket.removeAllListeners();
       socket.disconnect();

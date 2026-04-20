@@ -1,8 +1,13 @@
 import { useState } from "react";
-import { useAuthStore } from "@/stores/useAuthStore";
 import { cn, formatMessageTime } from "@/lib/utils";
+import { chatService } from "@/services/chatServiec";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
+import { useChatStore } from "@/stores/useChatStore";
 import type { Conversation, Message, Participant } from "@/types/chat";
+import { MoreVertical, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play, Send, Trash2, Video } from "lucide-react";
 import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import {
   Dialog,
@@ -17,12 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Button } from "../ui/button";
-import { MoreVertical, Send, Trash2 } from "lucide-react";
-import UserAvatar from "./UserAvatar";
 import RecallConfirmDialog from "./RecallConfirmDialog";
-import { useChatStore } from "@/stores/useChatStore";
-import { chatService } from "@/services/chatServiec";
+import UserAvatar from "./UserAvatar";
 
 
 interface MessageItemProps {
@@ -32,6 +33,116 @@ interface MessageItemProps {
   selectedConvo: Conversation;
   lastMessageStatus: "delivered" | "seen";
 }
+
+const getCallTypeLabel = (callType?: "audio" | "video") =>
+  callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại";
+
+const formatCallDuration = (seconds = 0) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remainingSeconds = seconds % 60;
+
+  if (hours > 0) {
+    return [hours, minutes, remainingSeconds].map((value) => value.toString().padStart(2, "0")).join(":");
+  }
+
+  return [minutes, remainingSeconds].map((value) => value.toString().padStart(2, "0")).join(":");
+};
+
+const getCallSummaryTitle = (message: Message, viewerId?: string) => {
+  const callMeta = message.callMeta;
+
+  if (!callMeta) {
+    return message.content ?? "Cuộc gọi";
+  }
+
+  const typeLabel = getCallTypeLabel(callMeta.callType);
+  const isCaller = callMeta.callerId === viewerId;
+
+  switch (callMeta.outcome) {
+    case "busy":
+      return isCaller ? "Người nhận bận" : "Bạn đang bận";
+    case "declined":
+      return isCaller ? `${typeLabel} bị từ chối` : `Đã từ chối ${typeLabel.toLowerCase()}`;
+    case "missed":
+      return isCaller ? `${typeLabel} không được trả lời` : `${typeLabel} nhỡ`;
+    case "cancelled":
+      return `${typeLabel} đã hủy`;
+    case "disconnected":
+      return `${typeLabel} bị gián đoạn`;
+    case "reconnect-timeout":
+      return `${typeLabel} mất kết nối`;
+    case "completed":
+      return isCaller ? `${typeLabel} đi` : `${typeLabel} đến`;
+    default:
+      return typeLabel;
+  }
+};
+
+const getCallDetailText = (message: Message) => {
+  const callMeta = message.callMeta;
+
+  if (!callMeta) {
+    return message.content ?? "";
+  }
+
+  const baseLabel = getCallTypeLabel(callMeta.callType);
+
+  if (callMeta.outcome === "completed") {
+    return `${baseLabel} • ${formatCallDuration(callMeta.durationSeconds)}`;
+  }
+
+  return baseLabel;
+};
+
+const getCallIcon = (message: Message, viewerId?: string) => {
+  const callMeta = message.callMeta;
+
+  if (!callMeta) {
+    return <Phone className="size-5 text-muted-foreground" />;
+  }
+
+  const isCaller = callMeta.callerId === viewerId;
+
+  if (callMeta.outcome === "busy") {
+    return <PhoneOff className="size-5 text-amber-500" />;
+  }
+
+  if (callMeta.outcome === "missed") {
+    return <PhoneMissed className="size-5 text-rose-500" />;
+  }
+
+  if (callMeta.callType === "video") {
+    return <Video className="size-5 text-sky-500" />;
+  }
+
+  if (callMeta.outcome === "completed") {
+    return isCaller
+      ? <PhoneOutgoing className="size-5 text-emerald-500" />
+      : <PhoneIncoming className="size-5 text-emerald-500" />;
+  }
+
+  return <Phone className="size-5 text-muted-foreground" />;
+};
+
+const formatVoiceDuration = (seconds = 0) => {
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+};
+
+const isVoiceMessage = (message: Message) => {
+  if (message.messageType === "voice") {
+    return true;
+  }
+
+  const audioFiles = (message.fileUrls || []).filter((file) => file.type?.startsWith("audio/"));
+  return audioFiles.length === 1 && (message.imgUrls?.length ?? 0) === 0;
+};
+
+const getVoiceAttachment = (message: Message) =>
+  message.fileUrls?.find((file) => file.type?.startsWith("audio/")) ?? null;
 
 const MessageItem = ({
   message,
@@ -44,6 +155,7 @@ const MessageItem = ({
   const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
+  const { currentCall, startOutgoingCall } = useCallStore();
 
   const handleDownloadFile = async (fileIndex: number, fileName: string) => {
     try {
@@ -69,8 +181,12 @@ const MessageItem = ({
       p._id.toString() === message.senderId.toString()
   );
 
-  const isOwn = message.isOwn;
+  const isOwn = Boolean(message.isOwn);
   const isDeletedForCurrentUser = message.deletedForUsers?.includes(user?._id || "") ?? false;
+  const isCallMessage = message.messageType === "call" && Boolean(message.callMeta);
+  const isVoice = isVoiceMessage(message);
+  const voiceAttachment = getVoiceAttachment(message);
+  const downloadableFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
   const canForward = !message.isRecalled && !isDeletedForCurrentUser && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
@@ -99,6 +215,14 @@ const MessageItem = ({
     } finally {
       setForwardingConversationId(null);
     }
+  };
+
+  const handleRecallCall = async () => {
+    if (selectedConvo.type !== "direct" || !message.callMeta || currentCall) {
+      return;
+    }
+
+    await startOutgoingCall(selectedConvo, message.callMeta.callType);
   };
 
   return (
@@ -144,9 +268,13 @@ const MessageItem = ({
               "px-4 py-2 inline-block max-w-[70vw]",
               message.isRecalled
                 ? "p-3 border rounded-lg bg-muted/50 text-muted-foreground"
-                : isOwn
-                  ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
-                  : "chat-bubble-received"
+                : isCallMessage
+                  ? "w-[min(22rem,70vw)] border bg-card text-card-foreground shadow-sm"
+                  : isVoice
+                    ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
+                    : isOwn
+                      ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
+                      : "chat-bubble-received"
             )}
           >
             {message.isRecalled ? (
@@ -163,6 +291,58 @@ const MessageItem = ({
             ) : isDeletedForCurrentUser ? (
               <div className="text-sm italic text-center py-1">
                 <p>Bạn đã xóa tin nhắn này</p>
+              </div>
+            ) : isVoice && voiceAttachment ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Play className="size-4" />
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-tight">Tin nhắn thoại</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {formatVoiceDuration(message.voiceMeta?.durationSeconds ?? 0)}
+                    </p>
+                  </div>
+                </div>
+
+                <audio controls preload="metadata" src={voiceAttachment.url} className="w-full max-w-full" />
+
+                {message.content && (
+                  <p className="text-sm break-words text-muted-foreground">
+                    {message.content}
+                  </p>
+                )}
+              </div>
+            ) : isCallMessage ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex size-10 items-center justify-center rounded-full bg-muted">
+                    {getCallIcon(message, user?._id)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-tight">
+                      {getCallSummaryTitle(message, user?._id)}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {getCallDetailText(message)}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedConvo.type === "direct" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-center gap-2"
+                    disabled={Boolean(currentCall)}
+                    onClick={() => void handleRecallCall()}
+                  >
+                    <Phone className="size-4" />
+                    Gọi lại
+                  </Button>
+                )}
               </div>
             ) : (
               <>
@@ -191,18 +371,26 @@ const MessageItem = ({
                   </div>
                 )}
 
-                {(message.fileUrls || []).length > 0 && (
+                {downloadableFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    {message.fileUrls!.map((file, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => void handleDownloadFile(index, file.name)}
-                        className="block text-sm text-blue-500 underline text-left"
-                      >
-                        📎 {file.name}
-                      </button>
-                    ))}
+                    {downloadableFiles.map((file) => {
+                      const fileIndex = message.fileUrls?.findIndex((item) => item.url === file.url) ?? -1;
+
+                      if (fileIndex < 0) {
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={file.url}
+                          type="button"
+                          onClick={() => void handleDownloadFile(fileIndex, file.name)}
+                          className="block text-sm text-blue-500 underline text-left"
+                        >
+                          📎 {file.name}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>

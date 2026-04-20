@@ -38,6 +38,52 @@ const forwardedFromSchema = new mongoose.Schema({
     },
 }, { _id: false });
 
+const callMetaSchema = new mongoose.Schema({
+    callType: {
+        type: String,
+        enum: ["audio", "video"],
+        required: true,
+    },
+    outcome: {
+        type: String,
+        enum: ["completed", "busy", "declined", "missed", "cancelled", "disconnected", "reconnect-timeout"],
+        required: true,
+    },
+    callerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    recipientId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    durationSeconds: {
+        type: Number,
+        default: 0,
+    },
+    startedAt: {
+        type: Date,
+        default: null,
+    },
+    endedAt: {
+        type: Date,
+        default: null,
+    },
+}, { _id: false });
+
+const voiceMetaSchema = new mongoose.Schema({
+    durationSeconds: {
+        type: Number,
+        default: 0,
+    },
+    mimeType: {
+        type: String,
+        default: null,
+    },
+}, { _id: false });
+
 const messageSchema = new mongoose.Schema({
     conversationId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -54,6 +100,19 @@ const messageSchema = new mongoose.Schema({
     content: {
         type: String,
         required: false
+    },
+    messageType: {
+        type: String,
+        enum: ["text", "call", "voice"],
+        default: "text",
+    },
+    callMeta: {
+        type: callMetaSchema,
+        default: null,
+    },
+    voiceMeta: {
+        type: voiceMetaSchema,
+        default: null,
     },
 
     imgUrls: {

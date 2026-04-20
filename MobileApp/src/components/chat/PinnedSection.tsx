@@ -1,9 +1,9 @@
-import { Pin, ChevronDown, MessageCircle, FileText } from "lucide-react-native";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { Message } from "@/types/chat";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
+import type { Message } from "@/types/chat";
+import { ChevronDown, FileText, MessageCircle, Pin } from "lucide-react-native";
 import { useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 interface PinnedSectionProps {
   pinnedMessages: Message[];
@@ -44,21 +44,21 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
   if (pinnedMessages.length === 0) return null;
 
   // Sort pinned messages by pinnedAt (newest first)
-  const sortedPinned = [...pinnedMessages].sort((a, b) => 
+  const sortedPinned = [...pinnedMessages].sort((a, b) =>
     new Date(b.pinnedAt || b.createdAt).getTime() - new Date(a.pinnedAt || a.createdAt).getTime()
   );
 
-  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('vi-VN', { 
-    hour: 'numeric', 
-    minute: '2-digit' 
+  const formatTime = (dateStr: string) => new Date(dateStr).toLocaleTimeString('vi-VN', {
+    hour: 'numeric',
+    minute: '2-digit'
   });
 
   return (
     <View style={styles.container}>
       {/* THANH GHIM CHÍNH (Giữ nguyên màu tím và icon trắng giống ảnh bạn gửi trước đó) */}
-      <Pressable 
+      <Pressable
         style={[
-          styles.header, 
+          styles.header,
           { backgroundColor: isDark ? "#4c1d95" : "#a78bfa" }
         ]}
         onPress={() => setIsOpen(!isOpen)}
@@ -67,10 +67,10 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
         <Text style={styles.headerText}>
           Tin nhắn đã ghim ({pinnedMessages.length})
         </Text>
-        <ChevronDown 
-          size={20} 
+        <ChevronDown
+          size={20}
           color="#ffffff"
-          style={{ transform: [{ rotate: isOpen ? '180deg' : '0deg' }] }} 
+          style={{ transform: [{ rotate: isOpen ? '180deg' : '0deg' }] }}
         />
       </Pressable>
 
@@ -85,54 +85,52 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
               const preview = getPinnedPreview(msg);
 
               return (
-              <View key={msg._id} style={styles.pinnedItem}>
-                {/* Preview */}
-                <Pressable 
-                  style={styles.pinnedPreview}
-                  onPress={() => onJump(msg._id)}
-                >
-                  <View style={[styles.miniAvatar, styles.previewMedia, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
-                    {preview.type === "image" && preview.src ? (
-                      <Image source={{ uri: preview.src }} style={styles.previewImage} resizeMode="cover" />
-                    ) : preview.type === "file" ? (
-                      <FileText size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
-                    ) : (
-                      <MessageCircle size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
-                    )}
-                  </View>
-                  <View style={styles.previewText}>
-                    <Text 
-                      style={[styles.previewContent, { color: isDark ? "#f8fafc" : "#1e2937" }]} 
-                      numberOfLines={1}
-                    >
-                      {preview.label}
-                    </Text>
-                    {preview.type === "file" ? (
-                      <View style={styles.fileMetaRow}>
-                        <FileText size={12} color={isDark ? "#94a3b8" : "#64748b"} />
-                        <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                          Tep dinh kem
-                        </Text>
-                      </View>
-                    ) : null}
-                    <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                      {formatTime(msg.createdAt)}
-                    </Text>
-                  </View>
-                </Pressable>
-                
-                {/* UNPIN BUTTON */}
-                <Pressable 
-                  style={styles.unpinButton}
-                  onPress={() => {
-                    togglePinMessage(msg._id);
-                    setIsOpen(false); // Collapse after unpin
-                  }}
-                >
-                  <Text style={styles.unpinText}>Bỏ ghim</Text>
-                </Pressable>
-              </View>
-            )})}
+                <View key={msg._id} style={styles.pinnedItem}>
+                  {/* Preview */}
+                  <Pressable
+                    style={styles.pinnedPreview}
+                    onPress={() => onJump(msg._id)}
+                  >
+                    <View style={[styles.miniAvatar, styles.previewMedia, { backgroundColor: isDark ? "#374151" : "#eef2ff" }]}>
+                      {preview.type === "image" && preview.src ? (
+                        <Image source={{ uri: preview.src }} style={styles.previewImage} resizeMode="cover" />
+                      ) : preview.type === "file" ? (
+                        <FileText size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                      ) : (
+                        <MessageCircle size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                      )}
+                    </View>
+                    <View style={styles.previewText}>
+                      <Text
+                        style={[styles.previewContent, { color: isDark ? "#f8fafc" : "#1e2937" }]}
+                        numberOfLines={1}
+                      >
+                        {preview.label}
+                      </Text>
+                      {preview.type === "file" ? (
+                        <View style={styles.fileMetaRow}>
+                          <FileText size={12} color={isDark ? "#94a3b8" : "#64748b"} />
+                          <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>Tep dinh kem</Text>
+                        </View>
+                      ) : null}
+                      <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                        {formatTime(msg.createdAt)}
+                      </Text>
+                    </View>
+                  </Pressable>
+
+                  <Pressable
+                    style={styles.unpinButton}
+                    onPress={() => {
+                      togglePinMessage(msg._id);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <Text style={styles.unpinText}>Bỏ ghim</Text>
+                  </Pressable>
+                </View>
+              );
+            })}
           </ScrollView>
         </View>
       )}

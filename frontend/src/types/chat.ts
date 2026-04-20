@@ -18,13 +18,28 @@ export interface Group {
 
 export interface LastMessage {
   _id: string;
-  content: string;
+  content: string | null;
   createdAt: string;
   sender: {
     _id: string;
     displayName: string;
     avatarUrl?: string | null;
   };
+}
+
+export interface CallMeta {
+  callType: "audio" | "video";
+  outcome: "completed" | "busy" | "declined" | "missed" | "cancelled" | "disconnected" | "reconnect-timeout";
+  callerId: string;
+  recipientId: string;
+  durationSeconds: number;
+  startedAt?: string | null;
+  endedAt?: string | null;
+}
+
+export interface VoiceMeta {
+  durationSeconds: number;
+  mimeType?: string | null;
 }
 
 export interface Conversation {
@@ -49,6 +64,9 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  messageType?: "text" | "call" | "voice";
+  callMeta?: CallMeta | null;
+  voiceMeta?: VoiceMeta | null;
 
   forwardedFrom?: {
     messageId: string;

@@ -114,6 +114,7 @@ export const chatService = {
       content?: string;
       conversationId?: string;
       forwardedFromMessageId?: string;
+      voiceDurationSeconds?: number;
       files?: Array<{
         uri: string;
         name?: string;
@@ -122,7 +123,7 @@ export const chatService = {
     } = {}
   ) {
     try {
-      const { content = "", conversationId, forwardedFromMessageId, files } = options;
+      const { content = "", conversationId, forwardedFromMessageId, files, voiceDurationSeconds } = options;
 
       if (files && files.length > 0) {
         const formData = new FormData();
@@ -131,6 +132,9 @@ export const chatService = {
         formData.append("content", content);
         if (conversationId) formData.append("conversationId", conversationId);
         if (forwardedFromMessageId) formData.append("forwardedFromMessageId", forwardedFromMessageId);
+        if (typeof voiceDurationSeconds === "number") {
+          formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
+        }
 
         files.forEach((file) => {
           formData.append("files", {
@@ -150,6 +154,7 @@ export const chatService = {
         content,
         conversationId,
         forwardedFromMessageId,
+        voiceDurationSeconds,
       });
 
       return res.data.message;
@@ -181,8 +186,11 @@ export const chatService = {
   // ======================
   // GROUP MESSAGE (UPLOAD FILES)
   // ======================
-  async sendGroupMessage(conversationId: string, formData: FormData) {
+  async sendGroupMessage(conversationId: string, formData: FormData, voiceDurationSeconds?: number) {
     formData.append("conversationId", conversationId);
+    if (typeof voiceDurationSeconds === "number") {
+      formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
+    }
 
     const data = await postMultipart("/messages/group", formData);
 

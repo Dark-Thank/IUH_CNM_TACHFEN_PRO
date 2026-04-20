@@ -4,7 +4,8 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
-import { ImagePlus, Send, X } from "lucide-react-native";
+import { Audio } from "expo-av";
+import { FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
@@ -16,6 +17,7 @@ import {
   View,
 } from "react-native";
 
+import VoiceMessagePlayer from "./VoiceMessagePlayer";
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -24,6 +26,7 @@ interface FileItem {
   uri: string;
   name: string;
   type: string;
+  voiceDurationSeconds?: number;
 }
 
 // interface MessageInputProps {
@@ -50,10 +53,16 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
+  const [voiceDraft, setVoiceDraft] = useState<FileItem | null>(null);
   const [sending, setSending] = useState(false);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingConversationIdRef = useRef(selectedConvo._id);
   const isTypingRef = useRef(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingStartedAtRef = useRef<number | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const placeholderColor = isDark
     ? "#94a3b8"
@@ -61,6 +70,7 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
   useEffect(() => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
+    Audio.requestPermissionsAsync();
   }, []);
 
   const otherUser = useMemo(() => {
@@ -90,9 +100,43 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
     isTypingRef.current = false;
   };
 
+  const stopRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
+    return () => {
+      stopRecordingTimer();
+      void recordingRef.current?.stopAndUnloadAsync().catch(() => undefined);
+      void Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      }).catch(() => undefined);
+    };
+  }, []);
+
+  useEffect(() => {
+    stopRecordingTimer();
+    void recordingRef.current?.stopAndUnloadAsync().catch(() => undefined);
+    recordingRef.current = null;
+    recordingStartedAtRef.current = null;
+    void Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    }).catch(() => undefined);
+
     setFiles([]);
     setValue("");
+    setVoiceDraft(null);
+    setIsRecording(false);
+    setRecordingSeconds(0);
   }, [selectedConvo._id]);
 
   useEffect(() => {
@@ -189,6 +233,98 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
     );
   };
 
+  const removeVoiceDraft = () => {
+    setVoiceDraft(null);
+  };
+
+  const startRecording = async () => {
+    if (disabled) {
+      toast.error("Bạn không thể gửi tin nhắn trong cuộc trò chuyện này");
+      return;
+    }
+
+    if (files.length > 0) {
+      toast.error("Hãy bỏ file đính kèm trước khi ghi âm");
+      return;
+    }
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+
+      if (!permission.granted) {
+        toast.error("Bạn cần cấp quyền microphone để ghi âm");
+        return;
+      }
+
+      setVoiceDraft(null);
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+
+      recordingRef.current = recording;
+      recordingStartedAtRef.current = Date.now();
+      setRecordingSeconds(0);
+      setIsRecording(true);
+
+      recordingTimerRef.current = setInterval(() => {
+        const startedAt = recordingStartedAtRef.current ?? Date.now();
+        setRecordingSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      }, 250);
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể bắt đầu ghi âm");
+      stopRecordingTimer();
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      const recording = recordingRef.current;
+
+      if (!recording) {
+        return;
+      }
+
+      stopRecordingTimer();
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      const uri = recording.getURI();
+      const startedAt = recordingStartedAtRef.current ?? Date.now();
+      const durationSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+
+      if (uri) {
+        setVoiceDraft({
+          uri,
+          name: `voice-${Date.now()}.m4a`,
+          type: "audio/mp4",
+          voiceDurationSeconds: durationSeconds,
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Không thể dừng ghi âm");
+    } finally {
+      recordingRef.current = null;
+      recordingStartedAtRef.current = null;
+      setIsRecording(false);
+      setRecordingSeconds(0);
+    }
+  };
+
   // ======================
   // SEND MESSAGE
   // ======================
@@ -202,7 +338,12 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
     const trimmed = value.trim();
 
-    if (!trimmed && files.length === 0)
+    if (isRecording) {
+      toast.error("Hãy dừng ghi âm trước khi gửi");
+      return;
+    }
+
+    if (!trimmed && files.length === 0 && !voiceDraft)
       return;
 
     stopTypingIndicator();
@@ -226,17 +367,20 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
         await sendDirectMessage(
           otherUser._id,
           trimmed,
-          files
+          voiceDraft ? [voiceDraft] : files,
+          voiceDraft?.voiceDurationSeconds
         );
       } else {
         await sendGroupMessage(
           selectedConvo._id,
           trimmed,
-          files
+          voiceDraft ? [voiceDraft] : files,
+          voiceDraft?.voiceDurationSeconds
         );
       }
 
       setFiles([]);
+      setVoiceDraft(null);
     } catch (error) {
       console.error(error);
       setValue(trimmed);
@@ -339,17 +483,63 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
         </ScrollView>
       )}
 
+      {voiceDraft && (
+        <View
+          style={[
+            styles.voicePreview,
+            {
+              backgroundColor: isDark ? "#111827" : "#ffffff",
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+            },
+          ]}
+        >
+          <View style={styles.voicePreviewHeader}>
+            <View style={styles.voicePreviewTitleWrap}>
+              <FileAudio size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+              <Text style={[styles.voicePreviewTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin nhắn thoại</Text>
+            </View>
+
+            <Pressable onPress={removeVoiceDraft} style={styles.removeVoiceButton}>
+              <Trash2 size={16} color={isDark ? "#f8fafc" : "#475569"} />
+            </Pressable>
+          </View>
+
+          <VoiceMessagePlayer
+            uri={voiceDraft.uri}
+            durationSeconds={voiceDraft.voiceDurationSeconds}
+          />
+        </View>
+      )}
+
+      {isRecording && (
+        <View
+          style={[
+            styles.recordingBanner,
+            { backgroundColor: isDark ? "#3f1d24" : "#fef2f2", borderColor: isDark ? "#7f1d1d" : "#fecaca" },
+          ]}
+        >
+          <View style={styles.recordingInfo}>
+            <View style={styles.recordingDot} />
+            <Text style={[styles.recordingText, { color: isDark ? "#fecaca" : "#b91c1c" }]}>Đang ghi âm {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}</Text>
+          </View>
+
+          <Pressable onPress={() => void stopRecording()} style={styles.stopRecordingButton}>
+            <Square size={16} color="#ffffff" fill="#ffffff" />
+          </Pressable>
+        </View>
+      )}
+
       {/* IMAGE BUTTON */}
       <Pressable
         onPress={pickImage}
-        disabled={disabled}
+        disabled={disabled || isRecording || !!voiceDraft}
         style={[
           styles.iconButton,
           {
             backgroundColor: isDark
               ? "#1f2937"
               : "#f1f5f9",
-            opacity: disabled ? 0.5 : 1,
+            opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
           },
         ]}
       >
@@ -400,16 +590,54 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
       {/* FILE BUTTON */}
       <Pressable
         onPress={pickFile}
+        disabled={disabled || isRecording || !!voiceDraft}
         style={[
           styles.iconButton,
           {
             backgroundColor: isDark
               ? "#1f2937"
               : "#f1f5f9",
+            opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
           },
         ]}
       >
-        <Text>📎</Text>
+        <Paperclip
+          size={18}
+          color={
+            isDark
+              ? "#cbd5e1"
+              : "#475569"
+          }
+        />
+      </Pressable>
+
+      <Pressable
+        onPress={isRecording ? () => void stopRecording() : () => void startRecording()}
+        disabled={disabled || !!voiceDraft}
+        style={[
+          styles.iconButton,
+          {
+            backgroundColor: isRecording
+              ? "#ef4444"
+              : isDark
+                ? "#1f2937"
+                : "#f1f5f9",
+            opacity: disabled || !!voiceDraft ? 0.5 : 1,
+          },
+        ]}
+      >
+        {isRecording ? (
+          <Square size={18} color="#ffffff" fill="#ffffff" />
+        ) : (
+          <Mic
+            size={18}
+            color={
+              isDark
+                ? "#cbd5e1"
+                : "#475569"
+            }
+          />
+        )}
       </Pressable>
 
       {/* SEND BUTTON */}
@@ -418,7 +646,8 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
         disabled={
           disabled ||
           sending ||
-          (value.trim().length === 0 && files.length === 0)
+          isRecording ||
+          (value.trim().length === 0 && files.length === 0 && !voiceDraft)
         }
         style={[
           styles.sendButton,
@@ -426,7 +655,8 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
             backgroundColor:
               !disabled &&
                 !sending &&
-                (value.trim().length > 0 || files.length > 0)
+                !isRecording &&
+                (value.trim().length > 0 || files.length > 0 || !!voiceDraft)
                 ? isDark
                   ? "#a855f7"
                   : "#8b5cf6"
@@ -543,5 +773,72 @@ const styles = StyleSheet.create({
 
   removeBtn: {
     marginLeft: 4,
+  },
+  voicePreview: {
+    position: "absolute",
+    bottom: 60,
+    left: 10,
+    right: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 10,
+    gap: 10,
+  },
+  voicePreviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  voicePreviewTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  voicePreviewTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  removeVoiceButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  recordingBanner: {
+    position: "absolute",
+    bottom: 60,
+    left: 10,
+    right: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  recordingInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "#ef4444",
+  },
+  recordingText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  stopRecordingButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#ef4444",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

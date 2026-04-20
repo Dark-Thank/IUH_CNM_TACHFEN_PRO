@@ -1,17 +1,18 @@
 import { useState } from "react";
-import { PanelRightClose, PanelRightOpen } from "lucide-react";
-import { useChatStore } from "@/stores/useChatStore";
+import { PanelRightClose, PanelRightOpen, Phone, Video } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
+import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import type { Conversation } from "@/types/chat";
 import type { Friend } from "@/types/user";
 import { ProfileModal } from "../createNewChat/ProfileModal";
 import { Button } from "../ui/button";
-import { SidebarTrigger } from "../ui/sidebar";
 import { Separator } from "../ui/separator";
-import UserAvatar from "./UserAvatar";
-import StatusBadge from "./StatusBadge";
+import { SidebarTrigger } from "../ui/sidebar";
 import GroupChatAvatar from "./GroupChatAvatar";
+import StatusBadge from "./StatusBadge";
+import UserAvatar from "./UserAvatar";
 
 type Props = {
   chat?: Conversation;
@@ -28,6 +29,7 @@ const ChatWindowHeader = ({
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
+  const { currentCall, startOutgoingCall } = useCallStore();
 
   let otherUser: Conversation["participants"][number] | null = null;
   let profileFriend: Friend | null = null;
@@ -77,9 +79,8 @@ const ChatWindowHeader = ({
               }
             }}
             disabled={!canOpenProfile}
-            className={`p-2 w-full flex items-center gap-3 rounded-xl text-left transition-colors ${
-              canOpenProfile ? "hover:bg-accent/60 cursor-pointer" : "cursor-default"
-            }`}
+            className={`p-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition-colors ${canOpenProfile ? "hover:bg-accent/60 cursor-pointer" : "cursor-default"
+              }`}
           >
             <div className="relative shrink-0">
               {chat.type === "direct" && otherUser ? (
@@ -98,10 +99,39 @@ const ChatWindowHeader = ({
               )}
             </div>
 
-            <h2 className="font-semibold text-foreground truncate">
-              {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
-            </h2>
+            <div className="min-w-0 flex-1">
+              <h2 className="truncate font-semibold text-foreground">
+                {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
+              </h2>
+            </div>
           </button>
+
+          {chat.type === "direct" && otherUser ? (
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => void startOutgoingCall(chat, "audio")}
+                disabled={Boolean(currentCall)}
+              >
+                <Phone className="size-4" />
+                <span className="sr-only">Gọi thoại</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => void startOutgoingCall(chat, "video")}
+                disabled={Boolean(currentCall)}
+              >
+                <Video className="size-4" />
+                <span className="sr-only">Gọi video</span>
+              </Button>
+            </div>
+          ) : null}
 
           <Button
             type="button"
