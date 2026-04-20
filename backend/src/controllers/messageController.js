@@ -475,6 +475,43 @@ export const recallMessage = async (req, res) => {
   }
 };
 
+export const deleteMessageForMe = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Tin nhắn không tồn tại" });
+    }
+
+    // Kiểm tra user có trong conversation không
+    const isParticipant = await Conversation.exists({
+      _id: message.conversationId,
+      "participants.userId": userId,
+    });
+
+    if (!isParticipant) {
+      return res.status(403).json({ message: "Bạn không có quyền xóa tin nhắn này" });
+    }
+
+    // Thêm user vào deletedForUsers (nếu chưa có)
+    if (!message.deletedForUsers.includes(userId)) {
+      message.deletedForUsers.push(userId);
+      await message.save();
+
+      // Emit realtime update
+      io.to(message.conversationId.toString()).emit("update-message", { message });
+    }
+
+    return res.status(200).json({ message: "Đã xóa tin nhắn cho bạn" });
+  } catch (error) {
+    console.error("Lỗi khi xóa tin nhắn cho tôi:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const downloadMessageFile = async (req, res) => {
   try {
     const { messageId, fileIndex } = req.params;
@@ -522,3 +559,4 @@ export const downloadMessageFile = async (req, res) => {
     return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
+

@@ -24,6 +24,7 @@ import RecallConfirmDialog from "./RecallConfirmDialog";
 import { useChatStore } from "@/stores/useChatStore";
 import { chatService } from "@/services/chatServiec";
 
+
 interface MessageItemProps {
   message: Message;
   index: number;
@@ -40,7 +41,7 @@ const MessageItem = ({
   lastMessageStatus,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, togglePinMessage } = useChatStore();
+  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
 
@@ -69,7 +70,8 @@ const MessageItem = ({
   );
 
   const isOwn = message.isOwn;
-  const canForward = !message.isRecalled && Boolean(
+  const isDeletedForCurrentUser = message.deletedForUsers?.includes(user?._id || "") ?? false;
+  const canForward = !message.isRecalled && !isDeletedForCurrentUser && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
   const availableConversations = conversations.filter(
@@ -158,6 +160,10 @@ const MessageItem = ({
                   </p>
                 )}
               </div>
+            ) : isDeletedForCurrentUser ? (
+              <div className="text-sm italic text-center py-1">
+                <p>Bạn đã xóa tin nhắn này</p>
+              </div>
             ) : (
               <>
                 {message.forwardedFrom && (
@@ -184,25 +190,24 @@ const MessageItem = ({
                     ))}
                   </div>
                 )}
+
+                {(message.fileUrls || []).length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {message.fileUrls!.map((file, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => void handleDownloadFile(index, file.name)}
+                        className="block text-sm text-blue-500 underline text-left"
+                      >
+                        📎 {file.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </Card>
-          {/* FILES */}
-          {/* FILES */}
-          {(message.fileUrls || []).length > 0 && (
-            <div className="mt-2 space-y-1">
-              {message.fileUrls!.map((file, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => void handleDownloadFile(index, file.name)}
-                  className="block text-sm text-blue-500 underline text-left"
-                >
-                  📎 {file.name}
-                </button>
-              ))}
-            </div>
-          )}
           {/* ACTION MENU */}
           <DropdownMenu>
             <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 flex-shrink-0 self-center">
@@ -253,8 +258,21 @@ const MessageItem = ({
                   </RecallConfirmDialog>
                 </DropdownMenuItem>
               )}
+              {!message.isRecalled && (
+                <DropdownMenuItem
+                  className="gap-2 text-destructive/80 hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    await deleteMessageForMe(message._id);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Xóa tin nhắn
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
+
 
           {/* STATUS */}
           {isOwn &&

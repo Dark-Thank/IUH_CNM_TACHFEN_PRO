@@ -54,6 +54,8 @@ export interface ChatState {
   forwardMessage: (targetConversationId: string, messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
+  deleteMessageForMe: (messageId: string) => Promise<void>;
+
 
   addMessage: (message: Message) => Promise<void>;
 

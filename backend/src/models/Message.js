@@ -94,9 +94,14 @@ const messageSchema = new mongoose.Schema({
     forwardedFrom: {
         type: forwardedFromSchema,
         default: null,
-    }
+    },
+    deletedForUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+    }]
 
 }, { timestamps: true }
+
 
 );
 

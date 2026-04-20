@@ -80,6 +80,8 @@ export interface Message {
   pinnedAt?: string;
   isRecalled?: boolean;
   recalledAt?: string;
+  deletedForUsers?: string[];
+
 
   updatedAt?: string | null;
   createdAt: string;
