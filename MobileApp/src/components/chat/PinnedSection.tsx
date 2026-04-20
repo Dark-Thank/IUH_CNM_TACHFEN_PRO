@@ -1,9 +1,25 @@
-import { Pin, ChevronDown, MessageCircle, X } from "lucide-react-native";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import type { Message } from "@/types/chat";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
+import type { Message } from "@/types/chat";
+import { ChevronDown, MessageCircle, Pin } from "lucide-react-native";
 import { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+
+const getPinnedPreview = (message: Message) => {
+  if (message.messageType === "voice") {
+    return "Tin nhắn thoại";
+  }
+
+  if ((message.content ?? "").trim()) {
+    return message.content;
+  }
+
+  if (message.imgUrls?.length) {
+    return "[Hình ảnh]";
+  }
+
+  return "[Tệp]";
+};
 
 interface PinnedSectionProps {
   pinnedMessages: Message[];
@@ -70,7 +86,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
                       style={[styles.previewContent, { color: isDark ? "#f8fafc" : "#1e2937" }]} 
                       numberOfLines={1}
                     >
-                      {msg.content || (msg.imgUrls?.length ? "[Hình ảnh]" : "[Tệp]")}
+                      {getPinnedPreview(msg)}
                     </Text>
                     <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                       {formatTime(msg.createdAt)}

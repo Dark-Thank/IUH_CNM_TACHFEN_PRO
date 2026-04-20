@@ -1,12 +1,53 @@
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useChatStore } from '@/stores/useChatStore';
 import type { Conversation } from "@/types/chat";
-import { ImagePlus, Send } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ImagePlus, Mic, Paperclip, Send, Square, Trash2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Input } from "../ui/input";
 import EmmojiPicker from './EmmojiPicker';
+
+const AUDIO_MIME_CANDIDATES = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/mp4",
+    "audio/ogg;codecs=opus",
+];
+
+type VoiceDraft = {
+    file: File;
+    durationSeconds: number;
+    previewUrl: string;
+};
+
+const getSupportedAudioMimeType = () => {
+    if (typeof MediaRecorder === "undefined") {
+        return "";
+    }
+
+    return AUDIO_MIME_CANDIDATES.find((candidate) => MediaRecorder.isTypeSupported(candidate)) || "";
+};
+
+const getAudioFileExtension = (mimeType: string) => {
+    if (mimeType.includes("ogg")) {
+        return "ogg";
+    }
+
+    if (mimeType.includes("mp4") || mimeType.includes("mpeg")) {
+        return "m4a";
+    }
+
+    return "webm";
+};
+
+const formatDuration = (seconds: number) => {
+    const safeSeconds = Math.max(0, seconds);
+    const minutes = Math.floor(safeSeconds / 60);
+    const remainingSeconds = safeSeconds % 60;
+
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+};
 
 const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedConvo: Conversation, isBlocked: boolean }) => {
     const { user } = useAuthStore();
@@ -21,11 +62,151 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
 
     const [value, setValue] = useState("");
     const [files, setFiles] = useState<File[]>([]);
+    const [voiceDraft, setVoiceDraft] = useState<VoiceDraft | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const recorderRef = useRef<MediaRecorder | null>(null);
+    const mediaStreamRef = useRef<MediaStream | null>(null);
+    const chunksRef = useRef<Blob[]>([]);
+    const recordingStartedAtRef = useRef<number | null>(null);
+    const recordingTimerRef = useRef<number | null>(null);
 
     if (!user) return null;
 
+    const stopRecordingTimer = () => {
+        if (recordingTimerRef.current) {
+            window.clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+        }
+    };
+
+    const clearRecorderResources = () => {
+        stopRecordingTimer();
+
+        recorderRef.current = null;
+        chunksRef.current = [];
+        recordingStartedAtRef.current = null;
+
+        mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+    };
+
+    const resetVoiceDraft = () => {
+        setVoiceDraft((current) => {
+            if (current) {
+                URL.revokeObjectURL(current.previewUrl);
+            }
+
+            return null;
+        });
+    };
+
+    useEffect(() => {
+        return () => {
+            if (recorderRef.current?.state === "recording") {
+                recorderRef.current.stop();
+            }
+
+            clearRecorderResources();
+            resetVoiceDraft();
+        };
+    }, []);
+
+    useEffect(() => {
+        setValue("");
+        setFiles([]);
+        setIsRecording(false);
+        setRecordingSeconds(0);
+
+        if (recorderRef.current?.state === "recording") {
+            recorderRef.current.stop();
+        }
+
+        clearRecorderResources();
+        resetVoiceDraft();
+    }, [selectedConvo._id]);
+
+    const startRecording = async () => {
+        if (isBlocked) {
+            return;
+        }
+
+        if (files.length > 0) {
+            toast.error("Hãy bỏ file đính kèm trước khi ghi âm.");
+            return;
+        }
+
+        try {
+            resetVoiceDraft();
+
+            const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mimeType = getSupportedAudioMimeType();
+            const recorder = mimeType
+                ? new MediaRecorder(mediaStream, { mimeType })
+                : new MediaRecorder(mediaStream);
+
+            mediaStreamRef.current = mediaStream;
+            recorderRef.current = recorder;
+            chunksRef.current = [];
+            recordingStartedAtRef.current = Date.now();
+            setRecordingSeconds(0);
+
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    chunksRef.current.push(event.data);
+                }
+            };
+
+            recorder.onstop = () => {
+                const startedAt = recordingStartedAtRef.current ?? Date.now();
+                const durationSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+                const resolvedMimeType = recorder.mimeType || mimeType || "audio/webm";
+                const extension = getAudioFileExtension(resolvedMimeType);
+                const blob = new Blob(chunksRef.current, { type: resolvedMimeType });
+
+                if (blob.size > 0) {
+                    const file = new File([blob], `voice-${Date.now()}.${extension}`, { type: resolvedMimeType });
+                    const previewUrl = URL.createObjectURL(blob);
+
+                    setVoiceDraft({
+                        file,
+                        durationSeconds,
+                        previewUrl,
+                    });
+                }
+
+                setIsRecording(false);
+                setRecordingSeconds(0);
+                clearRecorderResources();
+            };
+
+            recorder.start();
+            setIsRecording(true);
+            recordingTimerRef.current = window.setInterval(() => {
+                const startedAt = recordingStartedAtRef.current ?? Date.now();
+                setRecordingSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+            }, 250);
+        } catch (error) {
+            console.error(error);
+            toast.error("Không thể truy cập microphone.");
+            clearRecorderResources();
+            setIsRecording(false);
+        }
+    };
+
+    const stopRecording = () => {
+        if (recorderRef.current?.state === "recording") {
+            recorderRef.current.stop();
+        }
+    };
+
     const sendMessage = async () => {
-        if (!value.trim() && files.length === 0) return;
+        if (isRecording) {
+            toast.error("Hãy dừng ghi âm trước khi gửi.");
+            return;
+        }
+
+        if (!value.trim() && files.length === 0 && !voiceDraft) return;
 
         const formData = new FormData();
         formData.append("content", value);
@@ -34,6 +215,11 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
         files.forEach((file) => {
             formData.append("files", file);
         });
+
+        if (voiceDraft) {
+            formData.append("files", voiceDraft.file);
+            formData.append("voiceDurationSeconds", String(voiceDraft.durationSeconds));
+        }
 
         try {
             if (selectedConvo.type === "direct") {
@@ -48,6 +234,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
 
             setValue("");
             setFiles([]);
+            resetVoiceDraft();
 
         } catch (error: any) {
             console.error(error);
@@ -74,6 +261,8 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
             sendMessage();
         }
     };
+
+    const hasAttachments = files.length > 0 || Boolean(voiceDraft);
 
     return (
         <div className="flex flex-col gap-2 p-3 bg-background">
@@ -112,6 +301,45 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                 </div>
             )}
 
+            {voiceDraft && (
+                <div className="flex items-center gap-3 rounded-xl border bg-muted/40 px-3 py-2">
+                    <div className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <Mic className="size-4" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground">Tin nhắn thoại</p>
+                        <div className="mt-1 flex items-center gap-3">
+                            <audio controls src={voiceDraft.previewUrl} className="h-8 max-w-full" />
+                            <span className="text-xs text-muted-foreground">{formatDuration(voiceDraft.durationSeconds)}</span>
+                        </div>
+                    </div>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={resetVoiceDraft}
+                    >
+                        <Trash2 className="size-4" />
+                    </Button>
+                </div>
+            )}
+
+            {isRecording && (
+                <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-red-600">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                        <span className="size-2 rounded-full bg-red-500" />
+                        Đang ghi âm {formatDuration(recordingSeconds)}
+                    </div>
+
+                    <Button type="button" variant="destructive" size="sm" onClick={stopRecording}>
+                        <Square className="mr-1 size-4" />
+                        Dừng
+                    </Button>
+                </div>
+            )}
+
             {/* INPUT */}
             <div className="flex items-center gap-2">
 
@@ -123,12 +351,13 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                         accept="image/*"
                         multiple
                         hidden
+                        disabled={isRecording || Boolean(voiceDraft)}
                         onChange={(e) => {
                             const selected = Array.from(e.target.files || []);
                             setFiles((prev) => [...prev, ...selected]);
                         }}
                     />
-                    <Button variant="ghost" size="icon" asChild>
+                    <Button variant="ghost" size="icon" asChild disabled={isRecording || Boolean(voiceDraft)}>
                         <span><ImagePlus className="size-4" /></span>
                     </Button>
                 </label>
@@ -139,15 +368,26 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                         type="file"
                         multiple
                         hidden
+                        disabled={isRecording || Boolean(voiceDraft)}
                         onChange={(e) => {
                             const selected = Array.from(e.target.files || []);
                             setFiles((prev) => [...prev, ...selected]);
                         }}
                     />
-                    <Button variant="ghost" size="icon" asChild>
-                        <span>📎</span>
+                    <Button variant="ghost" size="icon" asChild disabled={isRecording || Boolean(voiceDraft)}>
+                        <span><Paperclip className="size-4" /></span>
                     </Button>
                 </label>
+
+                <Button
+                    type="button"
+                    variant={isRecording ? "destructive" : "ghost"}
+                    size="icon"
+                    disabled={Boolean(voiceDraft) || isBlocked}
+                    onClick={isRecording ? stopRecording : () => void startRecording()}
+                >
+                    {isRecording ? <Square className="size-4" /> : <Mic className="size-4" />}
+                </Button>
 
                 {/* TEXT */}
                 <div className="flex-1 relative">
@@ -172,7 +412,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                 {/* SEND */}
                 <Button
                     onClick={sendMessage}
-                    disabled={(!value.trim() && files.length === 0) || isBlocked}
+                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isRecording}
                 >
                     <Send className="size-4 text-white" />
                 </Button>

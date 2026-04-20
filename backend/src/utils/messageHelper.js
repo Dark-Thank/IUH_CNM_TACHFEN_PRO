@@ -1,3 +1,31 @@
+export const getMessagePreviewContent = (message) => {
+    const trimmedContent = typeof message?.content === "string"
+        ? message.content.trim()
+        : "";
+
+    if (trimmedContent) {
+        return trimmedContent;
+    }
+
+    if (message?.messageType === "voice") {
+        return "Tin nhắn thoại";
+    }
+
+    if (message?.messageType === "call") {
+        return message?.content || "Cuộc gọi";
+    }
+
+    if (Array.isArray(message?.imgUrls) && message.imgUrls.length > 0) {
+        return message.imgUrls.length > 1 ? "Đã gửi nhiều ảnh" : "Đã gửi một ảnh";
+    }
+
+    if (Array.isArray(message?.fileUrls) && message.fileUrls.length > 0) {
+        return message.fileUrls.length > 1 ? "Đã gửi nhiều tệp" : "Đã gửi một tệp";
+    }
+
+    return "Tin nhắn mới";
+};
+
 export const updateConversationAfterCreateMessage = (conversation, message,
     senderId) => {
     conversation.set({
@@ -5,7 +33,7 @@ export const updateConversationAfterCreateMessage = (conversation, message,
         lastMessageAt: message.createdAt,
         lastMessage: {
             _id: message._id,
-            content: message.content,
+            content: getMessagePreviewContent(message),
             senderId,
             createdAt: message.createdAt
         }

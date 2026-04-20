@@ -60,7 +60,8 @@ export interface ChatState {
       uri: string;
       name?: string;
       type?: string;
-    }[]
+    }[],
+    voiceDurationSeconds?: number
   ) => Promise<void>;
   sendGroupMessage: (
     conversationId: string,
@@ -69,7 +70,8 @@ export interface ChatState {
       uri: string;
       name?: string;
       type?: string;
-    }[]
+    }[],
+    voiceDurationSeconds?: number
   ) => Promise<void>;
   // add message
   addMessage: (message: Message) => Promise<void>;

@@ -113,6 +113,7 @@ async sendDirectMessage(
   options: {
     content?: string;
     conversationId?: string;
+    voiceDurationSeconds?: number;
     files?: Array<{
       uri: string;
       name?: string;
@@ -121,7 +122,7 @@ async sendDirectMessage(
   } = {}
 ) {
   try {
-    const { content = "", conversationId, files } = options;
+    const { content = "", conversationId, files, voiceDurationSeconds } = options;
 
     if (files && files.length > 0) {
       const formData = new FormData();
@@ -129,6 +130,9 @@ async sendDirectMessage(
       formData.append("recipientId", recipientId);
       formData.append("content", content);
       if (conversationId) formData.append("conversationId", conversationId);
+      if (typeof voiceDurationSeconds === "number") {
+        formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
+      }
 
       files.forEach((file) => {
         formData.append("files", {
@@ -178,8 +182,11 @@ async sendDirectMessage(
   // ======================
   // GROUP MESSAGE (UPLOAD FILES)
   // ======================
-  async sendGroupMessage(conversationId: string, formData: FormData) {
+  async sendGroupMessage(conversationId: string, formData: FormData, voiceDurationSeconds?: number) {
     formData.append("conversationId", conversationId);
+    if (typeof voiceDurationSeconds === "number") {
+      formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
+    }
 
     const data = await postMultipart("/messages/group", formData);
 

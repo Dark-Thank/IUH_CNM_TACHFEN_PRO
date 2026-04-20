@@ -1,10 +1,35 @@
+import { useChatStore } from "@/stores/useChatStore";
+import type { Message } from "@/types/chat";
+import { ChevronDown, MessageCircle, MoreVertical, Pin } from "lucide-react";
+import { useState } from "react";
 import { Button } from "../ui/button";
-import { Pin, ChevronDown, MoreVertical, MessageCircle } from "lucide-react";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
-import type { Message } from "@/types/chat";
-import { useChatStore } from "@/stores/useChatStore";
-import { useState } from "react";
+
+const getPinnedMessagePreview = (message: Message) => {
+  if (message.messageType === "voice") {
+    return "Tin nhắn thoại";
+  }
+
+  if (message.messageType === "call") {
+    return message.content ?? "Cuộc gọi";
+  }
+
+  if ((message.content ?? "").trim()) {
+    const normalized = message.content ?? "";
+    return normalized.length > 50 ? `${normalized.slice(0, 50)}...` : normalized;
+  }
+
+  if ((message.imgUrls ?? []).length > 0) {
+    return "Ảnh đính kèm";
+  }
+
+  if ((message.fileUrls ?? []).length > 0) {
+    return "Tệp đính kèm";
+  }
+
+  return "Tin nhắn";
+};
 
 interface PinnedSectionProps {
   pinnedMessages: Message[];
@@ -39,7 +64,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
             </div>
             <div className="flex-1 min-w-0 pt-1">
               <p className="font-semibold text-sm truncate leading-tight">
-                {(message.content ?? '').length > 50 ? `${(message.content ?? '').slice(0, 50)}...` : (message.content ?? '')}
+                {getPinnedMessagePreview(message)}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 {new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: 'numeric', minute: '2-digit' })}

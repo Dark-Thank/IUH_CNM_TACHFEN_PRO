@@ -156,13 +156,14 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendDirectMessage: async (recipientId, content, files) => {
+      sendDirectMessage: async (recipientId, content, files, voiceDurationSeconds) => {
         try {
           const { activeConversationId } = get();
 
           await chatService.sendDirectMessage(recipientId, {
             content,
             conversationId: activeConversationId || undefined,
+            voiceDurationSeconds,
             files: files?.map((file) => ({
               uri: file.uri,
               name: file.name,
@@ -176,7 +177,7 @@ export const useChatStore = create<ChatState>()(
         }
       },
 
-      sendGroupMessage: async (conversationId, content, files) => {
+      sendGroupMessage: async (conversationId, content, files, voiceDurationSeconds) => {
         try {
           const formData = new FormData();
 
@@ -192,7 +193,7 @@ export const useChatStore = create<ChatState>()(
             });
           }
 
-          await chatService.sendGroupMessage(conversationId, formData);
+          await chatService.sendGroupMessage(conversationId, formData, voiceDurationSeconds);
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
           throw error;

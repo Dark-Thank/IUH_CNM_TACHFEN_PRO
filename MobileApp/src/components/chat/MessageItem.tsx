@@ -1,21 +1,34 @@
-import { useState } from "react";
-import {
-  Alert,
-  Image,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { Pin } from "lucide-react-native";
-import { chatService } from "@/services/chatServiec";
 import { formatMessageTime } from "@/lib/utils";
+import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation, Message, Participant } from "@/types/chat";
+import { Pin } from "lucide-react-native";
+import { useState } from "react";
+import {
+    Alert,
+    Image,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import UserAvatar from "./UserAvatar";
+import VoiceMessagePlayer from "./VoiceMessagePlayer";
+
+const isVoiceMessage = (message: Message) => {
+  if (message.messageType === "voice") {
+    return true;
+  }
+
+  const audioFiles = (message.fileUrls || []).filter((file) => file.type?.startsWith("audio/"));
+  return audioFiles.length === 1 && (message.imgUrls?.length ?? 0) === 0;
+};
+
+const getVoiceAttachment = (message: Message) =>
+  message.fileUrls?.find((file) => file.type?.startsWith("audio/")) ?? null;
 
 interface MessageItemProps {
   message: Message;
@@ -129,9 +142,34 @@ export default function MessageItem({
       );
     }
 
+    const voiceAttachment = getVoiceAttachment(message);
+    const isVoice = isVoiceMessage(message);
+    const otherFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
+
     return (
       <View>
-        {message.content ? (
+        {isVoice && voiceAttachment ? (
+          <View style={styles.voiceBlock}>
+            <VoiceMessagePlayer
+              uri={voiceAttachment.url}
+              durationSeconds={message.voiceMeta?.durationSeconds}
+              isOwn={isOwn}
+            />
+
+            {message.content ? (
+              <Text
+                style={[
+                  styles.voiceCaption,
+                  { color: isOwn ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+                ]}
+              >
+                {message.content}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {!isVoice && message.content ? (
           <Text
             style={[
               styles.messageText,
@@ -156,17 +194,25 @@ export default function MessageItem({
           </Pressable>
         ))}
 
-        {message.fileUrls?.map((file, idx) => (
+        {otherFiles.map((file) => {
+          const fileIndex = message.fileUrls?.findIndex((item) => item.url === file.url) ?? -1;
+
+          if (fileIndex < 0) {
+            return null;
+          }
+
+          return (
           <Pressable
-            key={idx}
+            key={file.url}
             style={styles.fileBox}
-            onPress={() => void handleOpenFile(idx, file.name, file.type)}
+            onPress={() => void handleOpenFile(fileIndex, file.name, file.type)}
           >
             <Text style={{ color: isDark ? "#cbd5e1" : "#0f172a" }}>
               File: {file.name}
             </Text>
           </Pressable>
-        ))}
+          );
+        })}
       </View>
     );
   };
@@ -400,6 +446,8 @@ const styles = StyleSheet.create({
   recalledText: { fontSize: 14, fontStyle: "italic" },
   imageContainer: { marginTop: 4 },
   messageImage: { width: 200, height: 200, borderRadius: 12 },
+  voiceBlock: { gap: 8 },
+  voiceCaption: { fontSize: 14, lineHeight: 20 },
   pinIconContainer: { position: "absolute", top: 4, right: 4 },
   statusPill: {
     borderRadius: 999,

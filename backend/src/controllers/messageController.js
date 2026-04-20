@@ -28,6 +28,38 @@ const getUploadedFiles = (req) => {
   ];
 };
 
+const isAudioFile = (file) => file?.mimetype?.startsWith("audio/");
+
+const parseVoiceDurationSeconds = (value) => {
+  const parsed = Number.parseFloat(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+
+  return Math.round(parsed);
+};
+
+const buildVoiceMessageMeta = ({ content, uploadedFiles, voiceDurationSeconds }) => {
+  const imageCount = uploadedFiles.filter((file) => file.mimetype?.startsWith("image/")).length;
+  const audioFiles = uploadedFiles.filter(isAudioFile);
+
+  if (imageCount > 0 || audioFiles.length !== 1 || uploadedFiles.length !== 1) {
+    return {
+      messageType: "text",
+      voiceMeta: null,
+    };
+  }
+
+  return {
+    messageType: "voice",
+    voiceMeta: {
+      durationSeconds: parseVoiceDurationSeconds(voiceDurationSeconds),
+      mimeType: audioFiles[0].mimetype || null,
+    },
+  };
+};
+
 const buildAsciiFilename = (value = "download") => {
   const sanitized = value
     .normalize("NFKD")
@@ -93,7 +125,7 @@ const getAuthorizedMessageFile = async (messageId, fileIndex, userId) => {
 };
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, conversationId } = req.body;
+    const { recipientId, content, conversationId, voiceDurationSeconds } = req.body;
     const senderId = req.user._id;
     const uploadedFiles = getUploadedFiles(req);
 
@@ -168,10 +200,18 @@ export const sendDirectMessage = async (req, res) => {
         }
       });
     }
+    const { messageType, voiceMeta } = buildVoiceMessageMeta({
+      content,
+      uploadedFiles,
+      voiceDurationSeconds,
+    });
+
     const message = await Message.create({
       conversationId: conversation._id,
       senderId,
       content,
+      messageType,
+      voiceMeta,
       imgUrls: imageUrls, //  đổi sang mảng
       fileUrls,
 
@@ -214,7 +254,7 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, voiceDurationSeconds } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
     const uploadedFiles = getUploadedFiles(req);
@@ -264,10 +304,18 @@ export const sendGroupMessage = async (req, res) => {
       });
     }
 
+    const { messageType, voiceMeta } = buildVoiceMessageMeta({
+      content,
+      uploadedFiles,
+      voiceDurationSeconds,
+    });
+
     const message = await Message.create({
       conversationId: conversation._id,
       senderId,
       content,
+      messageType,
+      voiceMeta,
       imgUrls: imageUrls,
       fileUrls,
     });
@@ -347,6 +395,7 @@ export const recallMessage = async (req, res) => {
     message.content = null;        // Hide text content
     message.imgUrls = [];          // Hide images
     message.fileUrls = [];         // 🔥 HIDE FILES - Fix filename display
+    message.voiceMeta = null;
 
     await message.save();
 
