@@ -361,7 +361,13 @@ export const useChatStore = create<ChatState>()(
               [convoId]: {
                 ...convoMessages,
                 items: convoMessages.items.map((m) =>
-                  m._id === messageId ? updatedMessage : m
+                  m._id === messageId
+                    ? {
+                      ...m,
+                      reactions: updatedMessage.reactions,
+                      updatedAt: updatedMessage.updatedAt,
+                    }
+                    : m
                 ),
               },
             },

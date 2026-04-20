@@ -155,6 +155,40 @@ export const useChatStore = create<ChatState>()(
           set({ messageLoading: false });
         }
       },
+updateMessage: (updatedMessage?: Message) => {
+  if (!updatedMessage?._id || !updatedMessage?.conversationId) {
+    return;
+  }
+
+  const convoId = updatedMessage.conversationId;
+
+  set((state) => {
+    const current = state.messages[convoId];
+    if (!current) return {};
+
+    const exists = current.items.some(
+      (msg) => msg._id === updatedMessage._id
+    );
+
+    return {
+      
+      messages: {
+        ...state.messages,
+        [convoId]: {
+          ...current,
+          items: exists
+            ? current.items.map((msg) =>
+                msg._id === updatedMessage._id
+                  ? { ...msg, ...updatedMessage }
+                  : msg
+              )
+            : [updatedMessage, ...current.items],
+        },
+      },
+      
+    };
+  });
+},
 
       sendDirectMessage: async (recipientId, content, files) => {
         try {

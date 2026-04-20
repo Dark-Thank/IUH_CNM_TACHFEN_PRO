@@ -211,10 +211,39 @@ async sendDirectMessage(
     return res.data.conversation;
   },
 
-  async recallMessage(messageId: string) {
-    const res = await api.put(`/messages/${messageId}/recall`);
-    return res.data.message;
-  },
+ reactMessage: async (messageId: string, emoji: string) => {
+  try {
+    const accessToken = authSession.getAccessToken();
+
+    console.log("TOKEN:", accessToken);
+    console.log("URL:", `${getApiBaseUrl()}/messages/${messageId}/reaction`);
+
+    const res = await fetch(
+      `${getApiBaseUrl()}/messages/${messageId}/reaction`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ emoji }),
+      }
+    );
+
+    const data = await parseJsonSafely(res);
+
+    
+
+    if (!res.ok) {
+      throw new Error(data?.message || "React failed");
+    }
+
+    return data.message;
+  } catch (err) {
+    console.error("🔥 REACT ERROR:", err);
+    throw err;
+  }
+},
 
   async togglePinMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/pin`);
@@ -257,4 +286,5 @@ async sendDirectMessage(
 
     return downloadResult.uri;
   },
+ 
 };
