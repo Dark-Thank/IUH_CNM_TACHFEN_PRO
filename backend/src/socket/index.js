@@ -49,6 +49,33 @@ const getSocketUserId = (socket) => {
     return authUserId ? authUserId.toString() : null;
 };
 
+const trackTypingConversation = (socket, conversationId, shouldTrack) => {
+    const trackedConversationIds = socket.data.typingConversationIds || new Set();
+
+    if (shouldTrack) {
+        trackedConversationIds.add(conversationId);
+    } else {
+        trackedConversationIds.delete(conversationId);
+    }
+
+    socket.data.typingConversationIds = trackedConversationIds;
+};
+
+const emitTypingUpdate = (socket, conversationId, isTyping) => {
+    if (typeof conversationId !== "string" || !conversationId || !socket.rooms.has(conversationId)) {
+        return;
+    }
+
+    trackTypingConversation(socket, conversationId, isTyping);
+
+    socket.to(conversationId).emit("typing:update", {
+        conversationId,
+        userId: socket.data.userId,
+        displayName: socket.user?.displayName || "",
+        isTyping,
+    });
+};
+
 const broadcastOnlineUsers = async () => {
     try {
         const sockets = await io.fetchSockets();
@@ -125,10 +152,29 @@ io.on("connection", async (socket) => {
         socket.join(conversationId);
     });
 
+    socket.on("typing:start", ({ conversationId } = {}) => {
+        emitTypingUpdate(socket, conversationId, true);
+    });
+
+    socket.on("typing:stop", ({ conversationId } = {}) => {
+        emitTypingUpdate(socket, conversationId, false);
+    });
+
     socket.join(userId);
     await broadcastOnlineUsers();
 
     socket.on("disconnect", () => {
+        const typingConversationIds = socket.data.typingConversationIds || new Set();
+
+        typingConversationIds.forEach((conversationId) => {
+            socket.to(conversationId).emit("typing:update", {
+                conversationId,
+                userId,
+                displayName: user.displayName || "",
+                isTyping: false,
+            });
+        });
+
         console.log(`socket disconnected: ${socket.id}`);
         broadcastOnlineUsers().catch((error) => {
             console.error("Khong the cap nhat online-users khi disconnect:", error);

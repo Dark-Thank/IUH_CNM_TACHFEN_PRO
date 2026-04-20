@@ -13,6 +13,12 @@ import type { Conversation, Message } from "@/types/chat";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+const buildForwardGroupFormData = (messageId: string) => {
+  const formData = new FormData();
+  formData.append("forwardedFromMessageId", messageId);
+  return formData;
+};
+
 const uniqueById = <T extends { _id: string }>(items: T[]) => {
   const seen = new Set<string>();
 
@@ -195,6 +201,44 @@ export const useChatStore = create<ChatState>()(
           await chatService.sendGroupMessage(conversationId, formData);
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
+          throw error;
+        }
+      },
+
+      forwardMessage: async (targetConversationId, messageId) => {
+        try {
+          const conversations = get().conversations;
+          const currentUserId = authSession.getCurrentUserId();
+          const targetConversation = conversations.find(
+            (conversation) => conversation._id === targetConversationId
+          );
+
+          if (!targetConversation || !currentUserId) {
+            throw new Error("Khong tim thay cuoc tro chuyen de chuyen tiep");
+          }
+
+          if (targetConversation.type === "direct") {
+            const recipient = targetConversation.participants.find(
+              (participant) => participant._id !== currentUserId
+            );
+
+            if (!recipient) {
+              throw new Error("Khong tim thay nguoi nhan de chuyen tiep");
+            }
+
+            await chatService.sendDirectMessage(recipient._id, {
+              conversationId: targetConversationId,
+              forwardedFromMessageId: messageId,
+            });
+            return;
+          }
+
+          await chatService.sendGroupMessage(
+            targetConversationId,
+            buildForwardGroupFormData(messageId)
+          );
+        } catch (error) {
+          console.error("Loi khi chuyen tiep tin nhan:", error);
           throw error;
         }
       },

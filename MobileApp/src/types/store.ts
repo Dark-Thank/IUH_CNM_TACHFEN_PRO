@@ -71,6 +71,7 @@ export interface ChatState {
       type?: string;
     }[]
   ) => Promise<void>;
+  forwardMessage: (targetConversationId: string, messageId: string) => Promise<void>;
   // add message
   addMessage: (message: Message) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
@@ -89,9 +90,18 @@ export interface ChatState {
 export interface SocketState {
   socket: Socket | null;
   onlineUsers: string[];
+  typingByConversation: Record<
+    string,
+    {
+      userId: string;
+      displayName: string;
+    }[]
+  >;
   isConnected: boolean;
   connectSocket: () => void;
   disconnectSocket: () => void;
+  startTyping: (conversationId: string) => void;
+  stopTyping: (conversationId: string) => void;
   registerAppStateListener: () => void;
   unregisterAppStateListener: () => void;
 }
@@ -112,9 +122,9 @@ export interface FriendState {
   sentList: FriendRequest[];
   blockedUsers: Set<string>;
 
-setBlockedUsers: (ids: string[]) => void;
-blockUser: (id: string) => void;
-unblockUser: (id: string) => void;
+  setBlockedUsers: (ids: string[]) => void;
+  blockUser: (id: string) => void;
+  unblockUser: (id: string) => void;
   searchByUsername: (username: string) => Promise<User | null>;
   addFriend: (to: string, message?: string) => Promise<string>;
   getAllFriendRequests: () => Promise<void>;

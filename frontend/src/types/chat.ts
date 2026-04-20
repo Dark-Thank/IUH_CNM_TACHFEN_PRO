@@ -1,4 +1,4 @@
-  export interface Participant {
+export interface Participant {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
@@ -50,9 +50,24 @@ export interface Message {
   senderId: string;
   content: string | null;
 
+  forwardedFrom?: {
+    messageId: string;
+    conversationId: string;
+    senderId: string;
+    content: string | null;
+    imgUrls?: string[];
+    fileUrls?: {
+      url: string;
+      name: string;
+      size: number;
+      type: string;
+    }[];
+    createdAt: string;
+  } | null;
+
   imgUrls?: string[];
 
-  
+
   fileUrls?: {
     url: string;
     name: string;

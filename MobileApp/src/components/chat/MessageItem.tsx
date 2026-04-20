@@ -36,11 +36,13 @@ export default function MessageItem({
 }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
-  const { recallMessage, togglePinMessage } = useChatStore();
+  const { conversations, forwardMessage, recallMessage, togglePinMessage } = useChatStore();
   const currentUserId = user?._id;
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
+  const [showForwardPicker, setShowForwardPicker] = useState(false);
+  const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
 
   const previous = previousMessage ?? messages[index - 1];
   const previousCreatedAt = previous?.createdAt
@@ -57,12 +59,29 @@ export default function MessageItem({
   );
 
   const canTogglePin = !message.isRecalled;
+  const canForward = !message.isRecalled && Boolean(
+    message.content || message.imgUrls?.length || message.fileUrls?.length
+  );
   const canRecall =
     isOwn &&
     !message.isRecalled &&
     currentCreatedAt > Date.now() - 2 * 60 * 1000;
+  const availableConversations = conversations.filter(
+    (conversation) => conversation._id !== message.conversationId
+  );
 
   const closeActions = () => setShowActions(false);
+
+  const getConversationLabel = (conversation: Conversation) => {
+    if (conversation.type === "group") {
+      return conversation.group?.name || "Nhom chat";
+    }
+
+    return (
+      conversation.participants.find((participant) => participant._id !== currentUserId)
+        ?.displayName || "Tro chuyen truc tiep"
+    );
+  };
 
   const handleLongPress = () => {
     if (!canTogglePin && !canRecall) {
@@ -93,6 +112,24 @@ export default function MessageItem({
         },
       ]
     );
+  };
+
+  const handleOpenForwardPicker = () => {
+    closeActions();
+    setShowForwardPicker(true);
+  };
+
+  const handleForwardMessage = async (conversationId: string) => {
+    try {
+      setForwardingConversationId(conversationId);
+      await forwardMessage(conversationId, message._id);
+      setShowForwardPicker(false);
+    } catch (error) {
+      console.error("Loi khi chuyen tiep tin nhan:", error);
+      Alert.alert("Chuyen tiep that bai", "Khong the chuyen tiep tin nhan nay.");
+    } finally {
+      setForwardingConversationId(null);
+    }
   };
 
   const handleOpenFile = async (
@@ -131,6 +168,19 @@ export default function MessageItem({
 
     return (
       <View>
+        {message.forwardedFrom ? (
+          <View style={styles.forwardedBadge}>
+            <Text
+              style={[
+                styles.forwardedBadgeText,
+                { color: isOwn ? "#ffffffcc" : isDark ? "#94a3b8" : "#64748b" },
+              ]}
+            >
+              Da chuyen tiep
+            </Text>
+          </View>
+        ) : null}
+
         {message.content ? (
           <Text
             style={[
@@ -338,6 +388,28 @@ export default function MessageItem({
               </Pressable>
             ) : null}
 
+            {canForward ? (
+              <Pressable
+                onPress={handleOpenForwardPicker}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    { color: isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  Chuyen tiep
+                </Text>
+              </Pressable>
+            ) : null}
+
             {canRecall ? (
               <Pressable
                 onPress={handleRecall}
@@ -379,6 +451,101 @@ export default function MessageItem({
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showForwardPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowForwardPicker(false)}
+      >
+        <View style={styles.actionRoot}>
+          <Pressable
+            style={styles.actionBackdrop}
+            onPress={() => setShowForwardPicker(false)}
+          />
+
+          <View
+            style={[
+              styles.actionSheet,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.actionTitle,
+                { color: isDark ? "#f8fafc" : "#0f172a" },
+              ]}
+            >
+              Chuyen tiep den
+            </Text>
+
+            {availableConversations.length === 0 ? (
+              <View style={styles.emptyForwardState}>
+                <Text style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
+                  Chua co cuoc tro chuyen nao khac de chuyen tiep.
+                </Text>
+              </View>
+            ) : (
+              availableConversations.map((conversation) => (
+                <Pressable
+                  key={conversation._id}
+                  onPress={() => void handleForwardMessage(conversation._id)}
+                  disabled={forwardingConversationId === conversation._id}
+                  style={[
+                    styles.actionButton,
+                    styles.forwardTargetButton,
+                    {
+                      backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                      borderColor: isDark ? "#334155" : "#e2e8f0",
+                    },
+                  ]}
+                >
+                  <View>
+                    <Text
+                      style={[
+                        styles.actionButtonText,
+                        { color: isDark ? "#f8fafc" : "#0f172a" },
+                      ]}
+                    >
+                      {getConversationLabel(conversation)}
+                    </Text>
+                    <Text style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: 12 }}>
+                      {conversation.type === "group" ? "Nhom" : "Tro chuyen truc tiep"}
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: 12 }}>
+                    {forwardingConversationId === conversation._id ? "Dang gui..." : "Chon"}
+                  </Text>
+                </Pressable>
+              ))
+            )}
+
+            <Pressable
+              onPress={() => setShowForwardPicker(false)}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.actionButtonText,
+                  { color: isDark ? "#cbd5e1" : "#475569" },
+                ]}
+              >
+                Dong
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -396,6 +563,18 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   messageText: { fontSize: 15, lineHeight: 21 },
+  forwardedBadge: {
+    marginBottom: 6,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "#00000020",
+  },
+  forwardedBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
   recalledBubble: { minWidth: 120 },
   recalledText: { fontSize: 14, fontStyle: "italic" },
   imageContainer: { marginTop: 4 },
@@ -455,6 +634,16 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 14,
     fontWeight: "700",
+  },
+  forwardTargetButton: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  emptyForwardState: {
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    backgroundColor: "#00000010",
   },
   actionDangerText: {
     color: "#ef4444",

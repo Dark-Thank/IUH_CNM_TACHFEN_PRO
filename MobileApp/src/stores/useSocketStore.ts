@@ -38,9 +38,23 @@ const refreshChatAfterForeground = async () => {
   }
 };
 
+const updateTypingUsers = (
+  currentUsers: { userId: string; displayName: string }[],
+  nextUser: { userId: string; displayName: string },
+  isTyping: boolean
+) => {
+  if (!isTyping) {
+    return currentUsers.filter((user) => user.userId !== nextUser.userId);
+  }
+
+  const filteredUsers = currentUsers.filter((user) => user.userId !== nextUser.userId);
+  return [...filteredUsers, nextUser];
+};
+
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
   onlineUsers: [],
+  typingByConversation: {},
   isConnected: false,
 
   connectSocket: () => {
@@ -88,7 +102,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("disconnect", (reason) => {
       console.log("Socket da ngat ket noi:", reason);
-      set({ isConnected: false, onlineUsers: [] });
+      set({ isConnected: false, onlineUsers: [], typingByConversation: {} });
     });
 
     socket.on("connect_error", (error) => {
@@ -98,6 +112,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("online-users", (userIds) => {
       set({ onlineUsers: userIds });
+    });
+
+    socket.on("typing:update", ({ conversationId, userId, displayName, isTyping }) => {
+      set((state) => {
+        const currentUsers = state.typingByConversation[conversationId] ?? [];
+        const nextUsers = updateTypingUsers(
+          currentUsers,
+          { userId, displayName },
+          Boolean(isTyping)
+        );
+
+        if (nextUsers.length === 0) {
+          const { [conversationId]: _removed, ...rest } = state.typingByConversation;
+          return { typingByConversation: rest };
+        }
+
+        return {
+          typingByConversation: {
+            ...state.typingByConversation,
+            [conversationId]: nextUsers,
+          },
+        };
+      });
     });
 
     socket.on("conversation-upsert", (conversation: any) => {
@@ -181,7 +218,27 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.disconnect();
     }
 
-    set({ socket: null, onlineUsers: [], isConnected: false });
+    set({ socket: null, onlineUsers: [], typingByConversation: {}, isConnected: false });
+  },
+
+  startTyping: (conversationId) => {
+    const socket = get().socket;
+
+    if (!socket?.connected || !conversationId) {
+      return;
+    }
+
+    socket.emit("typing:start", { conversationId });
+  },
+
+  stopTyping: (conversationId) => {
+    const socket = get().socket;
+
+    if (!socket?.connected || !conversationId) {
+      return;
+    }
+
+    socket.emit("typing:stop", { conversationId });
   },
 
   registerAppStateListener: () => {

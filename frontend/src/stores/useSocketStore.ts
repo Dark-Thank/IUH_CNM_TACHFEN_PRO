@@ -15,9 +15,23 @@ const joinKnownConversations = (socket: Socket) => {
     });
 };
 
+const updateTypingUsers = (
+  currentUsers: { userId: string; displayName: string }[],
+  nextUser: { userId: string; displayName: string },
+  isTyping: boolean
+) => {
+  if (!isTyping) {
+    return currentUsers.filter((user) => user.userId !== nextUser.userId);
+  }
+
+  const filteredUsers = currentUsers.filter((user) => user.userId !== nextUser.userId);
+  return [...filteredUsers, nextUser];
+};
+
 export const useSocketStore = create<SocketState>((set, get) => ({
   socket: null,
   onlineUsers: [],
+  typingByConversation: {},
   connectSocket: () => {
     const accessToken = useAuthStore.getState().accessToken;
     const existingSocket = get().socket;
@@ -56,7 +70,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("disconnect", (reason) => {
       console.log("Socket đã ngắt kết nối:", reason);
-      set({ onlineUsers: [] });
+      set({ onlineUsers: [], typingByConversation: {} });
     });
 
     socket.on("connect_error", (error) => {
@@ -66,6 +80,29 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     // online users
     socket.on("online-users", (userIds) => {
       set({ onlineUsers: userIds });
+    });
+
+    socket.on("typing:update", ({ conversationId, userId, displayName, isTyping }) => {
+      set((state) => {
+        const currentUsers = state.typingByConversation[conversationId] ?? [];
+        const nextUsers = updateTypingUsers(
+          currentUsers,
+          { userId, displayName },
+          Boolean(isTyping)
+        );
+
+        if (nextUsers.length === 0) {
+          const { [conversationId]: _removed, ...rest } = state.typingByConversation;
+          return { typingByConversation: rest };
+        }
+
+        return {
+          typingByConversation: {
+            ...state.typingByConversation,
+            [conversationId]: nextUsers,
+          },
+        };
+      });
     });
 
     socket.on("conversation-upsert", (conversation) => {
@@ -212,7 +249,25 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     if (socket) {
       socket.removeAllListeners();
       socket.disconnect();
-      set({ socket: null });
+      set({ socket: null, typingByConversation: {}, onlineUsers: [] });
     }
+  },
+  startTyping: (conversationId) => {
+    const socket = get().socket;
+
+    if (!socket?.connected || !conversationId) {
+      return;
+    }
+
+    socket.emit("typing:start", { conversationId });
+  },
+  stopTyping: (conversationId) => {
+    const socket = get().socket;
+
+    if (!socket?.connected || !conversationId) {
+      return;
+    }
+
+    socket.emit("typing:stop", { conversationId });
   },
 }));

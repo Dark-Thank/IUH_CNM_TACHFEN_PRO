@@ -1,10 +1,11 @@
 import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
 import { ImagePlus, Send, X } from "lucide-react-native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   Pressable,
@@ -44,11 +45,15 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage } =
     useChatStore();
+  const { startTyping, stopTyping } = useSocketStore();
   const { isDark } = useThemeStore();
 
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<FileItem[]>([]);
   const [sending, setSending] = useState(false);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingConversationIdRef = useRef(selectedConvo._id);
+  const isTypingRef = useRef(false);
 
   const placeholderColor = isDark
     ? "#94a3b8"
@@ -71,10 +76,62 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
   if (!user) return null;
 
+  const stopTypingIndicator = (conversationId = typingConversationIdRef.current) => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    if (!isTypingRef.current) {
+      return;
+    }
+
+    stopTyping(conversationId);
+    isTypingRef.current = false;
+  };
+
   useEffect(() => {
     setFiles([]);
     setValue("");
   }, [selectedConvo._id]);
+
+  useEffect(() => {
+    const previousConversationId = typingConversationIdRef.current;
+
+    if (previousConversationId !== selectedConvo._id) {
+      stopTypingIndicator(previousConversationId);
+      typingConversationIdRef.current = selectedConvo._id;
+    }
+  }, [selectedConvo._id]);
+
+  useEffect(() => {
+    if (disabled || !value.trim()) {
+      stopTypingIndicator();
+      return;
+    }
+
+    if (!isTypingRef.current) {
+      startTyping(selectedConvo._id);
+      isTypingRef.current = true;
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      stopTypingIndicator();
+    }, 1500);
+
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+    };
+  }, [disabled, selectedConvo._id, startTyping, stopTyping, value]);
+
+  useEffect(() => () => stopTypingIndicator(), []);
 
   // ======================
   // PICK IMAGE
@@ -147,6 +204,8 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
     if (!trimmed && files.length === 0)
       return;
+
+    stopTypingIndicator();
 
 
 

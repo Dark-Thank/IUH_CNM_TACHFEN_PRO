@@ -49,6 +49,20 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  forwardedFrom?: {
+    messageId: string;
+    conversationId: string;
+    senderId: string;
+    content: string | null;
+    imgUrls?: string[];
+    fileUrls?: {
+      url: string;
+      name: string;
+      size?: number;
+      type?: string;
+    }[];
+    createdAt: string;
+  } | null;
   isRecalled?: boolean;
   recalledAt?: string | null;
   isPinned?: boolean;

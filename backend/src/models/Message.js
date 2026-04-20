@@ -1,5 +1,43 @@
 import mongoose from "mongoose";
 
+const forwardedFromSchema = new mongoose.Schema({
+    messageId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Message",
+        required: true,
+    },
+    conversationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Conversation",
+        required: true,
+    },
+    senderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    content: {
+        type: String,
+        default: null,
+    },
+    imgUrls: {
+        type: [String],
+        default: [],
+    },
+    fileUrls: [
+        {
+            url: { type: String },
+            name: { type: String },
+            size: { type: Number },
+            type: { type: String },
+        },
+    ],
+    createdAt: {
+        type: Date,
+        required: true,
+    },
+}, { _id: false });
+
 const messageSchema = new mongoose.Schema({
     conversationId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -22,14 +60,14 @@ const messageSchema = new mongoose.Schema({
         type: [String],
         default: [],
     },
-   fileUrls: [
-  {
-    url: { type: String },
-    name: { type: String },
-    size: { type: Number },
-    type: { type: String },
-  },
-],
+    fileUrls: [
+        {
+            url: { type: String },
+            name: { type: String },
+            size: { type: Number },
+            type: { type: String },
+        },
+    ],
 
     isPinned: {
         type: Boolean,
@@ -52,6 +90,10 @@ const messageSchema = new mongoose.Schema({
     recallBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
+    },
+    forwardedFrom: {
+        type: forwardedFromSchema,
+        default: null,
     }
 
 }, { timestamps: true }

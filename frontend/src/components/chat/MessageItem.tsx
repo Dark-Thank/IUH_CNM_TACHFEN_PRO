@@ -1,7 +1,16 @@
+import { useState } from "react";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { cn, formatMessageTime } from "@/lib/utils";
 import type { Conversation, Message, Participant } from "@/types/chat";
 import { Badge } from "../ui/badge";
 import { Card } from "../ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -9,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
-import { MoreVertical, Trash2 } from "lucide-react";
+import { MoreVertical, Send, Trash2 } from "lucide-react";
 import UserAvatar from "./UserAvatar";
 import RecallConfirmDialog from "./RecallConfirmDialog";
 import { useChatStore } from "@/stores/useChatStore";
@@ -30,7 +39,10 @@ const MessageItem = ({
   selectedConvo,
   lastMessageStatus,
 }: MessageItemProps) => {
-  const { togglePinMessage } = useChatStore();
+  const { user } = useAuthStore();
+  const { conversations, forwardMessage, togglePinMessage } = useChatStore();
+  const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
 
   const handleDownloadFile = async (fileIndex: number, fileName: string) => {
     try {
@@ -57,6 +69,35 @@ const MessageItem = ({
   );
 
   const isOwn = message.isOwn;
+  const canForward = !message.isRecalled && Boolean(
+    message.content || message.imgUrls?.length || message.fileUrls?.length
+  );
+  const availableConversations = conversations.filter(
+    (conversation) => conversation._id !== message.conversationId
+  );
+
+  const getConversationLabel = (conversation: Conversation) => {
+    if (conversation.type === "group") {
+      return conversation.group?.name || "Nhóm chat";
+    }
+
+    return (
+      conversation.participants.find((participant) => participant._id !== user?._id)
+        ?.displayName || "Cuộc trò chuyện trực tiếp"
+    );
+  };
+
+  const handleForwardMessage = async (conversationId: string) => {
+    try {
+      setForwardingConversationId(conversationId);
+      await forwardMessage(conversationId, message._id);
+      setForwardDialogOpen(false);
+    } catch (error) {
+      console.error("Lỗi khi chuyển tiếp tin nhắn:", error);
+    } finally {
+      setForwardingConversationId(null);
+    }
+  };
 
   return (
     <>
@@ -119,6 +160,11 @@ const MessageItem = ({
               </div>
             ) : (
               <>
+                {message.forwardedFrom && (
+                  <div className="mb-2 rounded-md border border-current/15 bg-black/5 px-2 py-1 text-xs font-medium opacity-80">
+                    Đã chuyển tiếp
+                  </div>
+                )}
                 {/* TEXT */}
                 {message.content && (
                   <p className="text-sm break-words">
@@ -179,6 +225,13 @@ const MessageItem = ({
                 📌 {message.isPinned ? "Bỏ ghim" : "Ghim tin nhắn"}
               </DropdownMenuItem>
 
+              {canForward && (
+                <DropdownMenuItem onClick={() => setForwardDialogOpen(true)}>
+                  <Send className="h-4 w-4" />
+                  Chuyển tiếp
+                </DropdownMenuItem>
+              )}
+
               {/* {isOwn && !message.isRecalled && (
                 <RecallConfirmDialog messageId={message._id}>
                   <DropdownMenuItem className="gap-2 text-destructive cursor-pointer">
@@ -214,6 +267,46 @@ const MessageItem = ({
             )}
         </div>
       </div>
+
+      <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Chuyển tiếp tin nhắn</DialogTitle>
+            <DialogDescription>
+              Chọn cuộc trò chuyện đích để gửi lại tin nhắn này.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {availableConversations.length === 0 ? (
+              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+                Chưa có cuộc trò chuyện nào khác để chuyển tiếp.
+              </div>
+            ) : (
+              availableConversations.map((conversation) => (
+                <button
+                  key={conversation._id}
+                  type="button"
+                  onClick={() => void handleForwardMessage(conversation._id)}
+                  disabled={forwardingConversationId === conversation._id}
+                  className="flex w-full items-center justify-between rounded-lg border px-3 py-3 text-left transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{getConversationLabel(conversation)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {conversation.type === "group" ? "Nhóm" : "Trò chuyện trực tiếp"}
+                    </p>
+                  </div>
+
+                  <span className="text-xs text-muted-foreground">
+                    {forwardingConversationId === conversation._id ? "Đang gửi..." : "Chọn"}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -108,72 +108,75 @@ export const chatService = {
     };
   },
 
-async sendDirectMessage(
-  recipientId: string,
-  options: {
-    content?: string;
-    conversationId?: string;
-    files?: Array<{
-      uri: string;
-      name?: string;
-      type?: string;
-    }>;
-  } = {}
-) {
-  try {
-    const { content = "", conversationId, files } = options;
+  async sendDirectMessage(
+    recipientId: string,
+    options: {
+      content?: string;
+      conversationId?: string;
+      forwardedFromMessageId?: string;
+      files?: Array<{
+        uri: string;
+        name?: string;
+        type?: string;
+      }>;
+    } = {}
+  ) {
+    try {
+      const { content = "", conversationId, forwardedFromMessageId, files } = options;
 
-    if (files && files.length > 0) {
-      const formData = new FormData();
+      if (files && files.length > 0) {
+        const formData = new FormData();
 
-      formData.append("recipientId", recipientId);
-      formData.append("content", content);
-      if (conversationId) formData.append("conversationId", conversationId);
+        formData.append("recipientId", recipientId);
+        formData.append("content", content);
+        if (conversationId) formData.append("conversationId", conversationId);
+        if (forwardedFromMessageId) formData.append("forwardedFromMessageId", forwardedFromMessageId);
 
-      files.forEach((file) => {
-        formData.append("files", {
-          uri: file.uri,
-          name: file.name || "file.jpg",
-          type: file.type || "application/octet-stream",
-        } as any);
+        files.forEach((file) => {
+          formData.append("files", {
+            uri: file.uri,
+            name: file.name || "file.jpg",
+            type: file.type || "application/octet-stream",
+          } as any);
+        });
+
+        const data = await postMultipart("/messages/direct", formData);
+
+        return data.message;
+      }
+
+      const res = await api.post("/messages/direct", {
+        recipientId,
+        content,
+        conversationId,
+        forwardedFromMessageId,
       });
 
-      const data = await postMultipart("/messages/direct", formData);
+      return res.data.message;
 
-      return data.message;
-    }
+    } catch (error: any) {
+      // ✅ Handle bị block
+      if (error.response?.status === 403) {
+        const data = error.response.data;
 
-    const res = await api.post("/messages/direct", {
-      recipientId,
-      content,
-      conversationId,
-    });
+        if (
+          data.message?.includes("chặn") ||
+          data.type === "YOU_ARE_BLOCKED"
+        ) {
+          toast.error("Bạn đã bị người dùng này chặn");
 
-    return res.data.message;
+          // update store nếu có
+          try {
+            useBlockStore.getState().setBlockedBy(recipientId);
+          } catch { }
 
-  } catch (error: any) {
-    // ✅ Handle bị block
-    if (error.response?.status === 403) {
-      const data = error.response.data;
-
-      if (
-        data.message?.includes("chặn") ||
-        data.type === "YOU_ARE_BLOCKED"
-      ) {
-        toast.error("Bạn đã bị người dùng này chặn");
-
-        // update store nếu có
-        try {
-          useBlockStore.getState().setBlockedBy(recipientId);
-        } catch {}
-
-        return;
+          return;
+        }
       }
-    }
 
-    throw error;
-  }
-},
+      throw error;
+    }
+  },
 
   // ======================
   // GROUP MESSAGE (UPLOAD FILES)

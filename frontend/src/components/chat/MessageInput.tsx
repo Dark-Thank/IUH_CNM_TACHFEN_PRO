@@ -1,8 +1,9 @@
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useChatStore } from '@/stores/useChatStore';
+import { useSocketStore } from '@/stores/useSocketStore';
 import type { Conversation } from "@/types/chat";
 import { ImagePlus, Send } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Input } from "../ui/input";
@@ -11,8 +12,12 @@ import EmmojiPicker from './EmmojiPicker';
 const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedConvo: Conversation, isBlocked: boolean }) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage } = useChatStore();
+    const { startTyping, stopTyping } = useSocketStore();
 
     const [isBlocked, setIsBlocked] = useState(false);
+    const typingTimeoutRef = useRef<number | null>(null);
+    const typingConversationIdRef = useRef(selectedConvo._id);
+    const isTypingRef = useRef(false);
 
     // Sync the prop value to local state
     useEffect(() => {
@@ -22,10 +27,66 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
     const [value, setValue] = useState("");
     const [files, setFiles] = useState<File[]>([]);
 
+    const stopTypingIndicator = (conversationId = typingConversationIdRef.current) => {
+        if (typingTimeoutRef.current) {
+            window.clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = null;
+        }
+
+        if (!isTypingRef.current) {
+            return;
+        }
+
+        stopTyping(conversationId);
+        isTypingRef.current = false;
+    };
+
     if (!user) return null;
+
+    useEffect(() => {
+        const previousConversationId = typingConversationIdRef.current;
+
+        if (previousConversationId !== selectedConvo._id) {
+            stopTypingIndicator(previousConversationId);
+            typingConversationIdRef.current = selectedConvo._id;
+            setValue("");
+            setFiles([]);
+        }
+    }, [selectedConvo._id]);
+
+    useEffect(() => {
+        if (isBlocked || !value.trim()) {
+            stopTypingIndicator();
+            return;
+        }
+
+        if (!isTypingRef.current) {
+            startTyping(selectedConvo._id);
+            isTypingRef.current = true;
+        }
+
+        if (typingTimeoutRef.current) {
+            window.clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = window.setTimeout(() => {
+            stopTypingIndicator();
+        }, 1500);
+
+        return () => {
+            if (typingTimeoutRef.current) {
+                window.clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = null;
+            }
+        };
+    }, [isBlocked, selectedConvo._id, startTyping, stopTyping, value]);
+
+    useEffect(() => () => stopTypingIndicator(), []);
 
     const sendMessage = async () => {
         if (!value.trim() && files.length === 0) return;
+
+        stopTypingIndicator();
 
         const formData = new FormData();
         formData.append("content", value);

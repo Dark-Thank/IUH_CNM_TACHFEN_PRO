@@ -6,11 +6,82 @@ import { io } from "../socket/index.js";
 
 import { uploadFileFromBuffer, uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import {
-    emitConversationUpsert,
-    emitNewMessage,
-    getConversationParticipantIds,
-    updateConversationAfterCreateMessage
+  emitConversationUpsert,
+  emitNewMessage,
+  getConversationParticipantIds,
+  updateConversationAfterCreateMessage
 } from "../utils/messageHelper.js";
+
+const normalizeOptionalText = (value) => {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim();
+};
+
+const cloneFileUrls = (fileUrls = []) =>
+  fileUrls.map((file) => ({
+    url: file.url,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+  }));
+
+const buildForwardedFromSnapshot = (message) => ({
+  messageId: message._id,
+  conversationId: message.conversationId,
+  senderId: message.senderId,
+  content: message.content ?? null,
+  imgUrls: [...(message.imgUrls || [])],
+  fileUrls: cloneFileUrls(message.fileUrls || []),
+  createdAt: message.createdAt,
+});
+
+const resolveForwardedMessage = async (forwardedFromMessageId, userId) => {
+  if (!forwardedFromMessageId) {
+    return { forwardedMessage: null, forwardedFrom: null };
+  }
+
+  const forwardedMessage = await Message.findById(forwardedFromMessageId).lean();
+
+  if (!forwardedMessage) {
+    return {
+      error: {
+        status: 404,
+        payload: { message: "Tin nhắn cần chuyển tiếp không tồn tại" },
+      },
+    };
+  }
+
+  if (forwardedMessage.isRecalled) {
+    return {
+      error: {
+        status: 400,
+        payload: { message: "Không thể chuyển tiếp tin nhắn đã thu hồi" },
+      },
+    };
+  }
+
+  const isParticipant = await Conversation.exists({
+    _id: forwardedMessage.conversationId,
+    "participants.userId": userId,
+  });
+
+  if (!isParticipant) {
+    return {
+      error: {
+        status: 403,
+        payload: { message: "Bạn không có quyền chuyển tiếp tin nhắn này" },
+      },
+    };
+  }
+
+  return {
+    forwardedMessage,
+    forwardedFrom: buildForwardedFromSnapshot(forwardedMessage),
+  };
+};
 
 const getUploadedFiles = (req) => {
   if (!req.files) {
@@ -92,13 +163,29 @@ const getAuthorizedMessageFile = async (messageId, fileIndex, userId) => {
 };
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, conversationId } = req.body;
+    const { recipientId, content, conversationId, forwardedFromMessageId } = req.body;
     const senderId = req.user._id;
     const uploadedFiles = getUploadedFiles(req);
+    const trimmedContent = normalizeOptionalText(content);
+
+    const forwardedResult = await resolveForwardedMessage(
+      forwardedFromMessageId,
+      senderId
+    );
+
+    if (forwardedResult.error) {
+      return res.status(forwardedResult.error.status).json(forwardedResult.error.payload);
+    }
+
+    const { forwardedMessage, forwardedFrom } = forwardedResult;
 
     let conversation;
 
-    if (!content && uploadedFiles.length === 0) {
+    if (forwardedMessage && uploadedFiles.length > 0) {
+      return res.status(400).json({ message: "Không thể thêm file mới khi chuyển tiếp tin nhắn" });
+    }
+
+    if (!trimmedContent && uploadedFiles.length === 0 && !forwardedMessage) {
       return res.status(400).json({ message: "Tin nhắn rỗng" });
     }
 
@@ -129,8 +216,8 @@ export const sendDirectMessage = async (req, res) => {
 
     const isFirstMessageInConversation = !conversation.lastMessage?._id;
 
-    let imageUrls = [];
-    let fileUrls = [];
+    let imageUrls = forwardedMessage ? [...(forwardedMessage.imgUrls || [])] : [];
+    let fileUrls = forwardedMessage ? cloneFileUrls(forwardedMessage.fileUrls || []) : [];
 
     if (uploadedFiles.length > 0) {
       const uploadPromises = uploadedFiles.map((file) => {
@@ -167,13 +254,20 @@ export const sendDirectMessage = async (req, res) => {
         }
       });
     }
+
+    const resolvedContent = trimmedContent || forwardedMessage?.content || null;
+
+    if (!resolvedContent && imageUrls.length === 0 && fileUrls.length === 0) {
+      return res.status(400).json({ message: "Tin nhắn chuyển tiếp không có nội dung hợp lệ" });
+    }
+
     const message = await Message.create({
       conversationId: conversation._id,
       senderId,
-      content,
-      imgUrls: imageUrls, //  đổi sang mảng
+      content: resolvedContent,
+      imgUrls: imageUrls,
       fileUrls,
-
+      forwardedFrom,
     });
 
     updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -213,17 +307,33 @@ export const sendDirectMessage = async (req, res) => {
 
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { content } = req.body;
+    const { content, forwardedFromMessageId } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
     const uploadedFiles = getUploadedFiles(req);
+    const trimmedContent = normalizeOptionalText(content);
 
-    if (!content && uploadedFiles.length === 0) {
+    const forwardedResult = await resolveForwardedMessage(
+      forwardedFromMessageId,
+      senderId
+    );
+
+    if (forwardedResult.error) {
+      return res.status(forwardedResult.error.status).json(forwardedResult.error.payload);
+    }
+
+    const { forwardedMessage, forwardedFrom } = forwardedResult;
+
+    if (forwardedMessage && uploadedFiles.length > 0) {
+      return res.status(400).json({ message: "Không thể thêm file mới khi chuyển tiếp tin nhắn" });
+    }
+
+    if (!trimmedContent && uploadedFiles.length === 0 && !forwardedMessage) {
       return res.status(400).json({ message: "Tin nhắn rỗng" });
     }
 
-    let imageUrls = [];
-    let fileUrls = [];
+    let imageUrls = forwardedMessage ? [...(forwardedMessage.imgUrls || [])] : [];
+    let fileUrls = forwardedMessage ? cloneFileUrls(forwardedMessage.fileUrls || []) : [];
 
     // FIX: thêm xử lý FILE giống direct
     if (uploadedFiles.length > 0) {
@@ -263,12 +373,19 @@ export const sendGroupMessage = async (req, res) => {
       });
     }
 
+    const resolvedContent = trimmedContent || forwardedMessage?.content || null;
+
+    if (!resolvedContent && imageUrls.length === 0 && fileUrls.length === 0) {
+      return res.status(400).json({ message: "Tin nhắn chuyển tiếp không có nội dung hợp lệ" });
+    }
+
     const message = await Message.create({
       conversationId: conversation._id,
       senderId,
-      content,
+      content: resolvedContent,
       imgUrls: imageUrls,
       fileUrls,
+      forwardedFrom,
     });
 
 

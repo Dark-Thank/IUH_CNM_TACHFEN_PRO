@@ -18,28 +18,28 @@ import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Bell, ChevronLeft, X } from "lucide-react-native";
 import {
-    useCallback,
-    useEffect,
-    useLayoutEffect,
-    useMemo,
-    useRef,
-    useState,
-    type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
 } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-    type NativeScrollEvent,
-    type NativeSyntheticEvent,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -191,7 +191,6 @@ export default function ChatAppScreen() {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const onlineUsers = useSocketStore((state) => state.onlineUsers);
-
   const flatListRef = useRef<FlatList<Message>>(null);
 
   const [showRequests, setShowRequests] = useState(false);
@@ -296,6 +295,9 @@ export default function ChatAppScreen() {
   const selectedConvo =
     sortedConversations.find((conversation) => conversation._id === activeConversationId) ?? null;
   const selectedConversationId = selectedConvo?._id ?? null;
+  const typingUsers = useSocketStore((state) =>
+    selectedConversationId ? state.typingByConversation[selectedConversationId] ?? [] : []
+  );
 
   const selectedConversationStatus = useMemo(
     () =>
@@ -320,6 +322,11 @@ export default function ChatAppScreen() {
 
   const lastMessageStatus: "delivered" | "seen" =
     (selectedConvo?.seenBy?.length ?? 0) > 0 ? "seen" : "delivered";
+  const typingLabel = typingUsers.length === 0
+    ? ""
+    : typingUsers.length === 1
+      ? `${typingUsers[0].displayName || "Ai do"} dang soan tin nhan`
+      : `${typingUsers[0].displayName || "Ai do"} va ${typingUsers.length - 1} nguoi khac dang soan tin nhan`;
 
   const filteredFriendsForMessage = useMemo(() => {
     const baseFriends = uniqueById(friends);
@@ -616,56 +623,56 @@ export default function ChatAppScreen() {
       title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Doan chat",
       headerTitle: selectedConvo
         ? () => (
-            <View style={styles.headerTitleWrap}>
+          <View style={styles.headerTitleWrap}>
+            <Text
+              numberOfLines={1}
+              style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+            >
+              {getConversationTitle(selectedConvo, user?._id)}
+            </Text>
+            {!!selectedConversationStatus && (
               <Text
                 numberOfLines={1}
-                style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+                style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
               >
-                {getConversationTitle(selectedConvo, user?._id)}
+                {selectedConversationStatus}
               </Text>
-              {!!selectedConversationStatus && (
-                <Text
-                  numberOfLines={1}
-                  style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
-                >
-                  {selectedConversationStatus}
-                </Text>
-              )}
-            </View>
-          )
+            )}
+          </View>
+        )
         : undefined,
       headerLeft: selectedConvo
         ? () => (
-            <Pressable
-              onPress={handleBack}
-              style={[
-                styles.headerBackButton,
-                { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
-              ]}
-            >
-              <ChevronLeft size={20} color={isDark ? "#f8fafc" : "#0f172a"} />
-            </Pressable>
-          )
+          <Pressable
+            onPress={handleBack}
+            style={[
+              styles.headerBackButton,
+              { backgroundColor: isDark ? "#1f2937" : "#f1f5f9" },
+            ]}
+          >
+            <ChevronLeft size={20} color={isDark ? "#f8fafc" : "#0f172a"} />
+          </Pressable>
+        )
         : undefined,
       headerRight: !selectedConvo
         ? () => (
-            <Pressable
-              onPress={openRequestsModal}
-              style={[
-                styles.headerIconButton,
-                { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-              ]}
-            >
-              <Bell size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
-              {receivedList.length > 0 && (
-                <View style={styles.headerBadge}>
-                  <Text style={styles.headerBadgeText}>
-                    {receivedList.length > 9 ? "9+" : receivedList.length}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          )
+          <Pressable
+            onPress={openRequestsModal}
+            style={[
+              styles.headerIconButton,
+              { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+            ]}
+          >
+            <Bell size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+            {receivedList.length > 0 && (
+              <View style={styles.headerBadge}>
+                <Text style={styles.headerBadgeText}>
+                  {receivedList.length > 9 ? "9+" : receivedList.length}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+        )
         : undefined,
     });
   }, [
@@ -745,6 +752,12 @@ export default function ChatAppScreen() {
 
           {isConversationBlocked ? (
             <Text style={styles.blockedNotice}>Ban khong the tra loi cuoc tro chuyen nay.</Text>
+          ) : null}
+
+          {typingLabel ? (
+            <Text style={[styles.typingNotice, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              {typingLabel}
+            </Text>
           ) : null}
 
           <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
@@ -1327,6 +1340,12 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontSize: 13,
     marginBottom: 8,
+  },
+  typingNotice: {
+    paddingHorizontal: 16,
+    paddingBottom: 6,
+    fontSize: 13,
+    fontStyle: "italic",
   },
   conversationList: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 22 },
   section: { gap: 12 },

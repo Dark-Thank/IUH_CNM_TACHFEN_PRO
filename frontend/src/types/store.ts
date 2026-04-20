@@ -42,7 +42,7 @@ export interface ChatState {
   activeConversationId: string | null;
   convoLoading: boolean;
   messageLoading: boolean;
-  loading:boolean;
+  loading: boolean;
   reset: () => void;
 
   setActiveConversation: (id: string | null) => void;
@@ -51,6 +51,7 @@ export interface ChatState {
 
   sendDirectMessage: (userId: string, formData: FormData) => Promise<void>;
   sendGroupMessage: (conversationId: string, formData: FormData) => Promise<void>;
+  forwardMessage: (targetConversationId: string, messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;
 
@@ -60,7 +61,7 @@ export interface ChatState {
   upsertConversation: (conversation: Conversation) => void;
   updateConversation: (conversation: unknown) => void;
   markAsSeen: () => Promise<void>;
-  addConvo:(convo: Conversation) => void;
+  addConvo: (convo: Conversation) => void;
   createConversation: (
     type: "group" | "direct",
     name: string,
@@ -71,8 +72,17 @@ export interface ChatState {
 export interface SocketState {
   socket: Socket | null;
   onlineUsers: string[];
+  typingByConversation: Record<
+    string,
+    {
+      userId: string;
+      displayName: string;
+    }[]
+  >;
   connectSocket: () => void;
   disconnectSocket: () => void;
+  startTyping: (conversationId: string) => void;
+  stopTyping: (conversationId: string) => void;
 }
 
 export interface UserState {

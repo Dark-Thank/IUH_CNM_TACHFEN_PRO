@@ -152,6 +152,43 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
+      forwardMessage: async (targetConversationId, messageId) => {
+        try {
+          const { conversations } = get();
+          const { user } = useAuthStore.getState();
+          const targetConversation = conversations.find(
+            (conversation) => conversation._id === targetConversationId
+          );
+
+          if (!targetConversation || !user) {
+            throw new Error("Không tìm thấy cuộc trò chuyện để chuyển tiếp");
+          }
+
+          const formData = new FormData();
+          formData.append("forwardedFromMessageId", messageId);
+
+          if (targetConversation.type === "direct") {
+            const recipient = targetConversation.participants.find(
+              (participant) => participant._id !== user._id
+            );
+
+            if (!recipient) {
+              throw new Error("Không tìm thấy người nhận để chuyển tiếp");
+            }
+
+            formData.append("recipientId", recipient._id);
+            formData.append("conversationId", targetConversationId);
+            await chatService.sendDirectMessage(formData);
+            return;
+          }
+
+          formData.append("conversationId", targetConversationId);
+          await chatService.sendGroupMessage(formData);
+        } catch (error) {
+          console.error("Lỗi khi chuyển tiếp tin nhắn:", error);
+          throw error;
+        }
+      },
       addMessage: async (message) => {
         try {
           const { user } = useAuthStore.getState();
@@ -281,7 +318,7 @@ export const useChatStore = create<ChatState>()(
 
       togglePinMessage: async (messageId: string) => {
         try {
-          const { activeConversationId, messages } = get();
+          const { activeConversationId } = get();
           if (!activeConversationId) return;
 
           const data = await chatService.togglePinMessage(messageId);
@@ -314,7 +351,7 @@ export const useChatStore = create<ChatState>()(
 
       recallMessage: async (messageId: string) => {
         try {
-          const { activeConversationId, messages } = get();
+          const { activeConversationId } = get();
           if (!activeConversationId) return;
 
           const data = await chatService.recallMessage(messageId);
