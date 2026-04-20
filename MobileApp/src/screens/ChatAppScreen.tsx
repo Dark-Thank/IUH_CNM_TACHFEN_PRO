@@ -46,6 +46,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const TOP_LOAD_THRESHOLD = 72;
+const EMPTY_TYPING_USERS: { userId: string; displayName: string }[] = [];
 
 type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
 type SearchStatus = "idle" | "loading" | "not_found" | "found";
@@ -302,7 +303,9 @@ export default function ChatAppScreen() {
     sortedConversations.find((conversation) => conversation._id === activeConversationId) ?? null;
   const selectedConversationId = selectedConvo?._id ?? null;
   const typingUsers = useSocketStore((state) =>
-    selectedConversationId ? state.typingByConversation[selectedConversationId] ?? [] : []
+    selectedConversationId
+      ? state.typingByConversation[selectedConversationId] ?? EMPTY_TYPING_USERS
+      : EMPTY_TYPING_USERS
   );
 
   const selectedConversationStatus = useMemo(

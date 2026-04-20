@@ -19,6 +19,7 @@ const io = new Server(server, {
 const REDIS_URL = process.env.REDIS_URL?.trim();
 let socketInfrastructureReady = false;
 const REDIS_CONNECT_TIMEOUT_MS = 5000;
+const EMPTY_SOCKET_LIST = [];
 
 const withTimeout = (promise, timeoutMs, label) =>
     Promise.race([
@@ -76,9 +77,11 @@ const emitTypingUpdate = (socket, conversationId, isTyping) => {
     });
 };
 
+const getConnectedSockets = () => Array.from(io.of("/")?.sockets?.values?.() || EMPTY_SOCKET_LIST);
+
 const broadcastOnlineUsers = async () => {
     try {
-        const sockets = await io.fetchSockets();
+        const sockets = getConnectedSockets();
         const onlineUserIds = Array.from(
             new Set(
                 sockets
