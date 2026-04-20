@@ -5,27 +5,36 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useEffect, useMemo, useState } from "react";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
+import ConversationAssetsPanel from "./ConversationAssetsPanel";
 import ChatWindowBody from "./ChatWindowBody";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowSkeleton from "./ChatWindowSkeleton";
 import MessageInput from "./MessageInput";
 
 const ChatWindowLayout = () => {
-  const activeConversationId = useChatStore((state) => state.activeConversationId);
-  const conversations = useChatStore((state) => state.conversations);
-  const loading = useChatStore((state) => state.messageLoading);
-  const markAsSeen = useChatStore((state) => state.markAsSeen);
+  const {
+    activeConversationId,
+    conversations,
+    fetchMessages,
+    messageLoading: loading,
+    messages,
+    markAsSeen,
+  } = useChatStore();
   const { user } = useAuthStore();
   const typingByConversation = useSocketStore((state) => state.typingByConversation);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [showAssetsPanel, setShowAssetsPanel] = useState(false);
 
   const selectedConvo = conversations.find((c) => c._id === activeConversationId) ?? null;
   const typingUsers = useMemo(
     () => (activeConversationId ? typingByConversation[activeConversationId] ?? [] : []),
     [activeConversationId, typingByConversation]
   );
+  const messageItems = useMemo(
+    () => messages[activeConversationId ?? ""]?.items ?? [],
+    [activeConversationId, messages]
+  );
 
-  // Check if current user is blocked
   useEffect(() => {
     if (!selectedConvo || selectedConvo.type !== "direct" || !user) {
       setIsBlocked(false);
@@ -48,8 +57,8 @@ const ChatWindowLayout = () => {
       }
     };
 
-    checkBlockStatus();
-  }, [activeConversationId, user, selectedConvo]);
+    void checkBlockStatus();
+  }, [activeConversationId, selectedConvo, user]);
 
   useEffect(() => {
     if (!selectedConvo) {
@@ -62,11 +71,28 @@ const ChatWindowLayout = () => {
       } catch (error) {
         console.error("Lỗi khi markSeen:", error);
       }
+    };
+
+    void markSeen();
+  }, [markAsSeen, selectedConvo]);
+
+  useEffect(() => {
+    setShowAssetsPanel(false);
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    if (!showAssetsPanel || !selectedConvo || loading) {
+      return;
     }
 
-    markSeen();
+    if (messages[selectedConvo._id]?.nextCursor === null) {
+      return;
+    }
 
-  }, [markAsSeen, selectedConvo]);
+    void fetchMessages(selectedConvo._id).catch((error) => {
+      console.error("Khong the tai them attachment trong cuoc tro chuyen:", error);
+    });
+  }, [fetchMessages, loading, messages, selectedConvo, showAssetsPanel]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
@@ -84,22 +110,29 @@ const ChatWindowLayout = () => {
 
   return (
     <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
-      {/* Header */}
-      <ChatWindowHeader chat={selectedConvo} />
+      <ChatWindowHeader
+        chat={selectedConvo}
+        attachmentsOpen={showAssetsPanel}
+        onToggleAttachmentsPanel={() => setShowAssetsPanel((current) => !current)}
+      />
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto bg-primary-foreground">
-        <ChatWindowBody isBlocked={isBlocked} />
-      </div>
+      <div className="flex flex-1 min-h-0">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto bg-primary-foreground">
+            <ChatWindowBody isBlocked={isBlocked} />
+          </div>
 
-      {typingLabel && (
-        <div className="border-t bg-background px-4 py-2 text-sm text-muted-foreground">
-          {typingLabel}
+          {typingLabel && (
+            <div className="border-t bg-background px-4 py-2 text-sm text-muted-foreground">
+              {typingLabel}
+            </div>
+          )}
+
+          <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />
         </div>
-      )}
 
-      {/* Footer */}
-      <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />
+        {showAssetsPanel && <ConversationAssetsPanel messages={messageItems} />}
+      </div>
     </SidebarInset>
   );
 };

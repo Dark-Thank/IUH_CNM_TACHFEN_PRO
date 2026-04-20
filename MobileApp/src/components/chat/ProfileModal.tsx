@@ -1,8 +1,3 @@
-import { toast } from "@/lib/toast";
-import { friendService } from "@/services/friendService";
-import { useChatStore } from "@/stores/useChatStore";
-import { useFriendStore } from "@/stores/useFriendStore";
-import type { Friend } from "@/types/user";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,12 +8,31 @@ import {
   Text,
   View,
 } from "react-native";
+import { toast } from "@/lib/toast";
+import { friendService } from "@/services/friendService";
+import { useChatStore } from "@/stores/useChatStore";
+import { useFriendStore } from "@/stores/useFriendStore";
+import type { Friend } from "@/types/user";
 import UserAvatar from "./UserAvatar";
 
 interface Props {
   visible: boolean;
   friend: Friend | null;
   onClose: () => void;
+}
+
+type InfoRowProps = {
+  label: string;
+  value: string;
+};
+
+function InfoRow({ label, value }: InfoRowProps) {
+  return (
+    <View style={styles.infoRow}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
 }
 
 export default function ProfileModal({ visible, friend, onClose }: Props) {
@@ -30,7 +44,9 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!friend || !visible) return;
+    if (!friend || !visible) {
+      return;
+    }
 
     setLoading(true);
 
@@ -51,10 +67,12 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
   const user = fullUser || friend;
 
   const handleChat = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     if (isBlocked) {
-      toast.error("Bạn đã chặn người này");
+      toast.error("Ban da chan nguoi nay");
       return;
     }
 
@@ -63,19 +81,23 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
   };
 
   const handleRemove = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     try {
       await removeFriend(user._id);
-      toast.success("Đã xóa bạn");
+      toast.success("Da xoa ban");
       onClose();
     } catch {
-      toast.error("Không thể xóa bạn");
+      toast.error("Khong the xoa ban");
     }
   };
 
   const handleBlock = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
 
     try {
       setLoading(true);
@@ -84,107 +106,93 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
         await friendService.unblockFriend(user._id);
         setIsBlocked(false);
         unblockUser(user._id);
-        toast.success("Đã bỏ chặn");
+        toast.success("Da bo chan");
       } else {
         await friendService.blockFriend(user._id);
         setIsBlocked(true);
         blockUser(user._id);
-        toast.success("Đã chặn");
+        toast.success("Da chan");
       }
     } catch {
-      toast.error("Lỗi thao tác");
+      toast.error("Loi thao tac");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-  <View style={styles.overlay}>
-    <View style={styles.container}>
-      
-      {/* Nút X */}
-      <Pressable style={styles.closeBtn} onPress={onClose}>
-        <Text style={{ fontSize: 20 }}>✕</Text>
-      </Pressable>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.overlay}>
+        <View style={styles.container}>
+          <Pressable style={styles.closeBtn} onPress={onClose}>
+            <Text style={styles.closeText}>x</Text>
+          </Pressable>
 
-      {loading ? (
-        <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-      ) : user ? (
-        <ScrollView>
-          {/* Cover */}
-          <View style={styles.cover} />
+          {loading ? (
+            <ActivityIndicator size="large" style={styles.loader} />
+          ) : user ? (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.cover} />
 
-          {/* Avatar + name */}
-          <View style={styles.header}>
-            <UserAvatar
-              name={user.displayName}
-              avatarUrl={user.avatarUrl}
-              size={80}
-            />
+              <View style={styles.header}>
+                <UserAvatar name={user.displayName} avatarUrl={user.avatarUrl} size={80} />
+                <Text style={styles.name}>{user.displayName}</Text>
+                <Text style={styles.username}>@{user.username}</Text>
+              </View>
 
-            <Text style={styles.name}>{user.displayName}</Text>
-            <Text style={styles.username}>@{user.username}</Text>
-          </View>
+              <View style={styles.infoBox}>
+                <InfoRow label="username" value={`@${user.username}`} />
 
-          {/* Info */}
-          <View style={styles.infoBox}>
-            {user.bio && <Text style={styles.info}>🧑 {user.bio}</Text>}
-            {user.email && <Text style={styles.info}>📧 {user.email}</Text>}
-            {user.phone && <Text style={styles.info}>📞 {user.phone}</Text>}
-            {user.createdAt && (
-              <Text style={styles.info}>
-                📅 {new Date(user.createdAt).toLocaleDateString("vi-VN")}
-              </Text>
-            )}
-          </View>
+                {user.bio ? <InfoRow label="Giới thiệu" value={user.bio} /> : null}
+                {user.email ? <InfoRow label="Email" value={user.email} /> : null}
+                {user.createdAt ? (
+                  <InfoRow
+                    label="Ngày tham gia"
+                    value={new Date(user.createdAt).toLocaleDateString("vi-VN")}
+                  />
+                ) : null}
+              </View>
 
-          {/* Actions */}
-          <View style={styles.actions}>
-            <Pressable
-              style={[styles.btn, isBlocked && { backgroundColor: "#94a3b8" }]}
-              onPress={handleChat}
-              disabled={isBlocked}
-            >
-              <Text style={styles.btnText}>
-                {isBlocked ? "Đã chặn" : "Nhắn tin"}
-              </Text>
-            </Pressable>
+              <View style={styles.actions}>
+                <Pressable
+                  style={[styles.btn, isBlocked && { backgroundColor: "#94a3b8" }]}
+                  onPress={handleChat}
+                  disabled={isBlocked}
+                >
+                  <Text style={styles.btnText}>{isBlocked ? "Da chan" : "Nhan tin"}</Text>
+                </Pressable>
 
-            <Pressable
-              style={[styles.btn, { backgroundColor: "#f59e0b" }]}
-              onPress={handleBlock}
-            >
-              <Text style={styles.btnText}>
-                {isBlocked ? "Bỏ chặn" : "Chặn"}
-              </Text>
-            </Pressable>
+                <Pressable
+                  style={[styles.btn, { backgroundColor: "#f59e0b" }]}
+                  onPress={handleBlock}
+                >
+                  <Text style={styles.btnText}>{isBlocked ? "Bo chan" : "Chan"}</Text>
+                </Pressable>
 
-            <Pressable
-              style={[styles.btn, { backgroundColor: "#ef4444" }]}
-              onPress={handleRemove}
-            >
-              <Text style={styles.btnText}>Xóa bạn</Text>
-            </Pressable>
-          </View>
-        </ScrollView>
-      ) : null}
-    </View>
-  </View>
-</Modal>
+                <Pressable
+                  style={[styles.btn, { backgroundColor: "#ef4444" }]}
+                  onPress={handleRemove}
+                >
+                  <Text style={styles.btnText}>Xoa ban</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+          ) : null}
+        </View>
+      </View>
+    </Modal>
   );
 }
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "#fff", // full trắng luôn
+    backgroundColor: "#ffffff",
   },
-
   container: {
     flex: 1,
     padding: 16,
   },
-
   closeBtn: {
     position: "absolute",
     top: 40,
@@ -197,46 +205,57 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
+  closeText: {
+    fontSize: 20,
+    textTransform: "uppercase",
+  },
+  loader: {
+    marginTop: 40,
+  },
   cover: {
     height: 160,
     borderRadius: 12,
     backgroundColor: "#6366f1",
   },
-
   header: {
     alignItems: "center",
     marginTop: -50,
     marginBottom: 16,
   },
-
   name: {
     fontSize: 20,
     fontWeight: "700",
     marginTop: 10,
   },
-
   username: {
-    color: "#666",
+    color: "#666666",
   },
-
   infoBox: {
     backgroundColor: "#f1f5f9",
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
-    gap: 6,
+    gap: 12,
   },
-
-  info: {
+  infoRow: {
+    gap: 4,
+  },
+  infoLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#64748b",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  infoValue: {
     fontSize: 14,
+    color: "#0f172a",
+    lineHeight: 20,
   },
-
   actions: {
     flexDirection: "row",
     gap: 8,
     marginTop: 16,
   },
-
   btn: {
     flex: 1,
     padding: 12,
@@ -244,9 +263,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#6366f1",
   },
-
   btnText: {
-    color: "#fff",
+    color: "#ffffff",
     fontWeight: "700",
   },
 });

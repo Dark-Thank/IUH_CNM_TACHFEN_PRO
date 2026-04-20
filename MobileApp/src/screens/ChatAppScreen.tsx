@@ -3,6 +3,8 @@ import FriendListModal from "@/components/chat/FriendListModal";
 import MessageInput from "@/components/chat/MessageInput";
 import MessageItem from "@/components/chat/MessageItem";
 import PinnedSection from "@/components/chat/PinnedSection";
+import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
+import ProfileModal from "@/components/chat/ProfileModal";
 import UserAvatar from "@/components/chat/UserAvatar";
 import { toast } from "@/lib/toast";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
@@ -16,7 +18,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronLeft, X } from "lucide-react-native";
+import { Bell, ChevronLeft, Menu, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -198,6 +200,8 @@ export default function ChatAppScreen() {
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
+  const [showConversationProfile, setShowConversationProfile] = useState(false);
+  const [showConversationAssets, setShowConversationAssets] = useState(false);
 
   const [friendUsername, setFriendUsername] = useState("");
   const [friendRequestMessage, setFriendRequestMessage] = useState("");
@@ -305,6 +309,33 @@ export default function ChatAppScreen() {
         ? getConversationActivityLabel(selectedConvo, onlineUserIds, user?._id)
         : "",
     [onlineUserIds, selectedConvo, user?._id]
+  );
+
+  const selectedConversationFriend = useMemo<Friend | null>(() => {
+    if (!selectedConvo || selectedConvo.type !== "direct" || !user?._id) {
+      return null;
+    }
+
+    const participant = getDirectParticipant(selectedConvo, user._id);
+
+    if (!participant) {
+      return null;
+    }
+
+    return {
+      _id: participant._id,
+      displayName: participant.displayName,
+      avatarUrl: participant.avatarUrl ?? undefined,
+      username: "",
+    };
+  }, [selectedConvo, user?._id]);
+
+  const isSelectedConversationFriendOnline = useMemo(
+    () =>
+      selectedConversationFriend
+        ? onlineUserIds.has(selectedConversationFriend._id)
+        : false,
+    [onlineUserIds, selectedConversationFriend]
   );
 
   const messageItems = useMemo(
@@ -591,6 +622,32 @@ export default function ChatAppScreen() {
   }, [markAsSeen, selectedConversationId]);
 
   useEffect(() => {
+    setShowConversationProfile(false);
+    setShowConversationAssets(false);
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (
+      !showConversationAssets ||
+      !selectedConversationId ||
+      messageLoading ||
+      !hasMoreMessages
+    ) {
+      return;
+    }
+
+    fetchMessages(selectedConversationId).catch((error) => {
+      console.error("Loi khi tai them attachment:", error);
+    });
+  }, [
+    fetchMessages,
+    hasMoreMessages,
+    messageLoading,
+    selectedConversationId,
+    showConversationAssets,
+  ]);
+
+  useEffect(() => {
     if (!selectedConvo || !latestMessageId) {
       return;
     }
@@ -618,28 +675,74 @@ export default function ChatAppScreen() {
     [activeConversationId, fetchMessages, hasMoreMessages, messageLoading]
   );
 
+  const handleOpenConversationProfile = useCallback(() => {
+    if (selectedConversationFriend) {
+      setShowConversationProfile(true);
+    }
+  }, [selectedConversationFriend]);
+
+  const handleOpenConversationAssets = useCallback(() => {
+    if (selectedConvo) {
+      setShowConversationAssets(true);
+    }
+  }, [selectedConvo]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Doan chat",
       headerTitle: selectedConvo
-        ? () => (
-          <View style={styles.headerTitleWrap}>
-            <Text
-              numberOfLines={1}
-              style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+        ? () =>
+          selectedConversationFriend ? (
+            <Pressable
+              onPress={handleOpenConversationProfile}
+              style={({ pressed }) => [
+                styles.headerProfileButton,
+                { opacity: pressed ? 0.9 : 1 },
+              ]}
             >
-              {getConversationTitle(selectedConvo, user?._id)}
-            </Text>
-            {!!selectedConversationStatus && (
+              <UserAvatar
+                name={selectedConversationFriend.displayName}
+                avatarUrl={selectedConversationFriend.avatarUrl}
+                size={40}
+                isOnline={isSelectedConversationFriendOnline}
+                showPresence
+              />
+
+              <View style={styles.headerProfileTextWrap}>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+                >
+                  {getConversationTitle(selectedConvo, user?._id)}
+                </Text>
+                {!!selectedConversationStatus && (
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                  >
+                    {selectedConversationStatus}
+                  </Text>
+                )}
+              </View>
+            </Pressable>
+          ) : (
+            <View style={styles.headerTitleWrap}>
               <Text
                 numberOfLines={1}
-                style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
               >
-                {selectedConversationStatus}
+                {getConversationTitle(selectedConvo, user?._id)}
               </Text>
-            )}
-          </View>
-        )
+              {!!selectedConversationStatus && (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                >
+                  {selectedConversationStatus}
+                </Text>
+              )}
+            </View>
+          )
         : undefined,
       headerLeft: selectedConvo
         ? () => (
@@ -654,8 +757,19 @@ export default function ChatAppScreen() {
           </Pressable>
         )
         : undefined,
-      headerRight: !selectedConvo
+      headerRight: selectedConvo
         ? () => (
+          <Pressable
+            onPress={handleOpenConversationAssets}
+            style={[
+              styles.headerIconButton,
+              { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+            ]}
+          >
+            <Menu size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+          </Pressable>
+        )
+        : () => (
           <Pressable
             onPress={openRequestsModal}
             style={[
@@ -672,16 +786,19 @@ export default function ChatAppScreen() {
               </View>
             )}
           </Pressable>
-        )
-        : undefined,
+        ),
     });
   }, [
     handleBack,
+    handleOpenConversationAssets,
+    handleOpenConversationProfile,
     isDark,
     navigation,
     openRequestsModal,
     receivedList.length,
     selectedConvo,
+    selectedConversationFriend,
+    isSelectedConversationFriendOnline,
     selectedConversationStatus,
     user?._id,
   ]);
@@ -762,6 +879,18 @@ export default function ChatAppScreen() {
 
           <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
         </KeyboardAvoidingView>
+
+        <ProfileModal
+          visible={showConversationProfile}
+          friend={selectedConversationFriend}
+          onClose={() => setShowConversationProfile(false)}
+        />
+
+        <ConversationAssetsModal
+          visible={showConversationAssets}
+          messages={messageItems}
+          onClose={() => setShowConversationAssets(false)}
+        />
       </SafeAreaView>
     );
   }
@@ -1279,6 +1408,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     maxWidth: 220,
+  },
+  headerProfileButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    maxWidth: 240,
+  },
+  headerProfileTextWrap: {
+    flexShrink: 1,
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   headerTitleText: {
     fontSize: 16,
