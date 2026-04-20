@@ -39,11 +39,11 @@ const NewGroupChatModal = () => {
     await getFriends();
   };
 
-    const handleSelectFriend = (friend: Friend) => {
+  const handleSelectFriend = (friend: Friend) => {
     setInvitedUsers([...invitedUsers, friend]);
     setSearch("");
   };
-    const handleRemoveFriend = (friend: Friend) => {
+  const handleRemoveFriend = (friend: Friend) => {
     setInvitedUsers(invitedUsers.filter((u) => u._id !== friend._id));
   };
 
@@ -51,17 +51,17 @@ const NewGroupChatModal = () => {
     try {
       e.preventDefault();
 
-        if (submitLockRef.current || isSubmitting || loading) {
-          return;
-        }
+      if (submitLockRef.current || isSubmitting || loading) {
+        return;
+      }
 
       if (invitedUsers.length === 0) {
         toast.warning("Bạn phải mời ít nhất 1 thành viên vào nhóm");
         return;
       }
 
-        submitLockRef.current = true;
-        setIsSubmitting(true);
+      submitLockRef.current = true;
+      setIsSubmitting(true);
 
       await createConversation(
         "group",
@@ -69,13 +69,13 @@ const NewGroupChatModal = () => {
         invitedUsers.map((u) => u._id)
       );
 
-        resetForm();
-        setOpen(false);
+      resetForm();
+      setOpen(false);
     } catch (error) {
       console.error("Lỗi xảy ra khi handleSubmit trong NewGroupChatModal:", error);
-      } finally {
-        submitLockRef.current = false;
-        setIsSubmitting(false);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 

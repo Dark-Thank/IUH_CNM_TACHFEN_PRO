@@ -73,9 +73,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             {convoLoading ? <ConversationSkeleton /> : <GroupChatList />}
           </SidebarGroupContent>
-          <SidebarGroupContent>
-            <GroupChatList />
-          </SidebarGroupContent>
         </SidebarGroup>
 
         {/* Dirrect Message */}
