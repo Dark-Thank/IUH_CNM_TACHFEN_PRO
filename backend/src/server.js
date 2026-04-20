@@ -22,7 +22,12 @@ const PORT = process.env.PORT || 5001;
 app.use(cors({
   ...buildCorsOptions(),
 }));
-
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
 app.use(cookieParser());
 app.use(express.json());
 

@@ -195,6 +195,7 @@ export default function ChatAppScreen() {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const onlineUsers = useSocketStore((state) => state.onlineUsers);
+  const socket = useSocketStore((state) => state.socket);
   const flatListRef = useRef<FlatList<Message>>(null);
   const isCreatingGroupRef = useRef(false);
 
@@ -629,7 +630,23 @@ export default function ChatAppScreen() {
       console.error("Loi khi tai tin nhan:", error);
     });
   }, [fetchMessages, messages, selectedConversationId]);
+  useEffect(() => {
+    if (!socket) return;
 
+    const handler = (data: any) => {
+      const message = data?.message ?? data;
+
+      if (!message?._id || !message?.conversationId) return;
+
+      useChatStore.getState().updateMessage(message);
+    };
+
+    socket.on("update-message", handler);
+
+    return () => {
+      socket.off("update-message", handler);
+    };
+  }, [socket]);
   useEffect(() => {
     if (!selectedConversationId) {
       return;

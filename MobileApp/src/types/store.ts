@@ -26,7 +26,9 @@ export interface AuthState {
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
   refresh: () => Promise<void>;
+
 }
+
 
 export interface ThemeState {
   isDark: boolean;
@@ -49,7 +51,7 @@ export interface ChatState {
   messageLoading: boolean;
   loading: boolean;
   reset: () => void;
-
+  updateMessage: (message: Message) => void;
   setActiveConversation: (id: string | null) => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;

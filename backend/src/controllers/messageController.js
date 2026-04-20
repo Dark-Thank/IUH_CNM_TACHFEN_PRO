@@ -344,6 +344,81 @@ export const sendDirectMessage = async (req, res) => {
   }
 };
 
+const ALLOWED_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "😡"];
+
+export const toggleReaction = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { emoji } = req.body;
+    const userId = req.user._id.toString();
+
+    // ✅ CHECK emoji ở đây
+    if (!ALLOWED_REACTIONS.includes(emoji)) {
+      return res.status(400).json({ message: "Emoji không hợp lệ" });
+    }
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Message not found" });
+    }
+
+    if (message.isRecalled) {
+      return res.status(400).json({ message: "Tin nhắn đã thu hồi" });
+    }
+
+    if (!message.reactions) {
+      message.reactions = new Map();
+    }
+
+    // 👇 LẤY danh sách user của emoji hiện tại
+    const currentUsers = message.reactions.get(emoji) || [];
+
+    // 👇 CHECK user đã react chưa
+    const alreadyReacted = currentUsers.some(
+      (id) => id.toString() === userId
+    );
+
+    if (alreadyReacted) {
+      // ❌ ĐÃ REACT → XOÁ (UNREACT)
+      const newUsers = currentUsers.filter(
+        (id) => id.toString() !== userId
+      );
+
+      if (newUsers.length === 0) {
+        message.reactions.delete(emoji);
+      } else {
+        message.reactions.set(emoji, newUsers);
+      }
+    } else {
+      // ✅ CHƯA REACT → XOÁ REACTION CŨ + ADD MỚI
+
+      for (const [key, users] of message.reactions.entries()) {
+        const filtered = users.filter(
+          (id) => id.toString() !== userId
+        );
+
+        if (filtered.length === 0) {
+          message.reactions.delete(key);
+        } else {
+          message.reactions.set(key, filtered);
+        }
+      }
+
+      message.reactions.set(emoji, [...currentUsers, userId]);
+    }
+
+    await message.save();
+
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
 export const sendGroupMessage = async (req, res) => {
   try {
     const { content, forwardedFromMessageId, voiceDurationSeconds } = req.body;

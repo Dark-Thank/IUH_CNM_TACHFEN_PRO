@@ -152,7 +152,7 @@ const MessageItem = ({
   lastMessageStatus,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe } = useChatStore();
+  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
@@ -225,6 +225,10 @@ const MessageItem = ({
     await startOutgoingCall(selectedConvo, message.callMeta.callType);
   };
 
+  const handleReact = async (emoji: string) => {
+    await reactToMessage(message._id, emoji);
+  };
+  const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
   return (
     <>
       {/* TIME */}
@@ -277,6 +281,18 @@ const MessageItem = ({
                       : "chat-bubble-received"
             )}
           >
+            {message.reactions && Object.keys(message.reactions).length > 0 && (
+              <div className="flex gap-1 mt-1">
+                {Object.entries(message.reactions).map(([emoji, users]) => (
+                  <span
+                    key={emoji}
+                    className="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
+                  >
+                    {emoji} {users.length}
+                  </span>
+                ))}
+              </div>
+            )}
             {message.isRecalled ? (
               <div className="text-sm italic text-center py-1">
                 <p>Tin nhắn đã thu hồi</p>
@@ -460,8 +476,17 @@ const MessageItem = ({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
-
-
+          <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition">
+            {emojis.map((emoji) => (
+              <button
+                key={emoji}
+                onClick={() => handleReact(emoji)}
+                className="hover:scale-125"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
           {/* STATUS */}
           {isOwn &&
             message._id === selectedConvo.lastMessage?._id && (

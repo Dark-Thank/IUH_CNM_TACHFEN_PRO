@@ -98,4 +98,7 @@ export interface Message {
   }[];
   createdAt: string;
   isOwn?: boolean;
+  reactions?: {
+    [emoji: string]: string[]; 
+  };
 }

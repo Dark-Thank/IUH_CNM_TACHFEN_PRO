@@ -146,6 +146,16 @@ const messageSchema = new mongoose.Schema({
     recalledAt: {
         type: Date
     },
+    reactions: {
+        type: Map,
+        of: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User"
+            }
+        ],
+        default: {}
+    },
     recallBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"

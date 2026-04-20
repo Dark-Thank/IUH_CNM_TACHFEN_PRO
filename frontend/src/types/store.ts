@@ -69,6 +69,7 @@ export interface ChatState {
     name: string,
     memberIds: string[]
   ) => Promise<void>;
+  reactToMessage: (messageId: string, emoji: string) => Promise<void>;
 }
 
 export interface SocketState {

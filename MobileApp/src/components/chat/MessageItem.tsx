@@ -49,14 +49,13 @@ export default function MessageItem({
 }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, recallMessage, togglePinMessage } = useChatStore();
+  const { conversations, forwardMessage, recallMessage, togglePinMessage, updateMessage } = useChatStore();
   const currentUserId = user?._id;
 
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [showForwardPicker, setShowForwardPicker] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
-
   const previous = previousMessage ?? messages[index - 1];
   const previousCreatedAt = previous?.createdAt
     ? new Date(previous.createdAt).getTime()
@@ -98,13 +97,18 @@ export default function MessageItem({
   };
 
   const handleLongPress = () => {
-    if (!canTogglePin && !canRecall) {
-      return;
-    }
-
     setShowActions(true);
   };
-
+  const handleReact = async (emoji: string) => {
+    try {
+      const res = await chatService.reactMessage(message._id, emoji);
+      updateMessage(res.message);
+    } catch (err) {
+      console.error("React lỗi:", err);
+    } finally {
+      setShowActions(false);
+    }
+  };
   const handleTogglePin = () => {
     closeActions();
     void togglePinMessage(message._id);
@@ -282,7 +286,9 @@ export default function MessageItem({
       </View>
     );
   };
+  {
 
+  }
   const renderPinIcon = () => {
     if (!message.isPinned || message.isRecalled) {
       return null;
@@ -332,6 +338,7 @@ export default function MessageItem({
             { alignItems: isOwn ? "flex-end" : "flex-start" },
           ]}
         >
+
           <Pressable
             onLongPress={handleLongPress}
             delayLongPress={260}
@@ -349,6 +356,34 @@ export default function MessageItem({
             {renderContent()}
             {renderPinIcon()}
           </Pressable>
+          {message.reactions && Object.keys(message.reactions).length > 0 && (
+            <View style={styles.reactionRow}>
+              {Object.entries(message.reactions).map(([emoji, users]) => {
+                const isMine = users.includes(currentUserId!);
+
+                return (
+                  <Pressable
+                    key={emoji}
+                    onPress={() => handleReact(emoji)}
+                    style={[
+                      styles.reactionItem,
+                      {
+                        backgroundColor: isMine
+                          ? "#a78bfa"
+                          : isDark
+                            ? "#1f2937"
+                            : "#e5e7eb",
+                      },
+                    ]}
+                  >
+                    <Text style={{ fontSize: 12 }}>
+                      {emoji} {users.length}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
 
           {isOwn && message._id === selectedConvo.lastMessage?._id ? (
             <View
@@ -418,7 +453,19 @@ export default function MessageItem({
                 borderColor: isDark ? "#1f2937" : "#e2e8f0",
               },
             ]}
+
           >
+            <View style={styles.reactionPicker}>
+              {["👍", "❤️", "😂", "😮", "😢", "😡"].map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  onPress={() => handleReact(emoji)}
+                  style={styles.reactionBtn}
+                >
+                  <Text style={{ fontSize: 24 }}>{emoji}</Text>
+                </Pressable>
+              ))}
+            </View>
             <Text
               style={[
                 styles.actionTitle,
@@ -665,15 +712,15 @@ const styles = StyleSheet.create({
   fullImage: { width: "100%", height: "100%" },
   actionRoot: {
     flex: 1,
-    justifyContent: "flex-end",
+    justifyContent: "center", // 
+    alignItems: "center",
   },
   actionBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(15, 23, 42, 0.42)",
   },
   actionSheet: {
-    marginHorizontal: 12,
-    marginBottom: 12,
+    width: "85%",
     borderRadius: 24,
     borderWidth: 1,
     paddingHorizontal: 16,
@@ -711,5 +758,29 @@ const styles = StyleSheet.create({
   },
   actionDangerText: {
     color: "#ef4444",
+  },
+  reactionPicker: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 10,
+    marginBottom: 10,
+    backgroundColor: "#00000010",
+    borderRadius: 16,
+  },
+
+  reactionBtn: {
+    padding: 6,
+  },
+
+  reactionRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 4,
+  },
+
+  reactionItem: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
   },
 });
