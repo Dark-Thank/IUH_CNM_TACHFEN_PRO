@@ -64,6 +64,11 @@ export const chatService = {
     return res.data;
   },
 
+  async markMessageDelivered(messageId: string) {
+    const res = await api.post(`/messages/${messageId}/delivered`);
+    return res.data.message;
+  },
+
   async createConversation(
     type: "direct" | "group",
     name: string,

@@ -80,6 +80,8 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  deliveredTo?: string[];
+  seenBy?: string[];
   replyTo?: ReplyToMessage | null;
   forwardedFrom?: {
     messageId: string;

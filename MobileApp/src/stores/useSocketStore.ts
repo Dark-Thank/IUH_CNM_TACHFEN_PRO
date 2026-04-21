@@ -1,6 +1,7 @@
 import { authSession } from "@/lib/authSession";
 import { getSocketOrigin, warnIfLocalOnlyRealtimeConfig } from "@/lib/backendUrl";
 import { socketEmitter } from "@/lib/socketEmitter";
+import { chatService } from "@/services/chatServiec";
 import type { SocketState } from "@/types/store";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
 import type { Socket } from "socket.io-client";
@@ -145,7 +146,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     socket.on("new-message", ({ message, conversation, unreadCounts }) => {
+      const currentUserId = authSession.getCurrentUserId();
+
       useChatStore.getState().addMessage(message);
+
+      if (currentUserId && message.senderId !== currentUserId) {
+        void chatService.markMessageDelivered(message._id).catch((error) => {
+          console.error("Loi khi cap nhat trang thai da nhan:", error);
+        });
+      }
 
       const lastMessage = {
         _id: conversation.lastMessage._id,

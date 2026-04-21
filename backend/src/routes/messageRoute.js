@@ -2,6 +2,7 @@ import express from 'express';
 import {
   deleteMessageForMe,
   downloadMessageFile,
+  markMessageDelivered,
   recallMessage,
   sendDirectMessage,
   sendGroupMessage,
@@ -24,6 +25,7 @@ const messageUpload = withUploadErrorHandling(
 router.put('/:messageId/pin', protectedRoute, togglePinMessage);
 router.put('/:messageId/recall', protectedRoute, recallMessage);
 router.put('/:messageId/delete-for-me', protectedRoute, deleteMessageForMe);
+router.post('/:messageId/delivered', protectedRoute, markMessageDelivered);
 router.get('/:messageId/files/:fileIndex', protectedRoute, downloadMessageFile);
 router.post("/:messageId/reaction", protectedRoute, toggleReaction);
 router.post(

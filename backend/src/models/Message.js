@@ -209,7 +209,21 @@ const messageSchema = new mongoose.Schema({
     deletedForUsers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: "User"
-    }]
+    }],
+    deliveredTo: {
+        type: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }],
+        default: [],
+    },
+    seenBy: {
+        type: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }],
+        default: [],
+    },
 
 }, { timestamps: true }
 

@@ -15,7 +15,6 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
         messages: allMessages,
         fetchMessages,
     } = useChatStore();
-    const [lastMessageStatus, setLastMessageStatus] = useState<"delivered" | "seen">("delivered");
     const [showScrollToLatest, setShowScrollToLatest] = useState(false);
 
     const messages = allMessages[activeConversationId ?? ""]?.items ?? [];
@@ -39,17 +38,6 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
     //ref
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        const lastMessage = selectedConvo?.lastMessage;
-        if (!lastMessage) {
-            return;
-        }
-
-        const seenBy = selectedConvo?.seenBy ?? [];
-
-        setLastMessageStatus(seenBy.length > 0 ? "seen" : "delivered");
-    }, [selectedConvo]);
 
     //keo xuong duoi khi load convo
     useLayoutEffect(() => {
@@ -137,7 +125,7 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
                 {isBlocked && (
                     <div className="p-4 pb-3 bg-primary-foreground">
                         <div className="px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
-                            <AlertCircle className="size-4 flex-shrink-0" />
+                            <AlertCircle className="size-4 shrink-0" />
                             <span>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
                         </div>
                     </div>
@@ -159,7 +147,7 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
             )}
             {isBlocked && (
                 <div className="mb-3 px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
-                    <AlertCircle className="size-4 flex-shrink-0" />
+                    <AlertCircle className="size-4 shrink-0" />
                     <span>Bạn đã chặn người này. Không thể gửi tin nhắn.</span>
                 </div>
             )}
@@ -189,7 +177,6 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
                             index={index}
                             messages={reversedMessages}
                             selectedConvo={selectedConvo}
-                            lastMessageStatus={lastMessageStatus}
                         />
                     ))}
                 </InfiniteScroll>

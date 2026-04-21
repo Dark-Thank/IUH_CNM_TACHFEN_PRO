@@ -25,13 +25,64 @@ import {
 import RecallConfirmDialog from "./RecallConfirmDialog";
 import UserAvatar from "./UserAvatar";
 
+const MESSAGE_RECEIPT_LABELS = {
+  sent: "Đã gửi",
+  delivered: "Đã nhận",
+  seen: "Đã xem",
+} as const;
+
+const MESSAGE_RECEIPT_STYLES: Record<MessageReceiptStatus, { chip: string; text: string }> = {
+  sent: {
+    chip: "bg-muted/70 border-border/70",
+    text: "text-muted-foreground",
+  },
+  delivered: {
+    chip: "bg-sky-500/10 border-sky-500/20",
+    text: "text-sky-700 dark:text-sky-300",
+  },
+  seen: {
+    chip: "bg-violet-500/10 border-violet-500/20",
+    text: "text-violet-700 dark:text-violet-300",
+  },
+};
+
+type MessageReceiptStatus = keyof typeof MESSAGE_RECEIPT_LABELS;
+
+const ReceiptUserList = ({
+  participants,
+  emptyText,
+}: {
+  participants: Participant[];
+  emptyText: string;
+}) => {
+  if (participants.length === 0) {
+    return <p className="mt-1 text-muted-foreground">{emptyText}</p>;
+  }
+
+  return (
+    <div className="mt-2 space-y-2">
+      {participants.map((item) => (
+        <div
+          key={item._id}
+          className="flex items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2"
+        >
+          <UserAvatar
+            type="chat"
+            name={item.displayName}
+            avatarUrl={item.avatarUrl ?? undefined}
+          />
+          <span className="text-foreground">{item.displayName}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 interface MessageItemProps {
   message: Message;
   index: number;
   messages: Message[];
   selectedConvo: Conversation;
-  lastMessageStatus: "delivered" | "seen";
 }
 
 const getCallTypeLabel = (callType?: "audio" | "video") =>
@@ -175,11 +226,11 @@ const MessageItem = ({
   index,
   messages,
   selectedConvo,
-  lastMessageStatus,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
   const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage, setReplyingMessage } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
 
@@ -208,6 +259,7 @@ const MessageItem = ({
   );
 
   const isOwn = Boolean(message.isOwn);
+  const isLastOwnMessage = isOwn && message._id === selectedConvo.lastMessage?._id;
   const isDeletedForCurrentUser = message.deletedForUsers?.includes(user?._id || "") ?? false;
   const isCallMessage = message.messageType === "call" && Boolean(message.callMeta);
   const isVoice = isVoiceMessage(message);
@@ -225,6 +277,29 @@ const MessageItem = ({
       ? "Bạn"
       : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thành viên")
     : "";
+  const receiptTargets = selectedConvo.participants.filter((item) => item._id !== message.senderId);
+  const deliveredSet = new Set((message.deliveredTo || []).map((item) => item.toString()));
+  const seenSet = new Set((message.seenBy || []).map((item) => item.toString()));
+  const seenParticipants = receiptTargets.filter((item) => seenSet.has(item._id));
+  const deliveredOnlyParticipants = receiptTargets.filter(
+    (item) => deliveredSet.has(item._id) && !seenSet.has(item._id)
+  );
+  const pendingParticipants = receiptTargets.filter((item) => !deliveredSet.has(item._id));
+  const receiptStatus: MessageReceiptStatus = seenParticipants.length > 0
+    ? "seen"
+    : deliveredSet.size > 0
+      ? "delivered"
+      : "sent";
+  const receiptProgress = receiptTargets.length > 1
+    ? `${receiptStatus === "seen" ? seenParticipants.length : deliveredSet.size}/${receiptTargets.length}`
+    : "";
+  const receiptSummary = receiptProgress
+    ? `${MESSAGE_RECEIPT_LABELS[receiptStatus]} ${receiptProgress}`
+    : MESSAGE_RECEIPT_LABELS[receiptStatus];
+  const canViewReceiptDetails = isOwn && selectedConvo.type === "group";
+  const showTimeSeparator = isShowTime && !isLastOwnMessage;
+  const messageFooterTime = formatMessageTime(new Date(message.createdAt));
+  const receiptTone = MESSAGE_RECEIPT_STYLES[receiptStatus];
 
   const getConversationLabel = (conversation: Conversation) => {
     if (conversation.type === "group") {
@@ -265,11 +340,19 @@ const MessageItem = ({
     setReplyingMessage(message);
   };
 
+  const openReceiptDetails = () => {
+    if (!canViewReceiptDetails) {
+      return;
+    }
+
+    setReceiptDialogOpen(true);
+  };
+
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
   return (
     <>
       {/* TIME */}
-      {isShowTime && (
+      {showTimeSeparator && (
         <span className="flex justify-center text-xs text-muted-foreground px-1">
           {formatMessageTime(new Date(message.createdAt))}
         </span>
@@ -490,6 +573,12 @@ const MessageItem = ({
                 </DropdownMenuItem>
               )}
 
+              {canViewReceiptDetails && (
+                <DropdownMenuItem onClick={openReceiptDetails}>
+                  Xem trạng thái
+                </DropdownMenuItem>
+              )}
+
               {/* {isOwn && !message.isRecalled && (
                 <RecallConfirmDialog messageId={message._id}>
                   <DropdownMenuItem className="gap-2 text-destructive cursor-pointer">
@@ -536,17 +625,39 @@ const MessageItem = ({
               </button>
             ))}
           </div>
-          {/* STATUS */}
-          {isOwn &&
-            message._id === selectedConvo.lastMessage?._id && (
-              <div className="absolute -bottom-4 right-0">
-                <Badge variant="outline" className="text-[10px]">
-                  {lastMessageStatus}
-                </Badge>
-              </div>
-            )}
         </div>
       </div>
+
+      {isLastOwnMessage ? (
+        <div className="mt-1 flex items-center justify-end gap-1.5 pr-9 text-[11px] leading-none text-muted-foreground">
+          <span>{messageFooterTime}</span>
+          <span className="opacity-50">•</span>
+          {canViewReceiptDetails ? (
+            <button
+              type="button"
+              onClick={openReceiptDetails}
+              className={cn(
+                "inline-flex items-center rounded-full border px-2 py-1 font-medium transition",
+                receiptTone.chip,
+                receiptTone.text,
+                "hover:opacity-80"
+              )}
+            >
+              {receiptSummary}
+            </button>
+          ) : (
+            <span
+              className={cn(
+                "inline-flex items-center rounded-full border px-2 py-1 font-medium",
+                receiptTone.chip,
+                receiptTone.text
+              )}
+            >
+              {receiptSummary}
+            </span>
+          )}
+        </div>
+      ) : null}
 
       <Dialog open={forwardDialogOpen} onOpenChange={setForwardDialogOpen}>
         <DialogContent className="max-w-md">
@@ -584,6 +695,50 @@ const MessageItem = ({
                 </button>
               ))
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={receiptDialogOpen} onOpenChange={setReceiptDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trạng thái tin nhắn</DialogTitle>
+            <DialogDescription>
+              Theo dõi thành viên nào đã nhận và đã xem tin nhắn trong nhóm.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <p>{message.content || "Tin nhắn đính kèm"}</p>
+              <p className="mt-1 text-xs">{messageFooterTime}</p>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="font-semibold text-foreground">Đã xem ({seenParticipants.length})</p>
+                <ReceiptUserList
+                  participants={seenParticipants}
+                  emptyText="Chưa có ai xem tin nhắn này."
+                />
+              </div>
+
+              <div>
+                <p className="font-semibold text-foreground">Đã nhận ({deliveredOnlyParticipants.length})</p>
+                <ReceiptUserList
+                  participants={deliveredOnlyParticipants}
+                  emptyText="Chưa có ai chỉ mới nhận mà chưa xem."
+                />
+              </div>
+
+              <div>
+                <p className="font-semibold text-foreground">Đã gửi ({pendingParticipants.length})</p>
+                <ReceiptUserList
+                  participants={pendingParticipants}
+                  emptyText="Tất cả thành viên còn lại đã nhận tin nhắn này."
+                />
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

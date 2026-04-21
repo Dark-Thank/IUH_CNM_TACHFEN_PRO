@@ -63,8 +63,36 @@ interface MessageItemProps {
   messages: Message[];
   previousMessage?: Message;
   selectedConvo: Conversation;
-  lastMessageStatus: "delivered" | "seen";
 }
+
+const MESSAGE_RECEIPT_LABELS = {
+  sent: "Da gui",
+  delivered: "Da nhan",
+  seen: "Da xem",
+} as const;
+
+type MessageReceiptStatus = keyof typeof MESSAGE_RECEIPT_LABELS;
+
+const getReceiptTone = (status: MessageReceiptStatus, isDark: boolean) => {
+  if (status === "seen") {
+    return {
+      backgroundColor: isDark ? "#312e81" : "#ede9fe",
+      textColor: isDark ? "#c4b5fd" : "#6d28d9",
+    };
+  }
+
+  if (status === "delivered") {
+    return {
+      backgroundColor: isDark ? "#0f3b4c" : "#e0f2fe",
+      textColor: isDark ? "#67e8f9" : "#0369a1",
+    };
+  }
+
+  return {
+    backgroundColor: isDark ? "#1f2937" : "#e2e8f0",
+    textColor: isDark ? "#94a3b8" : "#64748b",
+  };
+};
 
 export default function MessageItem({
   message,
@@ -72,7 +100,6 @@ export default function MessageItem({
   messages,
   previousMessage,
   selectedConvo,
-  lastMessageStatus,
 }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
@@ -91,6 +118,7 @@ export default function MessageItem({
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [showActions, setShowActions] = useState(false);
   const [showForwardPicker, setShowForwardPicker] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const previous = previousMessage ?? messages[index - 1];
   const previousCreatedAt = previous?.createdAt
@@ -99,6 +127,7 @@ export default function MessageItem({
   const currentCreatedAt = new Date(message.createdAt).getTime();
 
   const isOwn = !!message.isOwn || message.senderId === currentUserId;
+  const isLastOwnMessage = isOwn && message._id === selectedConvo.lastMessage?._id;
   const isShowTime = !previous || currentCreatedAt - previousCreatedAt > 300000;
   const isGroupBreak = isShowTime || message.senderId !== previous?.senderId;
 
@@ -129,6 +158,28 @@ export default function MessageItem({
       ? "Ban"
       : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thanh vien")
     : "";
+  const receiptTargets = selectedConvo.participants.filter((item) => item._id !== message.senderId);
+  const deliveredSet = new Set((message.deliveredTo || []).map((item) => item.toString()));
+  const seenSet = new Set((message.seenBy || []).map((item) => item.toString()));
+  const seenParticipants = receiptTargets.filter((item) => seenSet.has(item._id));
+  const deliveredOnlyParticipants = receiptTargets.filter(
+    (item) => deliveredSet.has(item._id) && !seenSet.has(item._id)
+  );
+  const pendingParticipants = receiptTargets.filter((item) => !deliveredSet.has(item._id));
+  const receiptStatus: MessageReceiptStatus = seenParticipants.length > 0
+    ? "seen"
+    : deliveredSet.size > 0
+      ? "delivered"
+      : "sent";
+  const receiptProgress = receiptTargets.length > 1
+    ? `${receiptStatus === "seen" ? seenParticipants.length : deliveredSet.size}/${receiptTargets.length}`
+    : "";
+  const receiptSummary = receiptProgress
+    ? `${MESSAGE_RECEIPT_LABELS[receiptStatus]} ${receiptProgress}`
+    : MESSAGE_RECEIPT_LABELS[receiptStatus];
+  const canViewReceiptDetails = isOwn && selectedConvo.type === "group";
+  const showTimeSeparator = isShowTime && !isLastOwnMessage;
+  const receiptTone = getReceiptTone(receiptStatus, isDark);
 
   const closeActions = () => setShowActions(false);
 
@@ -218,6 +269,50 @@ export default function MessageItem({
       Alert.alert("Tai file that bai", "Khong the tai tep dinh kem nay.");
     }
   };
+
+  const handleShowReceiptDetails = () => {
+    setShowReceiptModal(true);
+  };
+
+  const renderReceiptSection = (
+    title: string,
+    participants: Participant[],
+    emptyText: string
+  ) => (
+    <View style={styles.receiptSection}>
+      <Text style={[styles.receiptSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+        {title}
+      </Text>
+
+      {participants.length === 0 ? (
+        <Text style={[styles.receiptEmptyText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+          {emptyText}
+        </Text>
+      ) : (
+        participants.map((item) => (
+          <View
+            key={item._id}
+            style={[
+              styles.receiptUserRow,
+              {
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#334155" : "#e2e8f0",
+              },
+            ]}
+          >
+            <UserAvatar
+              name={item.displayName}
+              avatarUrl={item.avatarUrl}
+              size={32}
+            />
+            <Text style={[styles.receiptUserName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              {item.displayName}
+            </Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
 
   const renderContent = () => {
     if (message.isRecalled) {
@@ -364,7 +459,7 @@ export default function MessageItem({
 
   return (
     <View style={styles.wrapper}>
-      {isShowTime ? (
+      {showTimeSeparator ? (
         <Text
           style={[styles.timeText, { color: isDark ? "#94a3b8" : "#64748b" }]}
         >
@@ -443,37 +538,32 @@ export default function MessageItem({
             </View>
           )}
 
-          {isOwn && message._id === selectedConvo.lastMessage?._id ? (
-            <View
-              style={[
-                styles.statusPill,
-                {
-                  backgroundColor:
-                    lastMessageStatus === "seen"
-                      ? isDark
-                        ? "#312e81"
-                        : "#ede9fe"
-                      : isDark
-                        ? "#1f2937"
-                        : "#e2e8f0",
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  fontSize: 10,
-                  color:
-                    lastMessageStatus === "seen"
-                      ? isDark
-                        ? "#c4b5fd"
-                        : "#6d28d9"
-                      : isDark
-                        ? "#94a3b8"
-                        : "#64748b",
-                }}
-              >
-                {lastMessageStatus === "seen" ? "Da xem" : "Da gui"}
+          {isLastOwnMessage ? (
+            <View style={styles.metaRow}>
+              <Text style={[styles.metaText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                {formatMessageTime(new Date(message.createdAt))}
               </Text>
+              <Text style={[styles.metaDot, { color: isDark ? "#64748b" : "#94a3b8" }]}>•</Text>
+              <Pressable
+                disabled={!canViewReceiptDetails}
+                onPress={canViewReceiptDetails ? handleShowReceiptDetails : undefined}
+                style={[
+                  styles.statusPill,
+                  {
+                    backgroundColor: receiptTone.backgroundColor,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    color: receiptTone.textColor,
+                    fontWeight: "600",
+                  }}
+                >
+                  {receiptSummary}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
@@ -595,6 +685,31 @@ export default function MessageItem({
                   ]}
                 >
                   Chuyen tiep
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {canViewReceiptDetails ? (
+              <Pressable
+                onPress={() => {
+                  closeActions();
+                  handleShowReceiptDetails();
+                }}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    { color: isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  Xem trang thai
                 </Text>
               </Pressable>
             ) : null}
@@ -758,6 +873,66 @@ export default function MessageItem({
           </View>
         </View>
       </Modal>
+
+      <Modal
+        visible={showReceiptModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowReceiptModal(false)}
+      >
+        <View style={styles.actionRoot}>
+          <Pressable style={styles.actionBackdrop} onPress={() => setShowReceiptModal(false)} />
+
+          <View
+            style={[
+              styles.receiptModalCard,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text style={[styles.actionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Trang thai tin nhan
+            </Text>
+
+            <Text style={[styles.receiptMessageTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              {formatMessageTime(new Date(message.createdAt))}
+            </Text>
+
+            {renderReceiptSection(
+              `Da xem (${seenParticipants.length})`,
+              seenParticipants,
+              "Chua co ai xem tin nhan nay."
+            )}
+            {renderReceiptSection(
+              `Da nhan (${deliveredOnlyParticipants.length})`,
+              deliveredOnlyParticipants,
+              "Chua co ai chi moi nhan ma chua xem."
+            )}
+            {renderReceiptSection(
+              `Da gui (${pendingParticipants.length})`,
+              pendingParticipants,
+              "Tat ca thanh vien con lai da nhan tin nhan nay."
+            )}
+
+            <Pressable
+              onPress={() => setShowReceiptModal(false)}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                Dong
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -768,6 +943,53 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   avatarSlot: { width: 34, alignItems: "center" },
   messageColumn: { maxWidth: "78%" },
+  receiptModalCard: {
+    width: "85%",
+    maxHeight: "80%",
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 12,
+  },
+  receiptMessageTime: {
+    fontSize: 12,
+    textAlign: "center",
+  },
+  receiptSection: {
+    gap: 8,
+  },
+  receiptSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  receiptEmptyText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  receiptUserRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  receiptUserName: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  metaRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 6,
+  },
+  metaText: { fontSize: 11, lineHeight: 14 },
+  metaDot: { fontSize: 12, lineHeight: 14 },
   bubble: {
     borderRadius: 20,
     paddingHorizontal: 14,
@@ -810,9 +1032,8 @@ const styles = StyleSheet.create({
   pinIconContainer: { position: "absolute", top: 4, right: 4 },
   statusPill: {
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginTop: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   fileBox: {
     marginTop: 6,

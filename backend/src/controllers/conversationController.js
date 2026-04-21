@@ -24,7 +24,29 @@ const conversationPopulate = [
 
 const pair = (a, b) => (a < b ? [a, b] : [b, a]);
 
-const normalizeId = (value) => value?.toString?.() || null;
+const normalizeId = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    if (value._id) {
+        return value._id.toString();
+    }
+
+    if (value.id) {
+        return value.id.toString();
+    }
+
+    if (typeof value.toString === "function") {
+        return value.toString();
+    }
+
+    return null;
+};
 
 const dedupeIds = (values = [], excludedIds = []) => {
     const excluded = new Set(excludedIds.map((value) => normalizeId(value)).filter(Boolean));
@@ -349,6 +371,32 @@ export const markAsSeen = async (req, res) => {
 
         if (last.senderId.toString() === userId) {
             return res.status(200).json({ message: "Sender khong can Mark as seen" });
+        }
+
+        const unreadMessages = await Message.find({
+            conversationId,
+            senderId: { $ne: userId },
+            seenBy: { $ne: userId },
+        });
+
+        if (unreadMessages.length > 0) {
+            await Message.updateMany(
+                { _id: { $in: unreadMessages.map((message) => message._id) } },
+                {
+                    $addToSet: {
+                        deliveredTo: userId,
+                        seenBy: userId,
+                    },
+                }
+            );
+
+            const refreshedMessages = await Message.find({
+                _id: { $in: unreadMessages.map((message) => message._id) },
+            });
+
+            refreshedMessages.forEach((message) => {
+                io.to(conversationId).emit("update-message", { message });
+            });
         }
 
         const updated = await Conversation.findByIdAndUpdate(

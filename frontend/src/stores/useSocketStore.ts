@@ -1,3 +1,4 @@
+import { chatService } from "@/services/chatServiec";
 import type { SocketState } from "@/types/store";
 import { io, type Socket } from "socket.io-client";
 import { create } from "zustand";
@@ -121,7 +122,15 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     // new message
     socket.on("new-message", ({ message, conversation, unreadCounts }) => {
+      const currentUserId = useAuthStore.getState().user?._id;
+
       useChatStore.getState().addMessage(message);
+
+      if (currentUserId && message.senderId !== currentUserId) {
+        void chatService.markMessageDelivered(message._id).catch((error) => {
+          console.error("Lỗi khi cập nhật trạng thái đã nhận:", error);
+        });
+      }
 
       const lastMessage = {
         _id: conversation.lastMessage._id,

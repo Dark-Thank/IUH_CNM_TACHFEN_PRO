@@ -375,8 +375,6 @@ export default function ChatAppScreen() {
   const hasMoreMessages = selectedConvo ? messages[selectedConvo._id]?.hasMore ?? false : false;
   const latestMessageId = messageItems[messageItems.length - 1]?._id;
 
-  const lastMessageStatus: "delivered" | "seen" =
-    (selectedConvo?.seenBy?.length ?? 0) > 0 ? "seen" : "delivered";
   const typingLabel = typingUsers.length === 0
     ? ""
     : typingUsers.length === 1
@@ -1155,7 +1153,6 @@ export default function ChatAppScreen() {
                 messages={messageItems}
                 previousMessage={index > 0 ? messageItems[index - 1] : undefined}
                 selectedConvo={selectedConvo}
-                lastMessageStatus={lastMessageStatus}
               />
             )}
           />

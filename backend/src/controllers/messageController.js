@@ -734,6 +734,47 @@ export const deleteMessageForMe = async (req, res) => {
   }
 };
 
+export const markMessageDelivered = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id.toString();
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ message: "Tin nhắn không tồn tại" });
+    }
+
+    const isParticipant = await Conversation.exists({
+      _id: message.conversationId,
+      "participants.userId": userId,
+    });
+
+    if (!isParticipant) {
+      return res.status(403).json({ message: "Bạn không có quyền cập nhật trạng thái tin nhắn này" });
+    }
+
+    if (message.senderId.toString() === userId) {
+      return res.status(200).json({ message });
+    }
+
+    const alreadyDelivered = (message.deliveredTo || []).some(
+      (deliveredUserId) => deliveredUserId.toString() === userId
+    );
+
+    if (!alreadyDelivered) {
+      message.deliveredTo.push(userId);
+      await message.save();
+      io.to(message.conversationId.toString()).emit("update-message", { message });
+    }
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Lỗi khi cập nhật đã nhận tin nhắn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
+  }
+};
+
 export const downloadMessageFile = async (req, res) => {
   try {
     const { messageId, fileIndex } = req.params;

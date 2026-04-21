@@ -80,6 +80,8 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  deliveredTo?: string[];
+  seenBy?: string[];
   messageType?: "text" | "call" | "voice";
   callMeta?: CallMeta | null;
   voiceMeta?: VoiceMeta | null;
