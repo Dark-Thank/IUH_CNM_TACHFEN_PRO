@@ -1,7 +1,8 @@
 import { useFriendStore } from "@/stores/useFriendStore";
 import type { Friend } from "@/types/user";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, UserPlus } from "lucide-react";
 import { useState } from "react";
+import AddFriendModal from "./AddFriendModal";
 import FriendListModal from "../createNewChat/FriendListModal";
 import { ProfileModal } from "../createNewChat/ProfileModal";
 import { Card } from "../ui/card";
@@ -24,21 +25,36 @@ function CreateNewChat() {
   };
 
   return (
-    <div className="flex gap-2">
+    <div>
       <Card
-        className="flex-1 p-3 glass hover:shadow-soft transition-smooth cursor-pointer group/card"
+        className="glass cursor-pointer p-3 transition-smooth hover:shadow-soft group/card"
         onClick={() => {
           handleGetFriends();
           setShowFriendList(true);
         }}
       >
-        <div className="flex items-center gap-4">
-          <div className="size-8 bg-gradient-chat rounded-full flex items-center justify-center group-hover/card:scale-110 transition-bounce">
-            <MessageCircle className="size-4 text-white" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-chat transition-bounce group-hover/card:scale-110">
+              <MessageCircle className="size-4 text-white" />
+            </div>
+            <span className="truncate text-sm font-medium capitalize">
+              Danh sách bạn bè
+            </span>
           </div>
-          <span className="text-sm font-medium capitalize">
-            Danh sách bạn bè
-          </span>
+
+          <AddFriendModal
+            trigger={
+              <button
+                type="button"
+                onClick={(event) => event.stopPropagation()}
+                className="flex size-9 shrink-0 items-center justify-center rounded-full border border-border/70 bg-background/80 text-muted-foreground transition hover:border-primary/30 hover:text-primary"
+              >
+                <UserPlus className="size-4" />
+                <span className="sr-only">Kết bạn</span>
+              </button>
+            }
+          />
         </div>
       </Card>
 
@@ -46,10 +62,10 @@ function CreateNewChat() {
         <FriendListModal onSelectFriend={handleSelectFriend} onClose={() => setShowFriendList(false)} />
       </Dialog>
 
-      <ProfileModal 
-        friend={selectedFriend} 
-        open={showProfile} 
-        onOpenChange={setShowProfile} 
+      <ProfileModal
+        friend={selectedFriend}
+        open={showProfile}
+        onOpenChange={setShowProfile}
       />
     </div>
   )

@@ -1,25 +1,30 @@
 import { useFriendStore } from "@/stores/useFriendStore";
+import { cn } from "@/lib/utils";
 import type { User } from "@/types/user";
 import { UserPlus } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import SearchForm from "../addFriendModal/SearchForm";
 import SendFriendRequestForm from "../addFriendModal/SendFriendRequestForm";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "../ui/dialog";
 export interface IFormValues {
   username: string;
   message: string;
 }
 
+interface AddFriendModalProps {
+  trigger?: ReactNode;
+  triggerClassName?: string;
+}
 
-function AddFriendModal() {
+function AddFriendModal({ trigger, triggerClassName }: AddFriendModalProps) {
   const [isFound, setIsFound] = useState<boolean | null>(null);
   const [searchUser, setSearchUser] = useState<User>();
   const [searchedUsername, setSearchedUsername] = useState("");
@@ -63,9 +68,9 @@ function AddFriendModal() {
 
     try {
       const message = await addFriend(
-          searchUser._id,
-          (data.message ?? "").trim()
-);
+        searchUser._id,
+        (data.message ?? "").trim()
+      );
       toast.success(message);
 
       handleCancel();
@@ -83,13 +88,21 @@ function AddFriendModal() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <div className="flex justify-center items-center size-5 rounded-full hover:bg-sidebar-accent cursor-pointer z-10">
-          <UserPlus className="size-4" />
-          <span className="sr-only">Kết bạn</span>
-        </div>
+        {trigger ?? (
+          <button
+            type="button"
+            className={cn(
+              "z-10 flex cursor-pointer items-center justify-center rounded-full hover:bg-sidebar-accent",
+              triggerClassName ?? "size-5"
+            )}
+          >
+            <UserPlus className="size-4" />
+            <span className="sr-only">Kết bạn</span>
+          </button>
+        )}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[425px] border-none">
+      <DialogContent className="sm:max-w-md border-none">
         <DialogHeader>
           <DialogTitle>Kết Bạn</DialogTitle>
         </DialogHeader>

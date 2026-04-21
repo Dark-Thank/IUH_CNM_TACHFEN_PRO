@@ -1,5 +1,6 @@
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useRef, useState } from "react";
+import { Card } from "../ui/card";
 import {
   Dialog,
   DialogContent,
@@ -98,17 +99,22 @@ const NewGroupChatModal = () => {
       }}
     >
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
+        <Card
           onClick={handleGetFriends}
-          className="flex z-10 justify-center items-center size-5 rounded-full hover:bg-sidebar-accent transition cursor-pointer"
+          className="glass cursor-pointer p-3 transition-smooth hover:shadow-soft group/card"
         >
-          <Users className="size-4" />
-          <span className="sr-only">Tạo nhóm</span>
-        </Button>
+          <div className="flex items-center gap-4">
+            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-chat transition-bounce group-hover/card:scale-110">
+              <Users className="size-4 text-white" />
+            </div>
+            <span className="truncate text-sm font-medium capitalize">
+              Tạo nhóm mới
+            </span>
+          </div>
+        </Card>
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-[425px] border-none">
+      <DialogContent className="sm:max-w-106.25 border-none">
         <DialogHeader>
           <DialogTitle className="capitalize">tạo nhóm chat mới</DialogTitle>
         </DialogHeader>

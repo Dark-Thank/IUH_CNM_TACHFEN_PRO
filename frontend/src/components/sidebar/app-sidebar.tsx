@@ -9,7 +9,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
@@ -23,7 +22,6 @@ import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
-import AddFriendModal from "../chat/AddFriendModal";
 import DirectMessageList from "../chat/DirectMessageList";
 import { useThemeStore } from "@/stores/useThemeStore"
 import { useAuthStore } from "@/stores/useAuthStore"
@@ -66,11 +64,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarGroup>
         {/* Group Chat */}
         <SidebarGroup>
-          <div className="flex items-center justify-between">
-            <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
-            <NewGroupChatModal />
-          </div>
+          <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
           <SidebarGroupContent>
+            <div className="mb-3">
+              <NewGroupChatModal />
+            </div>
             {convoLoading ? <ConversationSkeleton /> : <GroupChatList />}
           </SidebarGroupContent>
         </SidebarGroup>
@@ -78,13 +76,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {/* Dirrect Message */}
         <SidebarGroup>
           <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
-          <SidebarGroupAction
-            title="Kết Bạn"
-            className="cursor-pointer"
-          >
-            <AddFriendModal />
-          </SidebarGroupAction>
-
           <SidebarGroupContent>
             <DirectMessageList />
           </SidebarGroupContent>
