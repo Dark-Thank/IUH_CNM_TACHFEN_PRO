@@ -10,6 +10,40 @@ import ChatWindowBody from "./ChatWindowBody";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowSkeleton from "./ChatWindowSkeleton";
 import MessageInput from "./MessageInput";
+import UserAvatar from "./UserAvatar";
+
+const TypingIndicatorBubble = ({
+  displayName,
+  avatarUrl,
+  summary,
+}: {
+  displayName: string;
+  avatarUrl?: string | null;
+  summary: string;
+}) => (
+  <div className="pointer-events-none absolute bottom-full left-4 z-20 mb-2">
+    <div className="inline-flex max-w-[18rem] items-center gap-3 rounded-2xl border border-white/8 bg-slate-950/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+      <UserAvatar
+        type="chat"
+        name={displayName || "Ai đó"}
+        avatarUrl={avatarUrl ?? undefined}
+      />
+
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-white/90">{summary}</p>
+        <div className="mt-1 flex items-center gap-1.5">
+          {[0, 1, 2].map((index) => (
+            <span
+              key={index}
+              className="size-1.5 rounded-full bg-violet-400 animate-bounce"
+              style={{ animationDelay: `${index * 0.15}s`, animationDuration: "0.9s" }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const ChatWindowLayout = () => {
   const {
@@ -107,6 +141,9 @@ const ChatWindowLayout = () => {
     : typingUsers.length === 1
       ? `${typingUsers[0].displayName || "Ai đó"} đang soạn tin nhắn`
       : `${typingUsers[0].displayName || "Ai đó"} và ${typingUsers.length - 1} người khác đang soạn tin nhắn`;
+  const typingLeadUser = typingUsers.length > 0
+    ? selectedConvo.participants.find((participant) => participant._id === typingUsers[0].userId)
+    : null;
 
   return (
     <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
@@ -122,13 +159,17 @@ const ChatWindowLayout = () => {
             <ChatWindowBody isBlocked={isBlocked} />
           </div>
 
-          {typingLabel && (
-            <div className="border-t bg-background px-4 py-2 text-sm text-muted-foreground">
-              {typingLabel}
-            </div>
-          )}
+          <div className="relative">
+            {typingLabel && typingLeadUser && (
+              <TypingIndicatorBubble
+                displayName={typingLeadUser.displayName}
+                avatarUrl={typingLeadUser.avatarUrl}
+                summary={typingLabel}
+              />
+            )}
 
-          <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />
+            <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />
+          </div>
         </div>
 
         {showAssetsPanel && <ConversationAssetsPanel messages={messageItems} />}

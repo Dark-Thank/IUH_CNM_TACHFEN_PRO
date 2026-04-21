@@ -31,6 +31,7 @@ import {
 import {
   Alert,
   ActivityIndicator,
+  Animated,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -380,6 +381,53 @@ export default function ChatAppScreen() {
     : typingUsers.length === 1
       ? `${typingUsers[0].displayName || "Ai do"} dang soan tin nhan`
       : `${typingUsers[0].displayName || "Ai do"} va ${typingUsers.length - 1} nguoi khac dang soan tin nhan`;
+  const typingLeadUser = typingUsers.length > 0 && selectedConvo
+    ? selectedConvo.participants.find((participant) => participant._id === typingUsers[0].userId) ?? null
+    : null;
+  const typingDotAnimations = useRef([
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+    new Animated.Value(0.4),
+  ]).current;
+
+  useEffect(() => {
+    if (!typingLabel || !typingLeadUser) {
+      typingDotAnimations.forEach((value) => {
+        value.stopAnimation();
+        value.setValue(0.4);
+      });
+      return;
+    }
+
+    const loops = typingDotAnimations.map((value, index) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(index * 150),
+          Animated.timing(value, {
+            toValue: 1,
+            duration: 280,
+            useNativeDriver: true,
+          }),
+          Animated.timing(value, {
+            toValue: 0.4,
+            duration: 280,
+            useNativeDriver: true,
+          }),
+          Animated.delay(240),
+        ])
+      )
+    );
+
+    loops.forEach((animation) => animation.start());
+
+    return () => {
+      loops.forEach((animation) => animation.stop());
+      typingDotAnimations.forEach((value) => {
+        value.stopAnimation();
+        value.setValue(0.4);
+      });
+    };
+  }, [typingDotAnimations, typingLabel, typingLeadUser]);
 
   const filteredFriendsForMessage = useMemo(() => {
     const baseFriends = uniqueById(friends);
@@ -1161,10 +1209,50 @@ export default function ChatAppScreen() {
             <Text style={styles.blockedNotice}>Ban khong the tra loi cuoc tro chuyen nay.</Text>
           ) : null}
 
-          {typingLabel ? (
-            <Text style={[styles.typingNotice, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              {typingLabel}
-            </Text>
+          {typingLabel && typingLeadUser ? (
+            <View
+              style={[
+                styles.typingBubble,
+                {
+                  backgroundColor: isDark ? "rgba(17, 24, 39, 0.96)" : "rgba(255, 255, 255, 0.96)",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <UserAvatar
+                name={typingLeadUser.displayName}
+                avatarUrl={typingLeadUser.avatarUrl ?? undefined}
+                size={28}
+              />
+
+              <View style={styles.typingBubbleContent}>
+                <Text numberOfLines={1} style={[styles.typingBubbleLabel, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                  {typingLabel}
+                </Text>
+                <View style={styles.typingBubbleDots}>
+                  {typingDotAnimations.map((opacity, index) => (
+                    <Animated.View
+                      key={index}
+                      style={[
+                        styles.typingBubbleDot,
+                        {
+                          backgroundColor: isDark ? "#c4b5fd" : "#8b5cf6",
+                          opacity,
+                          transform: [
+                            {
+                              translateY: opacity.interpolate({
+                                inputRange: [0.4, 1],
+                                outputRange: [1.5, -1.5],
+                              }),
+                            },
+                          ],
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+              </View>
+            </View>
           ) : null}
 
           {showScrollToLatest ? (
@@ -1990,11 +2078,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginBottom: 8,
   },
-  typingNotice: {
-    paddingHorizontal: 16,
-    paddingBottom: 6,
-    fontSize: 13,
-    fontStyle: "italic",
+  typingBubble: {
+    marginLeft: 16,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: "78%",
+  },
+  typingBubbleContent: {
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  typingBubbleLabel: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  typingBubbleDots: {
+    marginTop: 2,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignItems: "flex-start",
+  },
+  typingBubbleDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
   },
   scrollToLatestButton: {
     position: "absolute",
