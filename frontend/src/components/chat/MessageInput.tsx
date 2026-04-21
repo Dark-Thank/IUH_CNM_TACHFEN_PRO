@@ -9,6 +9,32 @@ import { Button } from '../ui/button';
 import { Input } from "../ui/input";
 import EmmojiPicker from './EmmojiPicker';
 
+const getReplyPreviewContent = (message?: { content?: string | null; messageType?: string; imgUrls?: string[]; fileUrls?: { url: string }[] }) => {
+    const trimmedContent = typeof message?.content === "string" ? message.content.trim() : "";
+
+    if (trimmedContent) {
+        return trimmedContent;
+    }
+
+    if (message?.messageType === "voice") {
+        return "Tin nhắn thoại";
+    }
+
+    if (message?.messageType === "call") {
+        return "Cuộc gọi";
+    }
+
+    if ((message?.imgUrls?.length ?? 0) > 0) {
+        return message?.imgUrls?.length === 1 ? "Ảnh đính kèm" : `${message?.imgUrls?.length} ảnh đính kèm`;
+    }
+
+    if ((message?.fileUrls?.length ?? 0) > 0) {
+        return message?.fileUrls?.length === 1 ? "Tệp đính kèm" : `${message?.fileUrls?.length} tệp đính kèm`;
+    }
+
+    return "Tin nhắn";
+};
+
 const AUDIO_MIME_CANDIDATES = [
     "audio/webm;codecs=opus",
     "audio/webm",
@@ -52,7 +78,7 @@ const formatDuration = (seconds: number) => {
 
 const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedConvo: Conversation, isBlocked: boolean }) => {
     const { user } = useAuthStore();
-    const { sendDirectMessage, sendGroupMessage } = useChatStore();
+    const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
     const { startTyping, stopTyping } = useSocketStore();
 
     const [isBlocked, setIsBlocked] = useState(false);
@@ -173,6 +199,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
         stopTypingIndicator();
         setValue("");
         setFiles([]);
+        clearReplyingMessage();
         setIsRecording(false);
         setRecordingSeconds(0);
 
@@ -182,7 +209,13 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
 
         clearRecorderResources();
         resetVoiceDraft();
-    }, [selectedConvo._id]);
+    }, [clearReplyingMessage, selectedConvo._id]);
+
+    useEffect(() => {
+        if (replyingMessage && replyingMessage.conversationId !== selectedConvo._id) {
+            clearReplyingMessage();
+        }
+    }, [clearReplyingMessage, replyingMessage, selectedConvo._id]);
 
     const startRecording = async () => {
         if (isBlocked) {
@@ -272,6 +305,9 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
 
         const formData = new FormData();
         formData.append("content", value);
+        if (replyingMessage?._id) {
+            formData.append("replyToMessageId", replyingMessage._id);
+        }
 
         //  gửi đúng key backend
         files.forEach((file) => {
@@ -297,6 +333,7 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
             setValue("");
             setFiles([]);
             resetVoiceDraft();
+            clearReplyingMessage();
 
         } catch (error: any) {
             console.error(error);
@@ -325,9 +362,32 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
     };
 
     const hasAttachments = files.length > 0 || Boolean(voiceDraft);
+    const replySenderName = replyingMessage
+        ? (replyingMessage.senderId === user._id
+            ? "Bạn"
+            : selectedConvo.participants.find((participant) => participant._id === replyingMessage.senderId)?.displayName || "Thành viên")
+        : "";
 
     return (
         <div className="flex flex-col gap-2 p-3 bg-background">
+
+            {replyingMessage && (
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-primary">Đang trả lời {replySenderName}</p>
+                        <p className="mt-1 truncate text-sm text-muted-foreground">{getReplyPreviewContent(replyingMessage)}</p>
+                    </div>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={clearReplyingMessage}
+                    >
+                        <Trash2 className="size-4" />
+                    </Button>
+                </div>
+            )}
 
             {/*  PREVIEW FILE */}
             {files.length > 0 && (

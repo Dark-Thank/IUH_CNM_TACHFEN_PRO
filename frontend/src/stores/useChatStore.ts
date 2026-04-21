@@ -32,16 +32,20 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messages: {},
       activeConversationId: null,
+      replyingMessage: null,
       convoLoading: false,
       messageLoading: false,
       loading: false,
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) => set({ activeConversationId: id, replyingMessage: null }),
+      setReplyingMessage: (message) => set({ replyingMessage: message }),
+      clearReplyingMessage: () => set({ replyingMessage: null }),
       reset: () => {
         set({
           conversations: [],
           messages: {},
           activeConversationId: null,
+          replyingMessage: null,
           convoLoading: false,
           messageLoading: false,
         });

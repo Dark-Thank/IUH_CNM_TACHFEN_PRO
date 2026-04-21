@@ -84,6 +84,44 @@ const voiceMetaSchema = new mongoose.Schema({
     },
 }, { _id: false });
 
+const replyToSchema = new mongoose.Schema({
+    messageId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Message",
+        required: true,
+    },
+    senderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    content: {
+        type: String,
+        default: null,
+    },
+    messageType: {
+        type: String,
+        enum: ["text", "call", "voice"],
+        default: "text",
+    },
+    imgUrls: {
+        type: [String],
+        default: [],
+    },
+    fileUrls: [
+        {
+            url: { type: String },
+            name: { type: String },
+            size: { type: Number },
+            type: { type: String },
+        },
+    ],
+    createdAt: {
+        type: Date,
+        required: true,
+    },
+}, { _id: false });
+
 const messageSchema = new mongoose.Schema({
     conversationId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -162,6 +200,10 @@ const messageSchema = new mongoose.Schema({
     },
     forwardedFrom: {
         type: forwardedFromSchema,
+        default: null,
+    },
+    replyTo: {
+        type: replyToSchema,
         default: null,
     },
     deletedForUsers: [{

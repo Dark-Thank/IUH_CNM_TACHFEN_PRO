@@ -38,6 +38,16 @@ const buildForwardedFromSnapshot = (message) => ({
   createdAt: message.createdAt,
 });
 
+const buildReplySnapshot = (message) => ({
+  messageId: message._id,
+  senderId: message.senderId,
+  content: message.content ?? null,
+  messageType: message.messageType || "text",
+  imgUrls: [...(message.imgUrls || [])],
+  fileUrls: cloneFileUrls(message.fileUrls || []),
+  createdAt: message.createdAt,
+});
+
 const resolveForwardedMessage = async (forwardedFromMessageId, userId) => {
   if (!forwardedFromMessageId) {
     return { forwardedMessage: null, forwardedFrom: null };
@@ -80,6 +90,69 @@ const resolveForwardedMessage = async (forwardedFromMessageId, userId) => {
   return {
     forwardedMessage,
     forwardedFrom: buildForwardedFromSnapshot(forwardedMessage),
+  };
+};
+
+const resolveReplyMessage = async ({ replyToMessageId, conversationId, userId }) => {
+  if (!replyToMessageId) {
+    return { replyMessage: null, replyTo: null };
+  }
+
+  if (!conversationId) {
+    return {
+      error: {
+        status: 400,
+        payload: { message: "Cần conversationId để trả lời tin nhắn" },
+      },
+    };
+  }
+
+  const replyMessage = await Message.findById(replyToMessageId).lean();
+
+  if (!replyMessage) {
+    return {
+      error: {
+        status: 404,
+        payload: { message: "Tin nhắn được trả lời không tồn tại" },
+      },
+    };
+  }
+
+  if (replyMessage.conversationId.toString() !== conversationId.toString()) {
+    return {
+      error: {
+        status: 400,
+        payload: { message: "Chỉ có thể trả lời tin nhắn trong cùng cuộc trò chuyện" },
+      },
+    };
+  }
+
+  const isParticipant = await Conversation.exists({
+    _id: conversationId,
+    "participants.userId": userId,
+  });
+
+  if (!isParticipant) {
+    return {
+      error: {
+        status: 403,
+        payload: { message: "Bạn không có quyền trả lời tin nhắn này" },
+      },
+    };
+  }
+
+  if (replyMessage.isRecalled) {
+    return {
+      error: {
+        status: 400,
+        payload: { message: "Không thể trả lời tin nhắn đã thu hồi" },
+      },
+    };
+  }
+
+  return {
+    replyMessage,
+    replyTo: buildReplySnapshot(replyMessage),
   };
 };
 
@@ -195,7 +268,7 @@ const getAuthorizedMessageFile = async (messageId, fileIndex, userId) => {
 };
 export const sendDirectMessage = async (req, res) => {
   try {
-    const { recipientId, content, conversationId, forwardedFromMessageId, voiceDurationSeconds } = req.body;
+    const { recipientId, content, conversationId, forwardedFromMessageId, replyToMessageId, voiceDurationSeconds } = req.body;
     const senderId = req.user._id;
     const uploadedFiles = getUploadedFiles(req);
     const trimmedContent = normalizeOptionalText(content);
@@ -245,6 +318,18 @@ export const sendDirectMessage = async (req, res) => {
         unreadCounts: new Map(),
       });
     }
+
+    const replyResult = await resolveReplyMessage({
+      replyToMessageId,
+      conversationId: conversation._id,
+      userId: senderId,
+    });
+
+    if (replyResult.error) {
+      return res.status(replyResult.error.status).json(replyResult.error.payload);
+    }
+
+    const { replyTo } = replyResult;
 
     const isFirstMessageInConversation = !conversation.lastMessage?._id;
 
@@ -307,6 +392,7 @@ export const sendDirectMessage = async (req, res) => {
       imgUrls: imageUrls,
       fileUrls,
       forwardedFrom,
+      replyTo,
     });
 
     updateConversationAfterCreateMessage(conversation, message, senderId);
@@ -421,7 +507,7 @@ export const toggleReaction = async (req, res) => {
 };
 export const sendGroupMessage = async (req, res) => {
   try {
-    const { content, forwardedFromMessageId, voiceDurationSeconds } = req.body;
+    const { content, forwardedFromMessageId, replyToMessageId, voiceDurationSeconds } = req.body;
     const senderId = req.user._id;
     const conversation = req.conversation;
     const uploadedFiles = getUploadedFiles(req);
@@ -437,6 +523,18 @@ export const sendGroupMessage = async (req, res) => {
     }
 
     const { forwardedMessage, forwardedFrom } = forwardedResult;
+
+    const replyResult = await resolveReplyMessage({
+      replyToMessageId,
+      conversationId: conversation._id,
+      userId: senderId,
+    });
+
+    if (replyResult.error) {
+      return res.status(replyResult.error.status).json(replyResult.error.payload);
+    }
+
+    const { replyTo } = replyResult;
 
     if (forwardedMessage && uploadedFiles.length > 0) {
       return res.status(400).json({ message: "Không thể thêm file mới khi chuyển tiếp tin nhắn" });
@@ -508,6 +606,7 @@ export const sendGroupMessage = async (req, res) => {
       imgUrls: imageUrls,
       fileUrls,
       forwardedFrom,
+      replyTo,
     });
 
 

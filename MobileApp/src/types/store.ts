@@ -47,6 +47,7 @@ export interface ChatState {
     }
   >;
   activeConversationId: string | null;
+  replyingMessage: Message | null;
   convoLoading: boolean;
   messageLoading: boolean;
   loading: boolean;
@@ -56,6 +57,8 @@ export interface ChatState {
     (messageId: string, updatedMessage: Partial<Message>): void;
   };
   setActiveConversation: (id: string | null) => void;
+  setReplyingMessage: (message: Message | null) => void;
+  clearReplyingMessage: () => void;
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
   sendDirectMessage: (

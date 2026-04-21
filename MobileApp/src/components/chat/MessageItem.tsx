@@ -31,6 +31,32 @@ const isVoiceMessage = (message: Message) => {
 const getVoiceAttachment = (message: Message) =>
   message.fileUrls?.find((file) => file.type?.startsWith("audio/")) ?? null;
 
+const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
+  const trimmedContent = typeof replyTo?.content === "string" ? replyTo.content.trim() : "";
+
+  if (trimmedContent) {
+    return trimmedContent;
+  }
+
+  if (replyTo?.messageType === "voice") {
+    return "Tin nhan thoai";
+  }
+
+  if (replyTo?.messageType === "call") {
+    return "Cuoc goi";
+  }
+
+  if ((replyTo?.imgUrls?.length ?? 0) > 0) {
+    return replyTo?.imgUrls?.length === 1 ? "Anh dinh kem" : `${replyTo?.imgUrls?.length} anh dinh kem`;
+  }
+
+  if ((replyTo?.fileUrls?.length ?? 0) > 0) {
+    return replyTo?.fileUrls?.length === 1 ? "Tep dinh kem" : `${replyTo?.fileUrls?.length} tep dinh kem`;
+  }
+
+  return "Tin nhan";
+};
+
 interface MessageItemProps {
   message: Message;
   index: number;
@@ -56,6 +82,7 @@ export default function MessageItem({
     recallMessage,
     togglePinMessage,
     deleteMessageForMe,
+    setReplyingMessage,
     updateMessage,
   } = useChatStore();
   const currentUserId = user?._id;
@@ -81,6 +108,7 @@ export default function MessageItem({
 
   const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
   const canTogglePin = !message.isRecalled && !isDeletedForMe;
+  const canReply = !message.isRecalled && !isDeletedForMe;
   const canForward = !message.isRecalled && !isDeletedForMe && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
@@ -96,6 +124,11 @@ export default function MessageItem({
   const voiceAttachment = getVoiceAttachment(message);
   const isVoice = isVoiceMessage(message);
   const otherFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
+  const replySenderName = message.replyTo
+    ? (message.replyTo.senderId === currentUserId
+      ? "Ban"
+      : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thanh vien")
+    : "";
 
   const closeActions = () => setShowActions(false);
 
@@ -112,6 +145,10 @@ export default function MessageItem({
 
   const handleLongPress = () => {
     setShowActions(true);
+  };
+  const handleReply = () => {
+    closeActions();
+    setReplyingMessage(message);
   };
   const handleReact = async (emoji: string) => {
     try {
@@ -215,6 +252,20 @@ export default function MessageItem({
 
     return (
       <View>
+        {message.replyTo ? (
+          <View style={[styles.replyPreview, { borderLeftColor: isOwn ? "#ffffff80" : isDark ? "#475569" : "#94a3b8" }]}>
+            <Text style={[styles.replySender, { color: isOwn ? "#ffffff" : isDark ? "#e2e8f0" : "#0f172a" }]}>
+              {replySenderName}
+            </Text>
+            <Text
+              numberOfLines={2}
+              style={[styles.replyText, { color: isOwn ? "#ffffffcc" : isDark ? "#cbd5e1" : "#475569" }]}
+            >
+              {getReplyPreviewContent(message.replyTo)}
+            </Text>
+          </View>
+        ) : null}
+
         {message.forwardedFrom ? (
           <View style={styles.forwardedBadge}>
             <Text
@@ -504,6 +555,28 @@ export default function MessageItem({
               </Pressable>
             ) : null}
 
+            {canReply ? (
+              <Pressable
+                onPress={handleReply}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    { color: isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  Tra loi
+                </Text>
+              </Pressable>
+            ) : null}
+
             {canForward ? (
               <Pressable
                 onPress={handleOpenForwardPicker}
@@ -707,6 +780,20 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#00000020",
+  },
+  replyPreview: {
+    marginBottom: 8,
+    paddingLeft: 10,
+    borderLeftWidth: 3,
+  },
+  replySender: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  replyText: {
+    marginTop: 2,
+    fontSize: 13,
+    lineHeight: 18,
   },
   forwardedBadgeText: {
     fontSize: 11,

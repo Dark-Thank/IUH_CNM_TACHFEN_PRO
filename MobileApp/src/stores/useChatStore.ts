@@ -63,17 +63,21 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messages: {},
       activeConversationId: null,
+      replyingMessage: null,
       convoLoading: false,
       messageLoading: false,
       loading: false,
 
-      setActiveConversation: (id) => set({ activeConversationId: id }),
+      setActiveConversation: (id) => set({ activeConversationId: id, replyingMessage: null }),
+      setReplyingMessage: (message) => set({ replyingMessage: message }),
+      clearReplyingMessage: () => set({ replyingMessage: null }),
 
       reset: () => {
         set({
           conversations: [],
           messages: {},
           activeConversationId: null,
+          replyingMessage: null,
           convoLoading: false,
           messageLoading: false,
           loading: false,
@@ -227,11 +231,12 @@ export const useChatStore = create<ChatState>()(
 
       sendDirectMessage: async (recipientId, content, files, voiceDurationSeconds) => {
         try {
-          const { activeConversationId } = get();
+          const { activeConversationId, replyingMessage } = get();
 
           await chatService.sendDirectMessage(recipientId, {
             content,
             conversationId: activeConversationId || undefined,
+            replyToMessageId: replyingMessage?._id,
             voiceDurationSeconds,
             files: files?.map((file) => ({
               uri: file.uri,
@@ -248,6 +253,7 @@ export const useChatStore = create<ChatState>()(
 
       sendGroupMessage: async (conversationId, content, files, voiceDurationSeconds) => {
         try {
+          const { replyingMessage } = get();
           const formData = new FormData();
 
           formData.append("content", content);
@@ -262,7 +268,7 @@ export const useChatStore = create<ChatState>()(
             });
           }
 
-          await chatService.sendGroupMessage(conversationId, formData, voiceDurationSeconds);
+          await chatService.sendGroupMessage(conversationId, formData, voiceDurationSeconds, replyingMessage?._id);
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
           throw error;

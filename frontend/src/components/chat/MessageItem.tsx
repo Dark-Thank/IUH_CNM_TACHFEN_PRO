@@ -144,6 +144,32 @@ const isVoiceMessage = (message: Message) => {
 const getVoiceAttachment = (message: Message) =>
   message.fileUrls?.find((file) => file.type?.startsWith("audio/")) ?? null;
 
+const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
+  const trimmedContent = typeof replyTo?.content === "string" ? replyTo.content.trim() : "";
+
+  if (trimmedContent) {
+    return trimmedContent;
+  }
+
+  if (replyTo?.messageType === "voice") {
+    return "Tin nhắn thoại";
+  }
+
+  if (replyTo?.messageType === "call") {
+    return "Cuộc gọi";
+  }
+
+  if ((replyTo?.imgUrls?.length ?? 0) > 0) {
+    return replyTo?.imgUrls?.length === 1 ? "Ảnh đính kèm" : `${replyTo?.imgUrls?.length} ảnh đính kèm`;
+  }
+
+  if ((replyTo?.fileUrls?.length ?? 0) > 0) {
+    return replyTo?.fileUrls?.length === 1 ? "Tệp đính kèm" : `${replyTo?.fileUrls?.length} tệp đính kèm`;
+  }
+
+  return "Tin nhắn";
+};
+
 const MessageItem = ({
   message,
   index,
@@ -152,7 +178,7 @@ const MessageItem = ({
   lastMessageStatus,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage } = useChatStore();
+  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage, setReplyingMessage } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
@@ -190,9 +216,15 @@ const MessageItem = ({
   const canForward = !message.isRecalled && !isDeletedForCurrentUser && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
+  const canReply = !message.isRecalled && !isDeletedForCurrentUser;
   const availableConversations = conversations.filter(
     (conversation) => conversation._id !== message.conversationId
   );
+  const replySenderName = message.replyTo
+    ? (message.replyTo.senderId === user?._id
+      ? "Bạn"
+      : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thành viên")
+    : "";
 
   const getConversationLabel = (conversation: Conversation) => {
     if (conversation.type === "group") {
@@ -228,6 +260,11 @@ const MessageItem = ({
   const handleReact = async (emoji: string) => {
     await reactToMessage(message._id, emoji);
   };
+
+  const handleReply = () => {
+    setReplyingMessage(message);
+  };
+
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
   return (
     <>
@@ -248,7 +285,7 @@ const MessageItem = ({
       >
         {/* AVATAR */}
         {!isOwn && (
-          <div className="w-8 flex-shrink-0">
+          <div className="w-8 shrink-0">
             {isGroupBreak && (
               <UserAvatar
                 type="chat"
@@ -326,7 +363,7 @@ const MessageItem = ({
                 <audio controls preload="metadata" src={voiceAttachment.url} className="w-full max-w-full" />
 
                 {message.content && (
-                  <p className="text-sm break-words text-muted-foreground">
+                  <p className="text-sm wrap-break-word text-muted-foreground">
                     {message.content}
                   </p>
                 )}
@@ -362,6 +399,12 @@ const MessageItem = ({
               </div>
             ) : (
               <>
+                {message.replyTo && (
+                  <div className="mb-2 rounded-md border-l-2 border-current/30 bg-black/5 px-3 py-2 text-xs opacity-90">
+                    <p className="font-semibold">{replySenderName}</p>
+                    <p className="mt-1 line-clamp-2 wrap-break-word">{getReplyPreviewContent(message.replyTo)}</p>
+                  </div>
+                )}
                 {message.forwardedFrom && (
                   <div className="mb-2 rounded-md border border-current/15 bg-black/5 px-2 py-1 text-xs font-medium opacity-80">
                     Đã chuyển tiếp
@@ -369,7 +412,7 @@ const MessageItem = ({
                 )}
                 {/* TEXT */}
                 {message.content && (
-                  <p className="text-sm break-words">
+                  <p className="text-sm wrap-break-word">
                     {message.content}
                   </p>
                 )}
@@ -381,7 +424,7 @@ const MessageItem = ({
                       <img
                         key={index}
                         src={url}
-                        className="max-w-[200px] rounded-lg"
+                        className="max-w-50 rounded-lg"
                       />
                     ))}
                   </div>
@@ -414,7 +457,7 @@ const MessageItem = ({
           </Card>
           {/* ACTION MENU */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 flex-shrink-0 self-center">
+            <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 shrink-0 self-center">
               <Button
                 variant="ghost"
                 size="sm"
@@ -428,6 +471,12 @@ const MessageItem = ({
               align={isOwn ? "end" : "start"}
               className="w-48"
             >
+              {canReply && (
+                <DropdownMenuItem onClick={handleReply}>
+                  ↩ Trả lời
+                </DropdownMenuItem>
+              )}
+
               <DropdownMenuItem
                 onClick={() => togglePinMessage(message._id)}
               >

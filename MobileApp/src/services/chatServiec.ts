@@ -114,6 +114,7 @@ export const chatService = {
       content?: string;
       conversationId?: string;
       forwardedFromMessageId?: string;
+      replyToMessageId?: string;
       voiceDurationSeconds?: number;
       files?: Array<{
         uri: string;
@@ -123,7 +124,7 @@ export const chatService = {
     } = {}
   ) {
     try {
-      const { content = "", conversationId, forwardedFromMessageId, files, voiceDurationSeconds } = options;
+      const { content = "", conversationId, forwardedFromMessageId, replyToMessageId, files, voiceDurationSeconds } = options;
 
       if (files && files.length > 0) {
         const formData = new FormData();
@@ -132,6 +133,7 @@ export const chatService = {
         formData.append("content", content);
         if (conversationId) formData.append("conversationId", conversationId);
         if (forwardedFromMessageId) formData.append("forwardedFromMessageId", forwardedFromMessageId);
+        if (replyToMessageId) formData.append("replyToMessageId", replyToMessageId);
         if (typeof voiceDurationSeconds === "number") {
           formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
         }
@@ -154,6 +156,7 @@ export const chatService = {
         content,
         conversationId,
         forwardedFromMessageId,
+        replyToMessageId,
         voiceDurationSeconds,
       });
 
@@ -186,10 +189,13 @@ export const chatService = {
   // ======================
   // GROUP MESSAGE (UPLOAD FILES)
   // ======================
-  async sendGroupMessage(conversationId: string, formData: FormData, voiceDurationSeconds?: number) {
+  async sendGroupMessage(conversationId: string, formData: FormData, voiceDurationSeconds?: number, replyToMessageId?: string) {
     formData.append("conversationId", conversationId);
     if (typeof voiceDurationSeconds === "number") {
       formData.append("voiceDurationSeconds", String(voiceDurationSeconds));
+    }
+    if (replyToMessageId) {
+      formData.append("replyToMessageId", replyToMessageId);
     }
 
     const data = await postMultipart("/messages/group", formData);

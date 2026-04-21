@@ -22,6 +22,32 @@ import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 
+const getReplyPreviewContent = (message?: { content?: string | null; messageType?: string; imgUrls?: string[]; fileUrls?: { url: string }[] }) => {
+  const trimmedContent = typeof message?.content === "string" ? message.content.trim() : "";
+
+  if (trimmedContent) {
+    return trimmedContent;
+  }
+
+  if (message?.messageType === "voice") {
+    return "Tin nhan thoai";
+  }
+
+  if (message?.messageType === "call") {
+    return "Cuoc goi";
+  }
+
+  if ((message?.imgUrls?.length ?? 0) > 0) {
+    return message?.imgUrls?.length === 1 ? "Anh dinh kem" : `${message?.imgUrls?.length} anh dinh kem`;
+  }
+
+  if ((message?.fileUrls?.length ?? 0) > 0) {
+    return message?.fileUrls?.length === 1 ? "Tep dinh kem" : `${message?.fileUrls?.length} tep dinh kem`;
+  }
+
+  return "Tin nhan";
+};
+
 interface FileItem {
   uri: string;
   name: string;
@@ -46,7 +72,7 @@ interface Props {
 export default function MessageInput({ selectedConvo, disabled }: Props) {
 
   const { user } = useAuthStore();
-  const { sendDirectMessage, sendGroupMessage } =
+  const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } =
     useChatStore();
   const { startTyping, stopTyping } = useSocketStore();
   const { isDark } = useThemeStore();
@@ -135,9 +161,16 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
     setFiles([]);
     setValue("");
     setVoiceDraft(null);
+    clearReplyingMessage();
     setIsRecording(false);
     setRecordingSeconds(0);
-  }, [selectedConvo._id]);
+  }, [clearReplyingMessage, selectedConvo._id]);
+
+  useEffect(() => {
+    if (replyingMessage && replyingMessage.conversationId !== selectedConvo._id) {
+      clearReplyingMessage();
+    }
+  }, [clearReplyingMessage, replyingMessage, selectedConvo._id]);
 
   useEffect(() => {
     const previousConversationId = typingConversationIdRef.current;
@@ -381,6 +414,7 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
 
       setFiles([]);
       setVoiceDraft(null);
+      clearReplyingMessage();
     } catch (error) {
       console.error(error);
       setValue(trimmed);
@@ -428,106 +462,135 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
         },
       ]}
     >
-      {/* PREVIEW FILES */}
-      {files.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.previewContainer}
-        >
-          {files.map((file, index) => (
-            <View
-              key={index}
-              style={[
-                styles.previewItem,
-                {
-                  backgroundColor: isDark
-                    ? "#1f2937"
-                    : "#f1f5f9",
-                },
-              ]}
-            >
-              {file.type.startsWith(
-                "image"
-              ) ? (
-                <Image
-                  source={{ uri: file.uri }}
-                  style={styles.imageThumb}
-                />
-              ) : (
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    styles.previewText,
-                    {
-                      color: isDark
-                        ? "#fff"
-                        : "#111",
-                    },
-                  ]}
-                >
-                  {file.name}
-                </Text>
-              )}
-
-              <Pressable
-                onPress={() =>
-                  removeFile(index)
-                }
-                style={styles.removeBtn}
+      <View pointerEvents="box-none" style={styles.previewStack}>
+        {replyingMessage ? (
+          <View
+            style={[
+              styles.replyPreviewBar,
+              {
+                backgroundColor: isDark ? "#111827" : "#eef2ff",
+                borderColor: isDark ? "#334155" : "#c7d2fe",
+              },
+            ]}
+          >
+            <View style={styles.replyPreviewContent}>
+              <Text style={[styles.replyPreviewLabel, { color: isDark ? "#c4b5fd" : "#4f46e5" }]}>
+                Dang tra loi {replyingMessage.senderId === user._id ? "Ban" : selectedConvo.participants.find((participant) => participant._id === replyingMessage.senderId)?.displayName || "Thanh vien"}
+              </Text>
+              <Text
+                numberOfLines={1}
+                style={[styles.replyPreviewText, { color: isDark ? "#cbd5e1" : "#475569" }]}
               >
-                <X size={14} color="red" />
-              </Pressable>
-            </View>
-          ))}
-        </ScrollView>
-      )}
-
-      {voiceDraft && (
-        <View
-          style={[
-            styles.voicePreview,
-            {
-              backgroundColor: isDark ? "#111827" : "#ffffff",
-              borderColor: isDark ? "#334155" : "#e2e8f0",
-            },
-          ]}
-        >
-          <View style={styles.voicePreviewHeader}>
-            <View style={styles.voicePreviewTitleWrap}>
-              <FileAudio size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
-              <Text style={[styles.voicePreviewTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin nhắn thoại</Text>
+                {getReplyPreviewContent(replyingMessage)}
+              </Text>
             </View>
 
-            <Pressable onPress={removeVoiceDraft} style={styles.removeVoiceButton}>
-              <Trash2 size={16} color={isDark ? "#f8fafc" : "#475569"} />
+            <Pressable onPress={clearReplyingMessage} style={styles.replyPreviewClose}>
+              <X size={16} color={isDark ? "#f8fafc" : "#475569"} />
             </Pressable>
           </View>
+        ) : null}
 
-          <VoiceMessagePlayer
-            uri={voiceDraft.uri}
-            durationSeconds={voiceDraft.voiceDurationSeconds}
-          />
-        </View>
-      )}
+        {files.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.previewContainer}
+          >
+            {files.map((file, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.previewItem,
+                  {
+                    backgroundColor: isDark
+                      ? "#1f2937"
+                      : "#f1f5f9",
+                  },
+                ]}
+              >
+                {file.type.startsWith(
+                  "image"
+                ) ? (
+                  <Image
+                    source={{ uri: file.uri }}
+                    style={styles.imageThumb}
+                  />
+                ) : (
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.previewText,
+                      {
+                        color: isDark
+                          ? "#fff"
+                          : "#111",
+                      },
+                    ]}
+                  >
+                    {file.name}
+                  </Text>
+                )}
 
-      {isRecording && (
-        <View
-          style={[
-            styles.recordingBanner,
-            { backgroundColor: isDark ? "#3f1d24" : "#fef2f2", borderColor: isDark ? "#7f1d1d" : "#fecaca" },
-          ]}
-        >
-          <View style={styles.recordingInfo}>
-            <View style={styles.recordingDot} />
-            <Text style={[styles.recordingText, { color: isDark ? "#fecaca" : "#b91c1c" }]}>Đang ghi âm {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}</Text>
+                <Pressable
+                  onPress={() =>
+                    removeFile(index)
+                  }
+                  style={styles.removeBtn}
+                >
+                  <X size={14} color="red" />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {voiceDraft && (
+          <View
+            style={[
+              styles.voicePreview,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#334155" : "#e2e8f0",
+              },
+            ]}
+          >
+            <View style={styles.voicePreviewHeader}>
+              <View style={styles.voicePreviewTitleWrap}>
+                <FileAudio size={16} color={isDark ? "#c084fc" : "#8b5cf6"} />
+                <Text style={[styles.voicePreviewTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin nhắn thoại</Text>
+              </View>
+
+              <Pressable onPress={removeVoiceDraft} style={styles.removeVoiceButton}>
+                <Trash2 size={16} color={isDark ? "#f8fafc" : "#475569"} />
+              </Pressable>
+            </View>
+
+            <VoiceMessagePlayer
+              uri={voiceDraft.uri}
+              durationSeconds={voiceDraft.voiceDurationSeconds}
+            />
           </View>
+        )}
 
-          <Pressable onPress={() => void stopRecording()} style={styles.stopRecordingButton}>
-            <Square size={16} color="#ffffff" fill="#ffffff" />
-          </Pressable>
-        </View>
-      )}
+        {isRecording && (
+          <View
+            style={[
+              styles.recordingBanner,
+              { backgroundColor: isDark ? "#3f1d24" : "#fef2f2", borderColor: isDark ? "#7f1d1d" : "#fecaca" },
+            ]}
+          >
+            <View style={styles.recordingInfo}>
+              <View style={styles.recordingDot} />
+              <Text style={[styles.recordingText, { color: isDark ? "#fecaca" : "#b91c1c" }]}>Đang ghi âm {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, "0")}</Text>
+            </View>
+
+            <Pressable onPress={() => void stopRecording()} style={styles.stopRecordingButton}>
+              <Square size={16} color="#ffffff" fill="#ffffff" />
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       {/* IMAGE BUTTON */}
       <Pressable
@@ -708,6 +771,41 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderTopWidth: 1,
   },
+  previewStack: {
+    position: "absolute",
+    bottom: 60,
+    left: 10,
+    right: 10,
+    gap: 8,
+  },
+  replyPreviewBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  replyPreviewContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  replyPreviewLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  replyPreviewText: {
+    fontSize: 13,
+  },
+  replyPreviewClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
   iconButton: {
     width: 42,
@@ -744,10 +842,6 @@ const styles = StyleSheet.create({
 
   // PREVIEW
   previewContainer: {
-    position: "absolute",
-    bottom: 60,
-    left: 10,
-    right: 10,
     flexDirection: "row",
   },
 
@@ -775,10 +869,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   voicePreview: {
-    position: "absolute",
-    bottom: 60,
-    left: 10,
-    right: 10,
     borderWidth: 1,
     borderRadius: 16,
     padding: 10,
@@ -806,10 +896,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   recordingBanner: {
-    position: "absolute",
-    bottom: 60,
-    left: 10,
-    right: 10,
     borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 12,

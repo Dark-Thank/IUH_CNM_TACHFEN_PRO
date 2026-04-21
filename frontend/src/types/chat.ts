@@ -42,6 +42,21 @@ export interface VoiceMeta {
   mimeType?: string | null;
 }
 
+export interface ReplyToMessage {
+  messageId: string;
+  senderId: string;
+  content: string | null;
+  messageType?: "text" | "call" | "voice";
+  imgUrls?: string[];
+  fileUrls?: {
+    url: string;
+    name: string;
+    size: number;
+    type: string;
+  }[];
+  createdAt: string;
+}
+
 export interface Conversation {
   _id: string;
   type: "direct" | "group";
@@ -82,6 +97,7 @@ export interface Message {
     }[];
     createdAt: string;
   } | null;
+  replyTo?: ReplyToMessage | null;
 
   imgUrls?: string[];
 
@@ -104,8 +120,8 @@ export interface Message {
   updatedAt?: string | null;
   createdAt: string;
   isOwn?: boolean;
-   reactions?: {
-    [emoji: string]: string[]; 
+  reactions?: {
+    [emoji: string]: string[];
   };
 }
 

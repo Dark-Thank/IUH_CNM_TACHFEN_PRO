@@ -27,6 +27,21 @@ export interface LastMessage {
   };
 }
 
+export interface ReplyToMessage {
+  messageId: string;
+  senderId: string;
+  content: string | null;
+  messageType?: "text" | "call" | "voice";
+  imgUrls?: string[];
+  fileUrls?: {
+    url: string;
+    name: string;
+    size?: number;
+    type?: string;
+  }[];
+  createdAt: string;
+}
+
 export interface VoiceMeta {
   durationSeconds: number;
   mimeType?: string | null;
@@ -64,6 +79,7 @@ export interface Message {
   conversationId: string;
   senderId: string;
   content: string | null;
+  replyTo?: ReplyToMessage | null;
   forwardedFrom?: {
     messageId: string;
     conversationId: string;
