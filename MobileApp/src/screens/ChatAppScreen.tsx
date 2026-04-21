@@ -29,6 +29,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Alert,
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
@@ -112,6 +113,12 @@ const getRequestUser = (request: FriendRequest, type: "received" | "sent") =>
 
 const matchesQuery = (value: string, query: string) =>
   value.toLowerCase().includes(query.trim().toLowerCase());
+
+const GROUP_ROLE_LABELS: Record<"owner" | "deputy" | "member", string> = {
+  owner: "Chu nhom",
+  deputy: "Pho nhom",
+  member: "Thanh vien",
+};
 
 const isSuccessMessage = (message: string) => /thanh cong|thành công/i.test(message);
 
@@ -205,6 +212,7 @@ export default function ChatAppScreen() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
   const [showConversationProfile, setShowConversationProfile] = useState(false);
+  const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [showConversationAssets, setShowConversationAssets] = useState(false);
 
   const [friendUsername, setFriendUsername] = useState("");
@@ -215,6 +223,8 @@ export default function ChatAppScreen() {
   const [groupName, setGroupName] = useState("");
   const [groupQuery, setGroupQuery] = useState("");
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
+  const [groupManageQuery, setGroupManageQuery] = useState("");
+  const [selectedMembersToAdd, setSelectedMembersToAdd] = useState<Friend[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
 
@@ -245,6 +255,12 @@ export default function ChatAppScreen() {
     fetchMessages,
     markAsSeen,
     createConversation,
+    addGroupMembers,
+    removeGroupMember,
+    updateGroupMemberRole,
+    transferGroupOwnership,
+    leaveGroup,
+    disbandGroup,
   } = useChatStore();
 
   const loadSocialData = useCallback(async () => {
@@ -397,6 +413,35 @@ export default function ChatAppScreen() {
     });
   }, [friends, groupQuery, selectedGroupMembers]);
 
+  const selectedGroupRole = useMemo(() => {
+    if (!selectedConvo || selectedConvo.type !== "group" || !user?._id) {
+      return null;
+    }
+
+    return selectedConvo.participants.find((participant) => participant._id === user._id) ?? null;
+  }, [selectedConvo, user?._id]);
+
+  const filteredFriendsForGroupManagement = useMemo(() => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return [] as Friend[];
+    }
+
+    const selectedIds = new Set(selectedMembersToAdd.map((friend) => friend._id));
+    const participantIds = new Set(selectedConvo.participants.map((participant) => participant._id));
+
+    return uniqueById(friends).filter((friend) => {
+      if (participantIds.has(friend._id) || selectedIds.has(friend._id)) {
+        return false;
+      }
+
+      if (!groupManageQuery.trim()) {
+        return true;
+      }
+
+      return matchesQuery(friend.displayName, groupManageQuery) || matchesQuery(friend.username, groupManageQuery);
+    });
+  }, [friends, groupManageQuery, selectedConvo, selectedMembersToAdd]);
+
   const searchedUserRelationship = useMemo<FriendRelationship>(() => {
     if (!searchedUser || !user) {
       return "available";
@@ -451,6 +496,11 @@ export default function ChatAppScreen() {
     setSelectedGroupMembers([]);
   }, []);
 
+  const resetGroupManagementState = useCallback(() => {
+    setGroupManageQuery("");
+    setSelectedMembersToAdd([]);
+  }, []);
+
   const openRequestsModal = useCallback(() => {
     setShowRequests(true);
     getAllFriendRequests().catch((error) => {
@@ -481,6 +531,18 @@ export default function ChatAppScreen() {
       console.error("Loi khi tai danh sach ban be:", error);
     });
   }, [getFriends, resetCreateGroupState]);
+
+  const openGroupManagementModal = useCallback(() => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    setShowGroupManagement(true);
+    resetGroupManagementState();
+    getFriends().catch((error) => {
+      console.error("Loi khi tai danh sach ban be de quan ly nhom:", error);
+    });
+  }, [getFriends, resetGroupManagementState, selectedConvo]);
 
   const openFriendListModal = useCallback(() => {
     setShowFriendList(true);
@@ -621,6 +683,154 @@ export default function ChatAppScreen() {
     }
   }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupMembers]);
 
+  const handleToggleMemberToAdd = useCallback((friend: Friend) => {
+    setSelectedMembersToAdd((currentMembers) => {
+      const exists = currentMembers.some((member) => member._id === friend._id);
+
+      return exists
+        ? currentMembers.filter((member) => member._id !== friend._id)
+        : [...currentMembers, friend];
+    });
+  }, []);
+
+  const handleAddMembersToCurrentGroup = useCallback(async () => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    if (selectedMembersToAdd.length === 0) {
+      toast.info("Chon it nhat mot ban de them vao nhom.");
+      return;
+    }
+
+    try {
+      await addGroupMembers(selectedConvo._id, selectedMembersToAdd.map((friend) => friend._id));
+      resetGroupManagementState();
+      toast.success("Da them thanh vien vao nhom.");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Them thanh vien that bai.");
+    }
+  }, [addGroupMembers, resetGroupManagementState, selectedConvo, selectedMembersToAdd]);
+
+  const canRemoveGroupParticipant = useCallback((participant: Conversation["participants"][number]) => {
+    if (!selectedGroupRole || participant._id === selectedGroupRole._id) {
+      return false;
+    }
+
+    if (selectedGroupRole.role === "owner") {
+      return true;
+    }
+
+    if (selectedGroupRole.role === "deputy") {
+      return participant.role !== "owner";
+    }
+
+    return false;
+  }, [selectedGroupRole]);
+
+  const confirmGroupAction = useCallback((
+    title: string,
+    message: string,
+    action: () => Promise<void>,
+    successMessage: string,
+    onAfterSuccess?: () => void
+  ) => {
+    Alert.alert(title, message, [
+      { text: "Huy", style: "cancel" },
+      {
+        text: "Dong y",
+        style: "destructive",
+        onPress: () => {
+          void action()
+            .then(() => {
+              toast.success(successMessage);
+              onAfterSuccess?.();
+            })
+            .catch((error: any) => {
+              toast.error(error?.response?.data?.message || "Thao tac that bai.");
+            });
+        },
+      },
+    ]);
+  }, []);
+
+  const handleToggleDeputyRole = useCallback((participant: Conversation["participants"][number]) => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    const nextRole = participant.role === "deputy" ? "member" : "deputy";
+
+    confirmGroupAction(
+      nextRole === "deputy" ? "Bo nhiem pho nhom" : "Thu hoi quyen pho nhom",
+      nextRole === "deputy"
+        ? `Bo nhiem ${participant.displayName} lam pho nhom?`
+        : `Thu hoi quyen pho nhom cua ${participant.displayName}?`,
+      () => updateGroupMemberRole(selectedConvo._id, participant._id, nextRole),
+      nextRole === "deputy" ? "Da bo nhiem pho nhom." : "Da thu hoi quyen pho nhom."
+    );
+  }, [confirmGroupAction, selectedConvo, updateGroupMemberRole]);
+
+  const handleTransferOwner = useCallback((participant: Conversation["participants"][number]) => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    confirmGroupAction(
+      "Chuyen quyen chu nhom",
+      `Chuyen quyen chu nhom cho ${participant.displayName}?`,
+      () => transferGroupOwnership(selectedConvo._id, participant._id),
+      "Da chuyen quyen chu nhom."
+    );
+  }, [confirmGroupAction, selectedConvo, transferGroupOwnership]);
+
+  const handleRemoveGroupParticipant = useCallback((participant: Conversation["participants"][number]) => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    confirmGroupAction(
+      "Xoa thanh vien",
+      `Xoa ${participant.displayName} khoi nhom?`,
+      () => removeGroupMember(selectedConvo._id, participant._id),
+      "Da xoa thanh vien khoi nhom."
+    );
+  }, [confirmGroupAction, removeGroupMember, selectedConvo]);
+
+  const handleLeaveCurrentGroup = useCallback(() => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    confirmGroupAction(
+      "Roi nhom",
+      "Ban co chac chan muon roi khoi nhom nay?",
+      () => leaveGroup(selectedConvo._id),
+      "Da roi nhom.",
+      () => {
+        setShowGroupManagement(false);
+        resetGroupManagementState();
+      }
+    );
+  }, [confirmGroupAction, leaveGroup, resetGroupManagementState, selectedConvo]);
+
+  const handleDisbandCurrentGroup = useCallback(() => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    confirmGroupAction(
+      "Giai tan nhom",
+      "Giai tan nhom chat nay? Hanh dong nay khong the hoan tac.",
+      () => disbandGroup(selectedConvo._id),
+      "Da giai tan nhom chat.",
+      () => {
+        setShowGroupManagement(false);
+        resetGroupManagementState();
+      }
+    );
+  }, [confirmGroupAction, disbandGroup, resetGroupManagementState, selectedConvo]);
+
   useEffect(() => {
     if (!selectedConversationId || messages[selectedConversationId]) {
       return;
@@ -659,8 +869,10 @@ export default function ChatAppScreen() {
 
   useEffect(() => {
     setShowConversationProfile(false);
+    setShowGroupManagement(false);
     setShowConversationAssets(false);
-  }, [selectedConversationId]);
+    resetGroupManagementState();
+  }, [resetGroupManagementState, selectedConversationId]);
 
   useEffect(() => {
     if (
@@ -732,6 +944,12 @@ export default function ChatAppScreen() {
     }
   }, [selectedConversationFriend]);
 
+  const handleOpenGroupManagement = useCallback(() => {
+    if (selectedConvo?.type === "group") {
+      openGroupManagementModal();
+    }
+  }, [openGroupManagementModal, selectedConvo]);
+
   const handleOpenConversationAssets = useCallback(() => {
     if (selectedConvo) {
       setShowConversationAssets(true);
@@ -775,6 +993,29 @@ export default function ChatAppScreen() {
                   </Text>
                 )}
               </View>
+            </Pressable>
+          ) : selectedConvo.type === "group" ? (
+            <Pressable
+              onPress={handleOpenGroupManagement}
+              style={({ pressed }) => [
+                styles.headerTitleWrap,
+                { opacity: pressed ? 0.9 : 1 },
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+              >
+                {getConversationTitle(selectedConvo, user?._id)}
+              </Text>
+              {!!selectedConversationStatus && (
+                <Text
+                  numberOfLines={1}
+                  style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                >
+                  {selectedConversationStatus}
+                </Text>
+              )}
             </Pressable>
           ) : (
             <View style={styles.headerTitleWrap}>
@@ -841,6 +1082,7 @@ export default function ChatAppScreen() {
     });
   }, [
     handleBack,
+    handleOpenGroupManagement,
     handleOpenConversationAssets,
     handleOpenConversationProfile,
     isDark,
@@ -949,6 +1191,206 @@ export default function ChatAppScreen() {
           friend={selectedConversationFriend}
           onClose={() => setShowConversationProfile(false)}
         />
+
+        <OverlayModal
+          visible={showGroupManagement && selectedConvo?.type === "group"}
+          title={selectedConvo?.group?.name || "Quan ly nhom"}
+          onClose={() => {
+            setShowGroupManagement(false);
+            resetGroupManagementState();
+          }}
+        >
+          <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View
+              style={[
+                styles.requestCard,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Thanh vien nhom</Text>
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Vai tro cua ban: {selectedGroupRole ? GROUP_ROLE_LABELS[selectedGroupRole.role] : "Khong xac dinh"}</Text>
+
+              {selectedConvo?.type === "group"
+                ? selectedConvo.participants.map((participant) => (
+                  <View
+                    key={participant._id}
+                    style={[
+                      styles.friendRow,
+                      {
+                        backgroundColor: isDark ? "#111827" : "#ffffff",
+                        borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                      },
+                    ]}
+                  >
+                    <View style={styles.requestInfo}>
+                      <UserAvatar name={participant.displayName} avatarUrl={participant.avatarUrl} size={42} />
+                      <View style={styles.requestTextBlock}>
+                        <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                          {participant.displayName}{participant._id === user?._id ? " (Ban)" : ""}
+                        </Text>
+                        <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                          {GROUP_ROLE_LABELS[participant.role]}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.groupActionColumn}>
+                      {selectedGroupRole?.role === "owner" && participant._id !== user?._id && participant.role !== "owner" ? (
+                        <Pressable
+                          onPress={() => handleToggleDeputyRole(participant)}
+                          style={[
+                            styles.secondaryButton,
+                            styles.groupActionButton,
+                            {
+                              backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                              borderColor: isDark ? "#334155" : "#e2e8f0",
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                            {participant.role === "deputy" ? "Thu hoi pho" : "Bo nhiem pho"}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+
+                      {selectedGroupRole?.role === "owner" && participant._id !== user?._id ? (
+                        <Pressable onPress={() => handleTransferOwner(participant)} style={[styles.primaryButton, styles.groupActionButton]}>
+                          <Text style={styles.primaryButtonText}>Chuyen chu nhom</Text>
+                        </Pressable>
+                      ) : null}
+
+                      {canRemoveGroupParticipant(participant) ? (
+                        <Pressable
+                          onPress={() => handleRemoveGroupParticipant(participant)}
+                          style={[
+                            styles.secondaryButton,
+                            styles.groupActionButton,
+                            {
+                              backgroundColor: isDark ? "#3f1d24" : "#fff1f2",
+                              borderColor: isDark ? "#7f1d1d" : "#fecdd3",
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Xoa khoi nhom</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </View>
+                ))
+                : null}
+            </View>
+
+            <View
+              style={[
+                styles.requestCard,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Them thanh vien</Text>
+              <TextInput
+                value={groupManageQuery}
+                onChangeText={setGroupManageQuery}
+                placeholder="Tim ban de them vao nhom"
+                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                style={[
+                  styles.textInput,
+                  {
+                    color: isDark ? "#f8fafc" : "#0f172a",
+                    backgroundColor: isDark ? "#111827" : "#ffffff",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              />
+
+              {selectedMembersToAdd.length > 0 ? (
+                <View style={styles.selectedMembersWrap}>
+                  {selectedMembersToAdd.map((friend) => (
+                    <Pressable
+                      key={friend._id}
+                      onPress={() => handleToggleMemberToAdd(friend)}
+                      style={[
+                        styles.selectedMemberChip,
+                        { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.selectedMemberText,
+                          { color: isDark ? "#ddd6fe" : "#6d28d9" },
+                        ]}
+                      >
+                        {friend.displayName}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+
+              <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                {filteredFriendsForGroupManagement.length === 0 ? (
+                  <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Khong con ban phu hop de them vao nhom.</Text>
+                ) : (
+                  filteredFriendsForGroupManagement.map((friend) => (
+                    <Pressable
+                      key={friend._id}
+                      onPress={() => handleToggleMemberToAdd(friend)}
+                      style={({ pressed }) => [
+                        styles.friendRow,
+                        {
+                          backgroundColor: isDark ? "#111827" : "#ffffff",
+                          borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                          opacity: pressed ? 0.92 : 1,
+                        },
+                      ]}
+                    >
+                      <View style={styles.requestInfo}>
+                        <UserAvatar name={friend.displayName} avatarUrl={friend.avatarUrl} size={42} />
+                        <View style={styles.requestTextBlock}>
+                          <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>{friend.displayName}</Text>
+                          <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{friend.username}</Text>
+                        </View>
+                      </View>
+
+                      <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Them</Text>
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+
+              <Pressable onPress={handleAddMembersToCurrentGroup} disabled={chatLoading || selectedMembersToAdd.length === 0} style={styles.primaryButton}>
+                <Text style={styles.primaryButtonText}>{chatLoading ? "Dang xu ly..." : "Them thanh vien"}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.requestActionsRow}>
+              <Pressable
+                onPress={handleLeaveCurrentGroup}
+                style={[
+                  styles.secondaryButton,
+                  styles.groupFooterButton,
+                  {
+                    backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Roi nhom</Text>
+              </Pressable>
+
+              {selectedGroupRole?.role === "owner" ? (
+                <Pressable onPress={handleDisbandCurrentGroup} style={[styles.primaryButton, styles.groupFooterButton, { backgroundColor: "#e11d48" }]}>
+                  <Text style={styles.primaryButtonText}>Giai tan nhom</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </ScrollView>
+        </OverlayModal>
 
         <ConversationAssetsModal
           visible={showConversationAssets}
@@ -1648,6 +2090,7 @@ const styles = StyleSheet.create({
   requestName: { fontSize: 15, fontWeight: "700" },
   requestUsername: { fontSize: 13 },
   requestActions: { flexDirection: "row", gap: 10 },
+  requestActionsRow: { flexDirection: "row", gap: 10 },
   primaryButton: {
     minHeight: 46,
     borderRadius: 16,
@@ -1665,6 +2108,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
+  },
+  groupActionColumn: {
+    alignItems: "stretch",
+    gap: 8,
+    width: "100%",
+  },
+  groupActionButton: {
+    width: "100%",
+  },
+  groupFooterButton: {
+    flex: 1,
   },
   secondaryButtonText: { fontSize: 13, fontWeight: "700" },
   pendingLabel: { fontSize: 13, fontWeight: "600" },

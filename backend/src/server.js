@@ -40,6 +40,10 @@ cloudinary.config({
 const swaggerDocument = JSON.parse(fs.readFileSync("./src/swagger.json", "utf-8"));
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
 app.use("/api/auth", authRoute);
 
 app.use(protectedRoute);

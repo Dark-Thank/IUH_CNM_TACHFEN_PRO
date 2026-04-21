@@ -66,7 +66,13 @@ const syncConversationAfterUserDeletion = async (conversation, deletedUserId) =>
   conversation.unreadCounts = nextUnreadCounts;
 
   if (conversation.group?.createdBy?.toString() === deletedUserIdStr) {
-    conversation.group.createdBy = remainingParticipants[0]?.userId ?? undefined;
+    const nextOwner = remainingParticipants[0] ?? null;
+
+    conversation.group.createdBy = nextOwner?.userId ?? undefined;
+    conversation.participants = remainingParticipants.map((participant, index) => ({
+      ...participant.toObject?.() ?? participant,
+      role: index === 0 ? "owner" : participant.role === "owner" ? "member" : (participant.role || "member"),
+    }));
   }
 
   conversation.lastMessageAt = latestMessage?.createdAt ?? null;

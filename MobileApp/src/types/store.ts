@@ -89,6 +89,7 @@ export interface ChatState {
   deleteMessageForMe: (messageId: string) => Promise<void>;
   upsertConversation: (conversation: Conversation) => void;
   updateConversation: (conversation: Partial<Conversation> & { _id: string }) => void;
+  removeConversation: (conversationId: string) => void;
   markAsSeen: () => Promise<void>;
   addConvo: (convo: Conversation) => void;
   createConversation: (
@@ -96,6 +97,16 @@ export interface ChatState {
     name: string,
     memberIds: string[]
   ) => Promise<void>;
+  addGroupMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
+  removeGroupMember: (conversationId: string, memberId: string) => Promise<void>;
+  updateGroupMemberRole: (
+    conversationId: string,
+    memberId: string,
+    role: "deputy" | "member"
+  ) => Promise<void>;
+  transferGroupOwnership: (conversationId: string, newOwnerId: string) => Promise<void>;
+  leaveGroup: (conversationId: string) => Promise<void>;
+  disbandGroup: (conversationId: string) => Promise<void>;
 }
 
 export interface SocketState {

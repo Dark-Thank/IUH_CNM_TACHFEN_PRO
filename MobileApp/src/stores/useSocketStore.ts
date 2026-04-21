@@ -195,6 +195,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.emit("join-conversation", conversation._id);
     });
 
+    socket.on("conversation-removed", ({ conversationId }: { conversationId: string }) => {
+      useChatStore.getState().removeConversation(conversationId);
+    });
+
     socket.on("user-blocked", ({ blockerId }) => {
       import('./useBlockStore').then((mod) => {
         mod.useBlockStore.getState().setBlockedBy(blockerId);

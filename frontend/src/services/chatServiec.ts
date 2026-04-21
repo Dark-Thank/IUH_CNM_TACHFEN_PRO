@@ -73,14 +73,48 @@ export const chatService = {
     return res.data.conversation;
   },
 
+  async addGroupMembers(conversationId: string, memberIds: string[]) {
+    const res = await api.post(`/conversations/${conversationId}/members`, { memberIds });
+    return res.data.conversation;
+  },
+
+  async removeGroupMember(conversationId: string, memberId: string) {
+    const res = await api.delete(`/conversations/${conversationId}/members/${memberId}`);
+    return res.data.conversation;
+  },
+
+  async updateGroupMemberRole(
+    conversationId: string,
+    memberId: string,
+    role: "deputy" | "member"
+  ) {
+    const res = await api.patch(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+    return res.data.conversation;
+  },
+
+  async transferGroupOwnership(conversationId: string, newOwnerId: string) {
+    const res = await api.patch(`/conversations/${conversationId}/owner`, { newOwnerId });
+    return res.data.conversation;
+  },
+
+  async leaveGroup(conversationId: string) {
+    const res = await api.post(`/conversations/${conversationId}/leave`);
+    return res.data;
+  },
+
+  async disbandGroup(conversationId: string) {
+    const res = await api.delete(`/conversations/${conversationId}`);
+    return res.data;
+  },
+
   async togglePinMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/pin`);
     return res.data.message;
   },
   async reactToMessage(messageId: string, emoji: string) {
-  const res = await api.post(`/messages/${messageId}/reaction`, { emoji });
-  return res.data.message;
-},
+    const res = await api.post(`/messages/${messageId}/reaction`, { emoji });
+    return res.data.message;
+  },
   async recallMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/recall`);
     return res.data;

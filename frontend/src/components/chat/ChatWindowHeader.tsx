@@ -10,6 +10,7 @@ import { ProfileModal } from "../createNewChat/ProfileModal";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import { SidebarTrigger } from "../ui/sidebar";
+import GroupChatManagementDialog from "./GroupChatManagementDialog";
 import GroupChatAvatar from "./GroupChatAvatar";
 import StatusBadge from "./StatusBadge";
 import UserAvatar from "./UserAvatar";
@@ -26,6 +27,7 @@ const ChatWindowHeader = ({
   onToggleAttachmentsPanel,
 }: Props) => {
   const [showProfile, setShowProfile] = useState(false);
+  const [showGroupManagement, setShowGroupManagement] = useState(false);
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
@@ -60,6 +62,7 @@ const ChatWindowHeader = ({
   }
 
   const canOpenProfile = chat.type === "direct" && !!profileFriend;
+  const canOpenGroupManagement = chat.type === "group";
 
   return (
     <>
@@ -76,10 +79,15 @@ const ChatWindowHeader = ({
             onClick={() => {
               if (canOpenProfile) {
                 setShowProfile(true);
+                return;
+              }
+
+              if (canOpenGroupManagement) {
+                setShowGroupManagement(true);
               }
             }}
-            disabled={!canOpenProfile}
-            className={`p-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition-colors ${canOpenProfile ? "hover:bg-accent/60 cursor-pointer" : "cursor-default"
+            disabled={!canOpenProfile && !canOpenGroupManagement}
+            className={`p-2 flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left transition-colors ${canOpenProfile || canOpenGroupManagement ? "hover:bg-accent/60 cursor-pointer" : "cursor-default"
               }`}
           >
             <div className="relative shrink-0">
@@ -155,6 +163,14 @@ const ChatWindowHeader = ({
         open={showProfile}
         onOpenChange={setShowProfile}
       />
+
+      {chat.type === "group" ? (
+        <GroupChatManagementDialog
+          conversation={chat}
+          open={showGroupManagement}
+          onOpenChange={setShowGroupManagement}
+        />
+      ) : null}
     </>
   );
 };

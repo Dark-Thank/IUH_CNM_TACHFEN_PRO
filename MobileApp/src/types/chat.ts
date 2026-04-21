@@ -2,6 +2,7 @@ export interface Participant {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
+  role: "owner" | "deputy" | "member";
   joinedAt: string;
 }
 

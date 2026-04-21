@@ -256,6 +256,19 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
+      removeConversation: (conversationId) => {
+        set((state) => {
+          const { [conversationId]: _removed, ...restMessages } = state.messages;
+
+          return {
+            conversations: state.conversations.filter((conversation) => conversation._id !== conversationId),
+            messages: restMessages,
+            activeConversationId:
+              state.activeConversationId === conversationId ? null : state.activeConversationId,
+          };
+        });
+      },
+
       markAsSeen: async () => {
         try {
           const { user } = useAuthStore.getState();
@@ -315,6 +328,92 @@ export const useChatStore = create<ChatState>()(
             .socket?.emit("join-conversation", conversation._id);
         } catch (error) {
           console.error("Lỗi xảy ra khi gọi createConversation trong store", error);
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      addGroupMembers: async (conversationId, memberIds) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.addGroupMembers(conversationId, memberIds);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Lỗi khi thêm thành viên nhóm:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      removeGroupMember: async (conversationId, memberId) => {
+        try {
+          set({ loading: true });
+          const { user } = useAuthStore.getState();
+
+          if (user?._id === memberId) {
+            await chatService.leaveGroup(conversationId);
+            get().removeConversation(conversationId);
+            return;
+          }
+
+          const conversation = await chatService.removeGroupMember(conversationId, memberId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Lỗi khi xóa thành viên nhóm:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      updateGroupMemberRole: async (conversationId, memberId, role) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.updateGroupMemberRole(conversationId, memberId, role);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Lỗi khi cập nhật vai trò thành viên:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      transferGroupOwnership: async (conversationId, newOwnerId) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.transferGroupOwnership(conversationId, newOwnerId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Lỗi khi chuyển quyền chủ nhóm:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      leaveGroup: async (conversationId) => {
+        try {
+          set({ loading: true });
+          await chatService.leaveGroup(conversationId);
+          get().removeConversation(conversationId);
+        } catch (error) {
+          console.error("Lỗi khi rời nhóm:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      disbandGroup: async (conversationId) => {
+        try {
+          set({ loading: true });
+          await chatService.disbandGroup(conversationId);
+          get().removeConversation(conversationId);
+        } catch (error) {
+          console.error("Lỗi khi giải tán nhóm:", error);
+          throw error;
         } finally {
           set({ loading: false });
         }

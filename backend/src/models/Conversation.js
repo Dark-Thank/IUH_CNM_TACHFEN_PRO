@@ -6,17 +6,22 @@ const participantSchema = new mongoose.Schema({
         ref: "User",
         required: true,
     },
+    role: {
+        type: String,
+        enum: ["owner", "deputy", "member"],
+        default: "member",
+    },
     joinedAt: {
         type: Date,
         default: Date.now,
     },
 },
-{ _id: false,}
+    { _id: false, }
 );
 
 const groupSchema = new mongoose.Schema({
     name: {
-        type : String,
+        type: String,
         trim: true,
     },
     createdBy: {
@@ -26,7 +31,7 @@ const groupSchema = new mongoose.Schema({
 }, { _id: false, });
 
 const lastMessageSchema = new mongoose.Schema({
-    _id: {type: String},
+    _id: { type: String },
     content: {
         type: String,
         default: null,
@@ -38,8 +43,8 @@ const lastMessageSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: null,
-    }, 
-},{ _id: false, });
+    },
+}, { _id: false, });
 
 
 const ConversationSchema = new mongoose.Schema({

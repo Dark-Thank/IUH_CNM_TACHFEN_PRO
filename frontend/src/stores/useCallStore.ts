@@ -1,15 +1,15 @@
 import { createBrowserPeerConnection, createCallId, getBrowserUserMedia } from "@/lib/callWebRTC";
 import type {
-    CallAcceptPayload,
-    CallDeclinePayload,
-    CallEndPayload,
-    CallInvitePayload,
-    CallSession,
-    CallSignalCandidatePayload,
-    CallSignalDescriptionPayload,
-    CallStatePayload,
-    CallStatus,
-    CallType,
+  CallAcceptPayload,
+  CallDeclinePayload,
+  CallEndPayload,
+  CallInvitePayload,
+  CallSession,
+  CallSignalCandidatePayload,
+  CallSignalDescriptionPayload,
+  CallStatePayload,
+  CallStatus,
+  CallType,
 } from "@/types/call";
 import type { Conversation, Participant } from "@/types/chat";
 import { toast } from "sonner";
@@ -62,6 +62,7 @@ const resolvePeerForIncomingCall = (conversationId: string, callerId: string): P
     _id: callerId,
     displayName: peer?.displayName ?? "Nguoi dung",
     avatarUrl: peer?.avatarUrl ?? null,
+    role: peer?.role ?? "member",
     joinedAt: peer?.joinedAt ?? new Date().toISOString(),
   };
 };
@@ -92,9 +93,9 @@ const setCurrentCallStatus = (
   set((state) => ({
     currentCall: state.currentCall
       ? {
-          ...state.currentCall,
-          status,
-        }
+        ...state.currentCall,
+        status,
+      }
       : null,
   }));
 };

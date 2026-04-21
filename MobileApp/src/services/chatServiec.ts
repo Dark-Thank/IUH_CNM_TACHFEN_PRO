@@ -228,6 +228,40 @@ export const chatService = {
     return res.data.conversation;
   },
 
+  async addGroupMembers(conversationId: string, memberIds: string[]) {
+    const res = await api.post(`/conversations/${conversationId}/members`, { memberIds });
+    return res.data.conversation;
+  },
+
+  async removeGroupMember(conversationId: string, memberId: string) {
+    const res = await api.delete(`/conversations/${conversationId}/members/${memberId}`);
+    return res.data.conversation;
+  },
+
+  async updateGroupMemberRole(
+    conversationId: string,
+    memberId: string,
+    role: "deputy" | "member"
+  ) {
+    const res = await api.patch(`/conversations/${conversationId}/members/${memberId}/role`, { role });
+    return res.data.conversation;
+  },
+
+  async transferGroupOwnership(conversationId: string, newOwnerId: string) {
+    const res = await api.patch(`/conversations/${conversationId}/owner`, { newOwnerId });
+    return res.data.conversation;
+  },
+
+  async leaveGroup(conversationId: string) {
+    const res = await api.post(`/conversations/${conversationId}/leave`);
+    return res.data;
+  },
+
+  async disbandGroup(conversationId: string) {
+    const res = await api.delete(`/conversations/${conversationId}`);
+    return res.data;
+  },
+
   reactMessage: async (messageId: string, emoji: string) => {
     try {
       const accessToken = authSession.getAccessToken();

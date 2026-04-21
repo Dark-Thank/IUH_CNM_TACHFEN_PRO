@@ -450,6 +450,19 @@ export const useChatStore = create<ChatState>()(
         }));
       },
 
+      removeConversation: (conversationId) => {
+        set((state) => {
+          const { [conversationId]: _removed, ...restMessages } = state.messages;
+
+          return {
+            conversations: state.conversations.filter((conversation) => conversation._id !== conversationId),
+            messages: restMessages,
+            activeConversationId:
+              state.activeConversationId === conversationId ? null : state.activeConversationId,
+          };
+        });
+      },
+
       markAsSeen: async () => {
         try {
           const currentUserId = authSession.getCurrentUserId();
@@ -514,6 +527,92 @@ export const useChatStore = create<ChatState>()(
           socketEmitter.emit("join-conversation", conversation._id);
         } catch (error) {
           console.error("Loi xay ra khi goi createConversation trong store", error);
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      addGroupMembers: async (conversationId, memberIds) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.addGroupMembers(conversationId, memberIds);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi them thanh vien nhom:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      removeGroupMember: async (conversationId, memberId) => {
+        try {
+          set({ loading: true });
+          const currentUserId = authSession.getCurrentUserId();
+
+          if (currentUserId === memberId) {
+            await chatService.leaveGroup(conversationId);
+            get().removeConversation(conversationId);
+            return;
+          }
+
+          const conversation = await chatService.removeGroupMember(conversationId, memberId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi xoa thanh vien nhom:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      updateGroupMemberRole: async (conversationId, memberId, role) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.updateGroupMemberRole(conversationId, memberId, role);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi cap nhat vai tro thanh vien:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      transferGroupOwnership: async (conversationId, newOwnerId) => {
+        try {
+          set({ loading: true });
+          const conversation = await chatService.transferGroupOwnership(conversationId, newOwnerId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi chuyen quyen chu nhom:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      leaveGroup: async (conversationId) => {
+        try {
+          set({ loading: true });
+          await chatService.leaveGroup(conversationId);
+          get().removeConversation(conversationId);
+        } catch (error) {
+          console.error("Loi khi roi nhom:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      disbandGroup: async (conversationId) => {
+        try {
+          set({ loading: true });
+          await chatService.disbandGroup(conversationId);
+          get().removeConversation(conversationId);
+        } catch (error) {
+          console.error("Loi khi giai tan nhom:", error);
+          throw error;
         } finally {
           set({ loading: false });
         }

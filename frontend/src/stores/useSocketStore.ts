@@ -166,6 +166,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.emit("join-conversation", conversation._id);
     });
 
+    socket.on("conversation-removed", ({ conversationId }) => {
+      useChatStore.getState().removeConversation(conversationId);
+    });
+
     // message pinned
     socket.on("messagePinned", ({ messageId, isPinned, pinnedBy, pinnedAt }) => {
       useChatStore.setState((state) => {

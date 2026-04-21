@@ -1,28 +1,189 @@
 import Block from "../models/Block.js";
 import Conversation from "../models/Conversation.js";
+import Friend from "../models/Friend.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
+import {
+    emitConversationRemoved,
+    emitConversationUpsert,
+    formatConversationForSocket,
+    getConversationParticipantIds,
+} from "../utils/messageHelper.js";
+
+const GROUP_ROLES = {
+    OWNER: "owner",
+    DEPUTY: "deputy",
+    MEMBER: "member",
+};
+
+const conversationPopulate = [
+    { path: "participants.userId", select: "displayName avatarUrl" },
+    { path: "seenBy", select: "displayName avatarUrl" },
+    { path: "lastMessage.senderId", select: "displayName avatarUrl" },
+];
+
+const pair = (a, b) => (a < b ? [a, b] : [b, a]);
+
+const normalizeId = (value) => value?.toString?.() || null;
+
+const dedupeIds = (values = [], excludedIds = []) => {
+    const excluded = new Set(excludedIds.map((value) => normalizeId(value)).filter(Boolean));
+
+    return [...new Set((values || []).map((value) => normalizeId(value)).filter(Boolean))]
+        .filter((value) => !excluded.has(value));
+};
+
+const getParticipant = (conversation, userId) => (
+    (conversation.participants || []).find(
+        (participant) => normalizeId(participant.userId) === normalizeId(userId)
+    ) || null
+);
+
+const isGroupConversation = (conversation) => conversation?.type === "group";
+
+const canRemoveTarget = (actor, target) => {
+    if (!actor || !target) {
+        return false;
+    }
+
+    if (normalizeId(actor.userId) === normalizeId(target.userId)) {
+        return false;
+    }
+
+    if (actor.role === GROUP_ROLES.OWNER) {
+        return true;
+    }
+
+    if (actor.role === GROUP_ROLES.DEPUTY) {
+        return target.role !== GROUP_ROLES.OWNER;
+    }
+
+    return false;
+};
+
+const canManageDeputyRole = (actor, target) => (
+    actor?.role === GROUP_ROLES.OWNER &&
+    !!target &&
+    target.role !== GROUP_ROLES.OWNER &&
+    normalizeId(actor.userId) !== normalizeId(target.userId)
+);
+
+const ensureGroupConversation = (conversation, res) => {
+    if (!conversation) {
+        res.status(404).json({ message: "Cuộc trò chuyện không tồn tại" });
+        return false;
+    }
+
+    if (!isGroupConversation(conversation)) {
+        res.status(400).json({ message: "Chỉ hỗ trợ thao tác này cho nhóm chat" });
+        return false;
+    }
+
+    return true;
+};
+
+const populateConversation = async (conversation) => {
+    if (!conversation) {
+        return null;
+    }
+
+    await conversation.populate(conversationPopulate);
+    return conversation;
+};
+
+const loadConversation = async (conversationId) => {
+    const conversation = await Conversation.findById(conversationId);
+
+    if (!conversation) {
+        return null;
+    }
+
+    return populateConversation(conversation);
+};
+
+const ensureFriendsWithActor = async (actorId, memberIds = []) => {
+    const checks = await Promise.all(
+        memberIds.map(async (memberId) => {
+            const [userA, userB] = pair(normalizeId(actorId), normalizeId(memberId));
+            const friendship = await Friend.findOne({ userA, userB }).lean();
+            return friendship ? null : memberId;
+        })
+    );
+
+    return checks.filter(Boolean);
+};
+
+const seedUnreadCountsForParticipants = (conversation) => {
+    if (!conversation.unreadCounts) {
+        conversation.unreadCounts = new Map();
+    }
+
+    (conversation.participants || []).forEach((participant) => {
+        const participantId = normalizeId(participant.userId);
+
+        if (!participantId) {
+            return;
+        }
+
+        if (conversation.unreadCounts instanceof Map) {
+            if (!conversation.unreadCounts.has(participantId)) {
+                conversation.unreadCounts.set(participantId, 0);
+            }
+            return;
+        }
+
+        if (conversation.unreadCounts[participantId] === undefined) {
+            conversation.unreadCounts[participantId] = 0;
+        }
+    });
+};
+
+const removeParticipantState = (conversation, removedUserId) => {
+    const removedId = normalizeId(removedUserId);
+
+    conversation.participants = (conversation.participants || []).filter(
+        (participant) => normalizeId(participant.userId) !== removedId
+    );
+    conversation.seenBy = (conversation.seenBy || []).filter(
+        (seenUserId) => normalizeId(seenUserId) !== removedId
+    );
+
+    if (conversation.unreadCounts instanceof Map) {
+        conversation.unreadCounts.delete(removedId);
+        return;
+    }
+
+    if (conversation.unreadCounts && typeof conversation.unreadCounts === "object") {
+        delete conversation.unreadCounts[removedId];
+    }
+};
+
+const respondWithConversation = async (res, conversation, statusCode = 200) => {
+    const populatedConversation = await populateConversation(conversation);
+    return res.status(statusCode).json({ conversation: formatConversationForSocket(populatedConversation) });
+};
 
 export const createConversation = async (req, res) => {
     try {
         const { type, name, memberIds } = req.body;
         const userId = req.user._id;
+        const uniqueMemberIds = dedupeIds(memberIds, [userId]);
 
         if (!type ||
             (type === 'group' && !name) ||
             !Array.isArray(memberIds) ||
-            memberIds.length === 0) {
+            uniqueMemberIds.length === 0) {
             return res.status(400).json({ message: 'Tên nhóm và danh sách thành viên là bắt buộc' });
         }
 
         let conversation;
         if (type === 'direct') {
-            const participantId = memberIds[0];
+            const participantId = uniqueMemberIds[0];
 
             // Check if participant has blocked the user
-            const isBlocked = await Block.findOne({ 
-                blocker: participantId, 
-                blocked: userId 
+            const isBlocked = await Block.findOne({
+                blocker: participantId,
+                blocked: userId
             });
 
             if (isBlocked) {
@@ -33,11 +194,11 @@ export const createConversation = async (req, res) => {
                 type: "direct",
                 participants: {
                     $all: [
-                    { $elemMatch: { userId } },
-                    { $elemMatch: { userId: participantId } }
+                        { $elemMatch: { userId } },
+                        { $elemMatch: { userId: participantId } }
                     ]
                 }
-});
+            });
 
             if (!conversation) {
                 conversation = new Conversation({
@@ -55,8 +216,8 @@ export const createConversation = async (req, res) => {
             conversation = new Conversation({
                 type: 'group',
                 participants: [
-                    { userId },
-                    ...memberIds.map(id => ({ userId: id }))
+                    { userId, role: GROUP_ROLES.OWNER },
+                    ...uniqueMemberIds.map(id => ({ userId: id, role: GROUP_ROLES.MEMBER }))
                 ],
                 group: {
                     name,
@@ -74,28 +235,13 @@ export const createConversation = async (req, res) => {
 
         }
 
-        await conversation.populate([
-            { path: 'participants.userId', select: 'displayName avatarUrl' },
-            {
-                path: 'seenBy',
-                select: 'displayName avatarUrl',
-            },
-            { path: 'lastMessage.senderId', select: 'displayName avatarUrl' },
-        ]);
-
-
-        const participants = (conversation.participants || []).map((p) => ({
-            _id: p.userId?._id,
-            displayName: p.userId?.displayName,
-            avatarUrl: p.userId?.avatarUrl ?? null,
-            joinedAt: p.joinedAt,
-        }));
-        const formatted = { ...conversation.toObject(), participants };
+        await populateConversation(conversation);
+        const formatted = formatConversationForSocket(conversation);
 
 
         if (type === "group") {
-            memberIds.forEach((userId) => {
-                io.to(userId).emit("new-group", formatted);
+            uniqueMemberIds.forEach((memberId) => {
+                io.to(memberId).emit("new-group", formatted);
             });
         }
         return res.status(201).json({ conversation: formatted });
@@ -127,19 +273,7 @@ export const getConversations = async (req, res) => {
                 select: 'displayName avatarUrl',
             });
 
-        const formatted = conversations.map((convo) => {
-            const participants = (convo.participants || []).map((p) => ({
-                _id: p.userId?._id,
-                displayName: p.userId?.displayName,
-                avatarUrl: p.userId?.avatarUrl ?? null,
-                joinedAt: p.joinedAt,
-            }));
-            return {
-                ...convo.toObject(),
-                unreadCounts: convo.unreadCounts || {},
-                participants,
-            };
-        });
+        const formatted = conversations.map((convo) => formatConversationForSocket(convo));
 
         return res.status(200).json({ conversations: formatted });
 
@@ -250,4 +384,249 @@ export const markAsSeen = async (req, res) => {
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 }
+
+export const addGroupMembers = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { memberIds } = req.body;
+        const actorId = req.user._id;
+
+        if (!Array.isArray(memberIds) || memberIds.length === 0) {
+            return res.status(400).json({ message: "Danh sách thành viên không hợp lệ" });
+        }
+
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+
+        if (!actor) {
+            return res.status(403).json({ message: "Bạn không phải là thành viên của nhóm" });
+        }
+
+        const nextMemberIds = dedupeIds(memberIds, conversation.participants.map((participant) => participant.userId));
+
+        if (nextMemberIds.length === 0) {
+            return res.status(400).json({ message: "Những người dùng này đã ở trong nhóm" });
+        }
+
+        const notFriends = await ensureFriendsWithActor(actorId, nextMemberIds);
+
+        if (notFriends.length > 0) {
+            return res.status(403).json({ message: "Bạn chỉ có thể thêm bạn bè vào nhóm", notFriends });
+        }
+
+        conversation.participants.push(
+            ...nextMemberIds.map((memberId) => ({
+                userId: memberId,
+                role: GROUP_ROLES.MEMBER,
+            }))
+        );
+        seedUnreadCountsForParticipants(conversation);
+
+        await conversation.save();
+        await populateConversation(conversation);
+
+        emitConversationUpsert(io, conversation);
+
+        nextMemberIds.forEach((memberId) => {
+            io.to(memberId).emit("new-group", formatConversationForSocket(conversation));
+        });
+
+        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+    } catch (error) {
+        console.error("Lỗi khi thêm thành viên nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const removeGroupMember = async (req, res) => {
+    try {
+        const { conversationId, memberId } = req.params;
+        const actorId = req.user._id;
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+        const target = getParticipant(conversation, memberId);
+
+        if (!actor) {
+            return res.status(403).json({ message: "Bạn không phải là thành viên của nhóm" });
+        }
+
+        if (!target) {
+            return res.status(404).json({ message: "Thành viên không tồn tại trong nhóm" });
+        }
+
+        if (!canRemoveTarget(actor, target)) {
+            return res.status(403).json({ message: "Bạn không có quyền xóa thành viên này" });
+        }
+
+        removeParticipantState(conversation, memberId);
+        await conversation.save();
+        await populateConversation(conversation);
+
+        emitConversationUpsert(io, conversation);
+        emitConversationRemoved(io, conversationId, [memberId]);
+
+        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+    } catch (error) {
+        console.error("Lỗi khi xóa thành viên nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const updateGroupMemberRole = async (req, res) => {
+    try {
+        const { conversationId, memberId } = req.params;
+        const { role } = req.body;
+        const actorId = req.user._id;
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        if (![GROUP_ROLES.DEPUTY, GROUP_ROLES.MEMBER].includes(role)) {
+            return res.status(400).json({ message: "Vai trò không hợp lệ" });
+        }
+
+        const actor = getParticipant(conversation, actorId);
+        const target = getParticipant(conversation, memberId);
+
+        if (!actor || !target) {
+            return res.status(404).json({ message: "Không tìm thấy thành viên trong nhóm" });
+        }
+
+        if (!canManageDeputyRole(actor, target)) {
+            return res.status(403).json({ message: "Chỉ chủ nhóm mới được phân quyền phó nhóm" });
+        }
+
+        target.role = role;
+        await conversation.save();
+
+        emitConversationUpsert(io, await populateConversation(conversation));
+
+        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+    } catch (error) {
+        console.error("Lỗi khi cập nhật vai trò thành viên:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const transferGroupOwnership = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { newOwnerId } = req.body;
+        const actorId = req.user._id;
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+        const target = getParticipant(conversation, newOwnerId);
+
+        if (!actor || actor.role !== GROUP_ROLES.OWNER) {
+            return res.status(403).json({ message: "Chỉ chủ nhóm mới được chuyển quyền chủ nhóm" });
+        }
+
+        if (!target) {
+            return res.status(404).json({ message: "Người nhận quyền không ở trong nhóm" });
+        }
+
+        if (normalizeId(actor.userId) === normalizeId(target.userId)) {
+            return res.status(400).json({ message: "Người nhận quyền phải khác chủ nhóm hiện tại" });
+        }
+
+        actor.role = GROUP_ROLES.MEMBER;
+        target.role = GROUP_ROLES.OWNER;
+        if (conversation.group) {
+            conversation.group.createdBy = target.userId;
+        }
+
+        await conversation.save();
+        emitConversationUpsert(io, await populateConversation(conversation));
+
+        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+    } catch (error) {
+        console.error("Lỗi khi chuyển quyền chủ nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const leaveGroup = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const actorId = req.user._id;
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+
+        if (!actor) {
+            return res.status(403).json({ message: "Bạn không phải là thành viên của nhóm" });
+        }
+
+        if (actor.role === GROUP_ROLES.OWNER) {
+            return res.status(400).json({
+                message: conversation.participants.length > 1
+                    ? "Chủ nhóm phải chuyển quyền chủ nhóm trước khi rời nhóm"
+                    : "Chủ nhóm là người cuối cùng, hãy giải tán nhóm thay vì rời nhóm",
+            });
+        }
+
+        removeParticipantState(conversation, actorId);
+        await conversation.save();
+        await populateConversation(conversation);
+
+        emitConversationUpsert(io, conversation);
+        emitConversationRemoved(io, conversationId, [actorId]);
+
+        return res.status(200).json({ message: "Đã rời nhóm", conversationId });
+    } catch (error) {
+        console.error("Lỗi khi rời nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const disbandGroup = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const actorId = req.user._id;
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+
+        if (!actor || actor.role !== GROUP_ROLES.OWNER) {
+            return res.status(403).json({ message: "Chỉ chủ nhóm mới được giải tán nhóm" });
+        }
+
+        const participantIds = getConversationParticipantIds(conversation);
+
+        await Message.deleteMany({ conversationId });
+        await Conversation.deleteOne({ _id: conversationId });
+
+        emitConversationRemoved(io, conversationId, participantIds);
+
+        return res.status(200).json({ message: "Đã giải tán nhóm", conversationId });
+    } catch (error) {
+        console.error("Lỗi khi giải tán nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
 

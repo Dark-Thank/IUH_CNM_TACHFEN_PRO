@@ -105,6 +105,7 @@ export const formatConversationForSocket = (conversation) => {
                 _id: getEntityId(user),
                 displayName: user?.displayName || "",
                 avatarUrl: user?.avatarUrl ?? null,
+                role: participant?.role || "member",
                 joinedAt: participant?.joinedAt,
             };
         }),
@@ -134,6 +135,14 @@ export const emitConversationUpsert = (io, conversation) => {
 
     getConversationParticipantIds(conversation).forEach((participantId) => {
         io.to(participantId).emit("conversation-upsert", formattedConversation);
+    });
+};
+
+export const emitConversationRemoved = (io, conversationId, participantIds = []) => {
+    const payload = { conversationId: conversationId?.toString?.() || conversationId };
+
+    participantIds.forEach((participantId) => {
+        io.to(participantId.toString()).emit("conversation-removed", payload);
     });
 };
 
