@@ -3,6 +3,7 @@ import {
   authMe,
   changePassword,
   deleteMe,
+  getRealtimeConfig,
   getUserById,
   requestChangePassword,
   searchUserByUsername,
@@ -16,6 +17,7 @@ const router = express.Router();
 const avatarUpload = withUploadErrorHandling(upload.single("file"));
 
 router.get("/me", protectedRoute, authMe);
+router.get("/realtime-config", protectedRoute, getRealtimeConfig);
 router.patch("/me", protectedRoute, updateMe);
 router.delete("/me", protectedRoute, deleteMe);
 router.get("/search", protectedRoute, searchUserByUsername);

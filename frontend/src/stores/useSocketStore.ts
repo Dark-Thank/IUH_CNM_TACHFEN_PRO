@@ -4,8 +4,11 @@ import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { useCallStore } from "./useCallStore";
 import { useChatStore } from "./useChatStore";
+import { getSocketBaseUrl, warnIfLocalOnlyRealtimeConfig } from "@/lib/runtimeConfig";
 
-const baseURL = import.meta.env.VITE_SOCKET_URL;
+const baseURL = getSocketBaseUrl();
+
+warnIfLocalOnlyRealtimeConfig();
 
 const joinKnownConversations = (socket: Socket) => {
   useChatStore
@@ -38,6 +41,11 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     const existingSocket = get().socket;
 
     if (!accessToken) {
+      return;
+    }
+
+    if (!baseURL) {
+      console.error("Khong the ket noi socket vi chua xac dinh duoc socket base URL.");
       return;
     }
 

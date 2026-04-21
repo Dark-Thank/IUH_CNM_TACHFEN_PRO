@@ -7,6 +7,7 @@ import FriendRequest from "../models/FriendRequest.js";
 import Message from "../models/Message.js";
 import Session from "../models/Session.js";
 import User from "../models/User.js";
+import { getRealtimeConfig as getRealtimeConfigPayload } from "../utils/realtimeConfig.js";
 
 const getUnreadCountEntries = (unreadCounts) => {
   if (!unreadCounts) {
@@ -57,10 +58,10 @@ const syncConversationAfterUserDeletion = async (conversation, deletedUserId) =>
   conversation.participants = remainingParticipants;
   conversation.seenBy = latestMessage
     ? (conversation.seenBy || []).filter((seenUserId) =>
-        remainingParticipants.some(
-          (participant) => participant.userId.toString() === seenUserId.toString()
-        )
+      remainingParticipants.some(
+        (participant) => participant.userId.toString() === seenUserId.toString()
       )
+    )
     : [];
   conversation.unreadCounts = nextUnreadCounts;
 
@@ -71,11 +72,11 @@ const syncConversationAfterUserDeletion = async (conversation, deletedUserId) =>
   conversation.lastMessageAt = latestMessage?.createdAt ?? null;
   conversation.lastMessage = latestMessage
     ? {
-        _id: latestMessage._id.toString(),
-        content: latestMessage.content ?? null,
-        senderId: latestMessage.senderId,
-        createdAt: latestMessage.createdAt,
-      }
+      _id: latestMessage._id.toString(),
+      content: latestMessage.content ?? null,
+      senderId: latestMessage.senderId,
+      createdAt: latestMessage.createdAt,
+    }
     : null;
 
   await conversation.save();
@@ -88,6 +89,15 @@ export const authMe = async (req, res) => {
     });
   } catch (error) {
     console.error("Loi khi goi authMe", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const getRealtimeConfig = async (_req, res) => {
+  try {
+    return res.status(200).json(getRealtimeConfigPayload());
+  } catch (error) {
+    console.error("Loi khi lay realtime config", error);
     return res.status(500).json({ message: "Loi he thong" });
   }
 };

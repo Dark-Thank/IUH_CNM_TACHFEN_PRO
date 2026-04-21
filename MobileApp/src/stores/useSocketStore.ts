@@ -1,5 +1,5 @@
 import { authSession } from "@/lib/authSession";
-import { getBackendOrigin } from "@/lib/backendUrl";
+import { getSocketOrigin, warnIfLocalOnlyRealtimeConfig } from "@/lib/backendUrl";
 import { socketEmitter } from "@/lib/socketEmitter";
 import type { SocketState } from "@/types/store";
 import { AppState, type AppStateStatus, type NativeEventSubscription } from "react-native";
@@ -7,7 +7,9 @@ import type { Socket } from "socket.io-client";
 import { create } from "zustand";
 import { useChatStore } from "./useChatStore";
 
-const baseURL = process.env.EXPO_PUBLIC_SOCKET_URL?.trim() || getBackendOrigin();
+const baseURL = getSocketOrigin();
+
+warnIfLocalOnlyRealtimeConfig();
 
 let appStateSubscription: NativeEventSubscription | null = null;
 let currentAppState: AppStateStatus = "active";
@@ -183,7 +185,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("update-message", ({ message }: { message: any }) => {
       const chatStore = useChatStore.getState();
-      
+
       // Update message in all conversations where it exists
       chatStore.updateMessage(message._id, message);
     });

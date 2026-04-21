@@ -1,12 +1,9 @@
 import type { CallType } from "@/types/call";
+import { getRtcConfiguration, warnIfLocalOnlyRealtimeConfig } from "./runtimeConfig";
 
-const rtcConfig: RTCConfiguration = {
-  iceServers: [
-    {
-      urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"],
-    },
-  ],
-};
+warnIfLocalOnlyRealtimeConfig();
+
+const rtcConfig: RTCConfiguration = getRtcConfiguration();
 
 export const createCallId = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;

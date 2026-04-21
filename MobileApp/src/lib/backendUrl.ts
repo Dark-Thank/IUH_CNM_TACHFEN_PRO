@@ -2,6 +2,7 @@ import { NativeModules, Platform } from "react-native";
 
 const DEFAULT_BACKEND_PORT = "5001";
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+let hasWarnedAboutLocalOnlyRealtimeConfig = false;
 
 const getWindowHostname = () => {
     if (typeof window === "undefined") {
@@ -83,11 +84,43 @@ const resolveRuntimeHost = () => {
     return host ?? "localhost";
 };
 
+const normalizeUrl = (value?: string | null) => value?.trim().replace(/\/$/, "") || "";
+
+const getHostname = (value?: string | null) => {
+    if (!value) {
+        return null;
+    }
+
+    try {
+        return new URL(value).hostname || null;
+    } catch {
+        return null;
+    }
+};
+
+const isPrivateHost = (hostname?: string | null) => {
+    const normalized = hostname?.trim().toLowerCase() || "";
+
+    if (!normalized) {
+        return false;
+    }
+
+    return LOCAL_HOSTS.has(normalized)
+        || /^10\./.test(normalized)
+        || /^192\.168\./.test(normalized)
+        || /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized);
+};
+
 export const getBackendOrigin = () => {
     const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+    const configuredOrigin = process.env.EXPO_PUBLIC_PUBLIC_ORIGIN?.trim();
 
     if (configuredUrl) {
         return configuredUrl.replace(/\/api\/?$/, "");
+    }
+
+    if (configuredOrigin) {
+        return normalizeUrl(configuredOrigin);
     }
 
     const host = resolveRuntimeHost();
@@ -101,6 +134,33 @@ export const getBackendOrigin = () => {
     }
 
     return origin;
+};
+
+export const getSocketOrigin = () => {
+    const configuredSocketUrl = process.env.EXPO_PUBLIC_SOCKET_URL?.trim();
+
+    if (configuredSocketUrl) {
+        return normalizeUrl(configuredSocketUrl);
+    }
+
+    return getBackendOrigin();
+};
+
+export const warnIfLocalOnlyRealtimeConfig = () => {
+    if (hasWarnedAboutLocalOnlyRealtimeConfig) {
+        return;
+    }
+
+    const apiOrigin = getBackendOrigin();
+    const socketOrigin = getSocketOrigin();
+
+    if (isPrivateHost(getHostname(apiOrigin)) || isPrivateHost(getHostname(socketOrigin))) {
+        hasWarnedAboutLocalOnlyRealtimeConfig = true;
+
+        console.warn(
+            "[MobileApp][Realtime] API/Socket dang tro toi host local/private. De goi khac mang, hay cau hinh EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SOCKET_URL hoac EXPO_PUBLIC_PUBLIC_ORIGIN tro toi backend cong khai chung."
+        );
+    }
 };
 
 export const getApiBaseUrl = () => `${getBackendOrigin()}/api`;

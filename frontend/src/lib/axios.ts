@@ -1,9 +1,11 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios from "axios";
+import { getApiBaseUrl, warnIfLocalOnlyRealtimeConfig } from "./runtimeConfig";
+
+warnIfLocalOnlyRealtimeConfig();
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_URL,
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
 });
 
