@@ -18,10 +18,10 @@ export interface AuthState {
     email: string,
     firstName: string,
     lastName: string
-  ) => Promise<void>;
-  signIn: (username: string, password: string) => Promise<void>;
+  ) => Promise<{ ok: true } | { ok: false; message: string }>;
+  signIn: (username: string, password: string) => Promise<{ message: string; userId: string; email: string } | null>;
   forgotPassword?: (email: string) => Promise<void>;
-  verifyOtp?: (email: string, otp: string) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
   resetPassword?: (email: string, otp: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
@@ -107,6 +107,7 @@ export interface ChatState {
   transferGroupOwnership: (conversationId: string, newOwnerId: string) => Promise<void>;
   leaveGroup: (conversationId: string) => Promise<void>;
   disbandGroup: (conversationId: string) => Promise<void>;
+  reactToMessage?: (messageId: string, emoji: string) => Promise<void>;
 }
 
 export interface SocketState {

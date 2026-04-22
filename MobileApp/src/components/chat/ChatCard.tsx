@@ -18,11 +18,11 @@ const getConversationName = (
   currentUserId?: string
 ) => {
   if (conversation.type === "group") {
-    return conversation.group?.name || "Nhom chat";
+    return conversation.group?.name || "Nhóm chat";
   }
 
   const otherUser = conversation.participants.find((p) => p._id !== currentUserId);
-  return otherUser?.displayName || "Tin nhan";
+  return otherUser?.displayName || "Tin nhắn";
 };
 
 const getConversationPreview = (
@@ -34,11 +34,11 @@ const getConversationPreview = (
   }
 
   if (conversation.type === "group") {
-    return `${conversation.participants.length} thanh vien`;
+    return `${conversation.participants.length} thành viên`;
   }
 
   const otherUser = conversation.participants.find((p) => p._id !== currentUserId);
-  return otherUser ? `Bat dau tro chuyen voi ${otherUser.displayName}` : "Bat dau tro chuyen";
+  return otherUser ? `Bắt đầu trò chuyện với ${otherUser.displayName}` : "Bắt đầu trò chuyện";
 };
 
 export default function ChatCard({

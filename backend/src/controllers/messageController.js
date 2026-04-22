@@ -8,6 +8,7 @@ import { uploadFileFromBuffer, uploadImageFromBuffer } from "../middlewares/uplo
 import {
   emitConversationUpsert,
   emitNewMessage,
+  formatMessageForClient,
   getConversationParticipantIds,
   updateConversationAfterCreateMessage
 } from "../utils/messageHelper.js";
@@ -420,9 +421,11 @@ export const sendDirectMessage = async (req, res) => {
       extraRooms = getConversationParticipantIds(conversation);
     }
 
-    emitNewMessage(io, conversation, message, extraRooms);
+    const formattedMessage = await formatMessageForClient(message);
 
-    return res.status(201).json({ message });
+    emitNewMessage(io, conversation, formattedMessage, extraRooms);
+
+    return res.status(201).json({ message: formattedMessage });
   } catch (error) {
     console.error("Lỗi khi gửi tin nhắn trực tiếp", error);
     console.log("FILES:", getUploadedFiles(req));
@@ -496,9 +499,11 @@ export const toggleReaction = async (req, res) => {
 
     await message.save();
 
-    io.to(message.conversationId.toString()).emit("update-message", { message });
+    const formattedMessage = await formatMessageForClient(message);
 
-    return res.status(200).json({ message });
+    io.to(message.conversationId.toString()).emit("update-message", { message: formattedMessage });
+
+    return res.status(200).json({ message: formattedMessage });
 
   } catch (error) {
     console.error(error);
@@ -613,9 +618,12 @@ export const sendGroupMessage = async (req, res) => {
     updateConversationAfterCreateMessage(conversation, message, senderId);
 
     await conversation.save();
-    emitNewMessage(io, conversation, message);
 
-    return res.status(201).json({ message });
+    const formattedMessage = await formatMessageForClient(message);
+
+    emitNewMessage(io, conversation, formattedMessage);
+
+    return res.status(201).json({ message: formattedMessage });
 
   } catch (error) {
     console.error("Lỗi khi gửi tin nhắn nhóm:", error);
@@ -652,10 +660,12 @@ export const togglePinMessage = async (req, res) => {
 
     await message.save();
 
-    // notify via socket
-    io.to(message.conversationId.toString()).emit("update-message", { message });
+    const formattedMessage = await formatMessageForClient(message);
 
-    return res.status(200).json({ message });
+    // notify via socket
+    io.to(message.conversationId.toString()).emit("update-message", { message: formattedMessage });
+
+    return res.status(200).json({ message: formattedMessage });
   } catch (error) {
     console.error("Lỗi khi toggle pin message:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -688,9 +698,11 @@ export const recallMessage = async (req, res) => {
 
     await message.save();
 
-    io.to(message.conversationId.toString()).emit("update-message", { message });
+    const formattedMessage = await formatMessageForClient(message);
 
-    return res.status(200).json({ message });
+    io.to(message.conversationId.toString()).emit("update-message", { message: formattedMessage });
+
+    return res.status(200).json({ message: formattedMessage });
   } catch (error) {
     console.error("Lỗi khi thu hồi tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -723,8 +735,10 @@ export const deleteMessageForMe = async (req, res) => {
       message.deletedForUsers.push(userId);
       await message.save();
 
+      const formattedMessage = await formatMessageForClient(message);
+
       // Emit realtime update
-      io.to(message.conversationId.toString()).emit("update-message", { message });
+      io.to(message.conversationId.toString()).emit("update-message", { message: formattedMessage });
     }
 
     return res.status(200).json({ message: "Đã xóa tin nhắn cho bạn" });
@@ -765,10 +779,13 @@ export const markMessageDelivered = async (req, res) => {
     if (!alreadyDelivered) {
       message.deliveredTo.push(userId);
       await message.save();
-      io.to(message.conversationId.toString()).emit("update-message", { message });
+
+      const formattedMessage = await formatMessageForClient(message);
+
+      io.to(message.conversationId.toString()).emit("update-message", { message: formattedMessage });
     }
 
-    return res.status(200).json({ message });
+    return res.status(200).json({ message: await formatMessageForClient(message) });
   } catch (error) {
     console.error("Lỗi khi cập nhật đã nhận tin nhắn:", error);
     return res.status(500).json({ message: "Lỗi hệ thống" });

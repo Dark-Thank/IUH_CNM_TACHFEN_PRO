@@ -114,7 +114,7 @@ export default function ConversationAssetsModal({
         entry.file.type
       );
     } catch (error) {
-      console.error("Loi khi tai tep dinh kem:", error);
+      console.error("Lỗi khi tải tệp đính kèm:", error);
     }
   };
 
@@ -141,10 +141,10 @@ export default function ConversationAssetsModal({
             <View style={styles.header}>
               <View>
                 <Text style={[styles.title, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Tep va Hinh anh
+                  Tệp và Hình ảnh
                 </Text>
                 <Text style={[styles.subtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Cac attachment trong cuoc tro chuyen hien tai
+                  Các tệp đính kèm trong cuộc trò chuyện hiện tại
                 </Text>
               </View>
 
@@ -165,7 +165,7 @@ export default function ConversationAssetsModal({
             >
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Hinh anh gan day ({images.length})
+                  Hình ảnh gần đây ({images.length})
                 </Text>
 
                 {images.length === 0 ? (
@@ -176,7 +176,7 @@ export default function ConversationAssetsModal({
                     ]}
                   >
                     <Text style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
-                      Chua co hinh anh nao trong du lieu da tai.
+                      Chưa có hình ảnh nào trong dữ liệu đã tải.
                     </Text>
                   </View>
                 ) : (
@@ -210,7 +210,7 @@ export default function ConversationAssetsModal({
 
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Tep gan day ({files.length})
+                  Tệp gần đây ({files.length})
                 </Text>
 
                 {files.length === 0 ? (
@@ -221,7 +221,7 @@ export default function ConversationAssetsModal({
                     ]}
                   >
                     <Text style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
-                      Chua co tep nao trong du lieu da tai.
+                      Chưa có tệp nào trong dữ liệu đã tải.
                     </Text>
                   </View>
                 ) : (
@@ -249,7 +249,7 @@ export default function ConversationAssetsModal({
                           { color: isDark ? "#94a3b8" : "#64748b" },
                         ]}
                       >
-                        {entry.file.type || "Khong ro dinh dang"}
+                        {entry.file.type || "Không rõ định dạng"}
                         {formatFileSize(entry.file.size)
                           ? ` - ${formatFileSize(entry.file.size)}`
                           : ""}

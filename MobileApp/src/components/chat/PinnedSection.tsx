@@ -12,13 +12,13 @@ interface PinnedSectionProps {
 
 const getPinnedPreview = (message: Message) => {
   if (message.isRecalled) {
-    return { type: "text" as const, label: "Tin nhan da thu hoi" };
+    return { type: "text" as const, label: "Tin nhắn đã thu hồi" };
   }
 
   if (message.imgUrls?.length) {
     return {
       type: "image" as const,
-      label: message.imgUrls.length > 1 ? `${message.imgUrls.length} hinh anh` : "Hinh anh",
+      label: message.imgUrls.length > 1 ? `${message.imgUrls.length} hình ảnh` : "Hình ảnh",
       src: message.imgUrls[0],
     };
   }
@@ -26,13 +26,13 @@ const getPinnedPreview = (message: Message) => {
   if (message.fileUrls?.length) {
     return {
       type: "file" as const,
-      label: message.fileUrls[0].name || "Tep dinh kem",
+      label: message.fileUrls[0].name || "Tệp đính kèm",
     };
   }
 
   return {
     type: "text" as const,
-    label: (message.content ?? "Tin nhan khong co noi dung").trim() || "Tin nhan khong co noi dung",
+    label: (message.content ?? "Tin nhắn không có nội dung").trim() || "Tin nhắn không có nội dung",
   };
 };
 
@@ -110,7 +110,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
                       {preview.type === "file" ? (
                         <View style={styles.fileMetaRow}>
                           <FileText size={12} color={isDark ? "#94a3b8" : "#64748b"} />
-                          <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>Tep dinh kem</Text>
+                          <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>Tệp đính kèm</Text>
                         </View>
                       ) : null}
                       <Text style={[styles.previewTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>

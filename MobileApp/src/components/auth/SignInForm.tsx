@@ -39,7 +39,7 @@ export default function SignInForm({ onSignUpPress, onForgotPress }: SignInFormP
     const nextErrors: SignInErrors = {};
 
     if (username.trim().length < 3) {
-      nextErrors.username = "Username phải có it nhất 3 ký tự.";
+      nextErrors.username = "Tên đăng nhập phải có ít nhất 3 ký tự.";
     }
 
     if (password.length < 6) {
@@ -93,7 +93,7 @@ export default function SignInForm({ onSignUpPress, onForgotPress }: SignInFormP
             </View>
 
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.text }]}>Username</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Tên đăng nhập</Text>
               <View
                 style={[
                   styles.inputShell,
@@ -113,7 +113,7 @@ export default function SignInForm({ onSignUpPress, onForgotPress }: SignInFormP
                     setUsername(value);
                     setErrors((current) => ({ ...current, username: undefined }));
                   }}
-                  placeholder="username"
+                  placeholder="Nhập tên đăng nhập"
                   placeholderTextColor={colors.placeholder}
                   autoCapitalize="none"
                   autoCorrect={false}

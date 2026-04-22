@@ -35,7 +35,7 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
         const { username, password } = data;
 
         // gọi backend để signin
-        const res = await signIn(username, password);
+        await signIn(username, password);
         // đi tới trang nhập OTP
         navigate("/verify-otp");
     };

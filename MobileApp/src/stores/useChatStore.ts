@@ -57,6 +57,15 @@ const mergeConversationList = (
     ...conversations.filter((conversation) => conversation._id !== nextConversation._id),
   ]).sort((left, right) => getConversationTimestamp(right) - getConversationTimestamp(left));
 
+const getMessageTimestamp = (message: Partial<Message>) => {
+  const fallbackValue = "1970-01-01T00:00:00.000Z";
+
+  return new Date(message.createdAt ?? fallbackValue).getTime();
+};
+
+const sortMessagesAscending = (items: Message[]) =>
+  uniqueById(items).sort((left, right) => getMessageTimestamp(left) - getMessageTimestamp(right));
+
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
@@ -142,7 +151,7 @@ export const useChatStore = create<ChatState>()(
 
           set((state) => {
             const prev = state.messages[convoId]?.items ?? [];
-            const merged = uniqueById(
+            const merged = sortMessagesAscending(
               prev.length > 0 ? [...processed, ...prev] : processed
             );
 
@@ -190,13 +199,15 @@ export const useChatStore = create<ChatState>()(
                 ...state.messages,
                 [convoId]: {
                   ...current,
-                  items: exists
-                    ? current.items.map((msg) =>
-                      msg._id === patch._id
-                        ? { ...msg, ...patch }
-                        : msg
-                    )
-                    : [patch as Message, ...current.items],
+                  items: sortMessagesAscending(
+                    exists
+                      ? current.items.map((msg) =>
+                        msg._id === patch._id
+                          ? { ...msg, ...patch }
+                          : msg
+                      )
+                      : [...current.items, patch as Message]
+                  ),
                 },
               },
             };
@@ -341,7 +352,7 @@ export const useChatStore = create<ChatState>()(
               messages: {
                 ...state.messages,
                 [convoId]: {
-                  items: uniqueById([...currentItems, message]),
+                  items: sortMessagesAscending([...currentItems, message]),
                   hasMore: current?.hasMore ?? false,
                   nextCursor: current?.nextCursor ?? undefined,
                 },

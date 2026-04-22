@@ -30,22 +30,22 @@ const getReplyPreviewContent = (message?: { content?: string | null; messageType
   }
 
   if (message?.messageType === "voice") {
-    return "Tin nhan thoai";
+    return "Tin nhắn thoại";
   }
 
   if (message?.messageType === "call") {
-    return "Cuoc goi";
+    return "Cuộc gọi";
   }
 
   if ((message?.imgUrls?.length ?? 0) > 0) {
-    return message?.imgUrls?.length === 1 ? "Anh dinh kem" : `${message?.imgUrls?.length} anh dinh kem`;
+    return message?.imgUrls?.length === 1 ? "Ảnh đính kèm" : `${message?.imgUrls?.length} ảnh đính kèm`;
   }
 
   if ((message?.fileUrls?.length ?? 0) > 0) {
-    return message?.fileUrls?.length === 1 ? "Tep dinh kem" : `${message?.fileUrls?.length} tep dinh kem`;
+    return message?.fileUrls?.length === 1 ? "Tệp đính kèm" : `${message?.fileUrls?.length} tệp đính kèm`;
   }
 
-  return "Tin nhan";
+  return "Tin nhắn";
 };
 
 interface FileItem {
@@ -475,7 +475,7 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
           >
             <View style={styles.replyPreviewContent}>
               <Text style={[styles.replyPreviewLabel, { color: isDark ? "#c4b5fd" : "#4f46e5" }]}>
-                Dang tra loi {replyingMessage.senderId === user._id ? "Ban" : selectedConvo.participants.find((participant) => participant._id === replyingMessage.senderId)?.displayName || "Thanh vien"}
+                Đang trả lời {replyingMessage.senderId === user._id ? "Bạn" : selectedConvo.participants.find((participant) => participant._id === replyingMessage.senderId)?.displayName || "Thành viên"}
               </Text>
               <Text
                 numberOfLines={1}

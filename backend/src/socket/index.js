@@ -10,6 +10,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { buildCorsOptions } from "../utils/cors.js";
 import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
+import { formatMessageForClient } from "../utils/messageHelper.js";
 
 dotenv.config();
 
@@ -230,7 +231,10 @@ const persistCallSummaryMessage = async (activeCall, reason) => {
 
     updateConversationAfterCreateMessage(conversation, message, activeCall.callerId);
     await conversation.save();
-    emitNewMessage(io, conversation, message);
+
+    const formattedMessage = await formatMessageForClient(message);
+
+    emitNewMessage(io, conversation, formattedMessage);
 };
 
 const clearCallState = (callId) => {

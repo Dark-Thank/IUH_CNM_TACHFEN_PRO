@@ -72,7 +72,7 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
     }
 
     if (isBlocked) {
-      toast.error("Ban da chan nguoi nay");
+      toast.error("Bạn đã chặn người này");
       return;
     }
 
@@ -87,10 +87,10 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
 
     try {
       await removeFriend(user._id);
-      toast.success("Da xoa ban");
+      toast.success("Đã xóa bạn");
       onClose();
     } catch {
-      toast.error("Khong the xoa ban");
+      toast.error("Không thể xóa bạn");
     }
   };
 
@@ -106,15 +106,15 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
         await friendService.unblockFriend(user._id);
         setIsBlocked(false);
         unblockUser(user._id);
-        toast.success("Da bo chan");
+        toast.success("Đã bỏ chặn");
       } else {
         await friendService.blockFriend(user._id);
         setIsBlocked(true);
         blockUser(user._id);
-        toast.success("Da chan");
+        toast.success("Đã chặn");
       }
     } catch {
-      toast.error("Loi thao tac");
+      toast.error("Lỗi thao tác");
     } finally {
       setLoading(false);
     }
@@ -141,7 +141,7 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
               </View>
 
               <View style={styles.infoBox}>
-                <InfoRow label="username" value={`@${user.username}`} />
+                <InfoRow label="Tên đăng nhập" value={`@${user.username}`} />
 
                 {user.bio ? <InfoRow label="Giới thiệu" value={user.bio} /> : null}
                 {user.email ? <InfoRow label="Email" value={user.email} /> : null}
@@ -159,21 +159,21 @@ export default function ProfileModal({ visible, friend, onClose }: Props) {
                   onPress={handleChat}
                   disabled={isBlocked}
                 >
-                  <Text style={styles.btnText}>{isBlocked ? "Da chan" : "Nhan tin"}</Text>
+                  <Text style={styles.btnText}>{isBlocked ? "Đã chặn" : "Nhắn tin"}</Text>
                 </Pressable>
 
                 <Pressable
                   style={[styles.btn, { backgroundColor: "#f59e0b" }]}
                   onPress={handleBlock}
                 >
-                  <Text style={styles.btnText}>{isBlocked ? "Bo chan" : "Chan"}</Text>
+                  <Text style={styles.btnText}>{isBlocked ? "Bỏ chặn" : "Chặn"}</Text>
                 </Pressable>
 
                 <Pressable
                   style={[styles.btn, { backgroundColor: "#ef4444" }]}
                   onPress={handleRemove}
                 >
-                  <Text style={styles.btnText}>Xoa ban</Text>
+                  <Text style={styles.btnText}>Xóa bạn</Text>
                 </Pressable>
               </View>
             </ScrollView>

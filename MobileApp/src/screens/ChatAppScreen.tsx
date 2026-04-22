@@ -18,7 +18,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronDown, ChevronLeft, Menu, X } from "lucide-react-native";
+import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, UserPlus, Users, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -70,12 +70,12 @@ const uniqueById = <T extends { _id: string }>(items: T[]) => {
 
 const getConversationTitle = (conversation: Conversation, currentUserId?: string) => {
   if (conversation.type === "group") {
-    return conversation.group?.name || "Nhom chat";
+    return conversation.group?.name || "Nhóm chat";
   }
 
   return (
     conversation.participants.find((participant) => participant._id !== currentUserId)
-      ?.displayName || "Tin nhan"
+      ?.displayName || "Tin nhắn"
   );
 };
 
@@ -94,7 +94,7 @@ const getConversationActivityLabel = (
       return "";
     }
 
-    return onlineUserIds.has(otherUser._id) ? "Dang hoat dong" : "Dang ngoai tuyen";
+    return onlineUserIds.has(otherUser._id) ? "Đang hoạt động" : "Đang ngoại tuyến";
   }
 
   const members = conversation.participants.filter(
@@ -103,10 +103,10 @@ const getConversationActivityLabel = (
   const onlineCount = members.filter((participant) => onlineUserIds.has(participant._id)).length;
 
   if (onlineCount <= 0) {
-    return `${members.length} thanh vien`;
+    return `${members.length} thành viên`;
   }
 
-  return `${onlineCount} thanh vien dang hoat dong`;
+  return `${onlineCount} thành viên đang hoạt động`;
 };
 
 const getRequestUser = (request: FriendRequest, type: "received" | "sent") =>
@@ -116,31 +116,48 @@ const matchesQuery = (value: string, query: string) =>
   value.toLowerCase().includes(query.trim().toLowerCase());
 
 const GROUP_ROLE_LABELS: Record<"owner" | "deputy" | "member", string> = {
-  owner: "Chu nhom",
-  deputy: "Pho nhom",
-  member: "Thanh vien",
+  owner: "Chủ nhóm",
+  deputy: "Phó nhóm",
+  member: "Thành viên",
 };
 
 const isSuccessMessage = (message: string) => /thanh cong|thành công/i.test(message);
 
-function SectionActionButton({ label, onPress }: { label: string; onPress: () => void }) {
+function SidebarActionCard({
+  title,
+  icon,
+  onPress,
+  accessory,
+}: {
+  title: string;
+  icon: ReactNode;
+  onPress: () => void;
+  accessory?: ReactNode;
+}) {
   const { isDark } = useThemeStore();
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
-        styles.sectionActionButton,
+        styles.sidebarActionCard,
         {
-          backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
-          borderColor: isDark ? "#334155" : "#e2e8f0",
+          backgroundColor: isDark ? "rgba(30, 41, 59, 0.84)" : "#ffffff",
+          borderColor: isDark ? "rgba(148, 163, 184, 0.2)" : "#d7def0",
           opacity: pressed ? 0.9 : 1,
         },
       ]}
     >
-      <Text style={[styles.sectionActionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-        {label}
-      </Text>
+      <View style={styles.sidebarActionCardContent}>
+        <View style={styles.sidebarActionCardLead}>
+          <View style={styles.sidebarActionIconWrap}>{icon}</View>
+          <Text style={[styles.sidebarActionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+            {title}
+          </Text>
+        </View>
+
+        {accessory ? <View style={styles.sidebarActionAccessory}>{accessory}</View> : null}
+      </View>
     </Pressable>
   );
 }
@@ -206,6 +223,7 @@ export default function ChatAppScreen() {
   const socket = useSocketStore((state) => state.socket);
   const flatListRef = useRef<FlatList<Message>>(null);
   const isCreatingGroupRef = useRef(false);
+  const pendingScrollToLatestRef = useRef(false);
 
   const [showRequests, setShowRequests] = useState(false);
   const [showAddFriend, setShowAddFriend] = useState(false);
@@ -272,7 +290,7 @@ export default function ChatAppScreen() {
     useCallback(() => {
       fetchConversations();
       loadSocialData().catch((error) => {
-        console.error("Loi khi tai du lieu ban be:", error);
+        console.error("Lỗi khi tải dữ liệu bạn bè:", error);
       });
     }, [fetchConversations, loadSocialData])
   );
@@ -301,19 +319,22 @@ export default function ChatAppScreen() {
   const sortedConversations = useMemo(
     () =>
       uniqueById(conversations).sort(
-        (left, right) =>
-          new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime()
+        (left, right) => {
+          const leftTimestamp = new Date(
+            left.lastMessageAt || left.lastMessage?.createdAt || left.updatedAt || left.createdAt || 0
+          ).getTime();
+          const rightTimestamp = new Date(
+            right.lastMessageAt || right.lastMessage?.createdAt || right.updatedAt || right.createdAt || 0
+          ).getTime();
+
+          return rightTimestamp - leftTimestamp;
+        }
       ),
     [conversations]
   );
 
   const directConversations = useMemo(
     () => sortedConversations.filter((conversation) => conversation.type === "direct"),
-    [sortedConversations]
-  );
-
-  const groupConversations = useMemo(
-    () => sortedConversations.filter((conversation) => conversation.type === "group"),
     [sortedConversations]
   );
 
@@ -364,7 +385,13 @@ export default function ChatAppScreen() {
   );
 
   const messageItems = useMemo(
-    () => (selectedConvo ? uniqueById(messages[selectedConvo._id]?.items ?? []) : []),
+    () => (
+      selectedConvo
+        ? uniqueById(messages[selectedConvo._id]?.items ?? []).sort(
+          (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+        )
+        : []
+    ),
     [messages, selectedConvo]
   );
 
@@ -376,11 +403,24 @@ export default function ChatAppScreen() {
   const hasMoreMessages = selectedConvo ? messages[selectedConvo._id]?.hasMore ?? false : false;
   const latestMessageId = messageItems[messageItems.length - 1]?._id;
 
+  const keyExtractor = useCallback((item: Message) => item._id, []);
+
+  const renderMessageItem = useCallback(
+    ({ item, index }: { item: Message; index: number }) => (
+      <MessageItem
+        message={item}
+        previousMessage={index > 0 ? messageItems[index - 1] : undefined}
+        selectedConvo={selectedConvo!}
+      />
+    ),
+    [messageItems, selectedConvo]
+  );
+
   const typingLabel = typingUsers.length === 0
     ? ""
     : typingUsers.length === 1
-      ? `${typingUsers[0].displayName || "Ai do"} dang soan tin nhan`
-      : `${typingUsers[0].displayName || "Ai do"} va ${typingUsers.length - 1} nguoi khac dang soan tin nhan`;
+      ? `${typingUsers[0].displayName || "Ai đó"} đang soạn tin nhắn`
+      : `${typingUsers[0].displayName || "Ai đó"} và ${typingUsers.length - 1} người khác đang soạn tin nhắn`;
   const typingLeadUser = typingUsers.length > 0 && selectedConvo
     ? selectedConvo.participants.find((participant) => participant._id === typingUsers[0].userId) ?? null
     : null;
@@ -521,7 +561,21 @@ export default function ChatAppScreen() {
     return !!otherUser && blockedUsers.has(otherUser._id);
   }, [blockedUsers, selectedConvo, user?._id]);
 
+  const armScrollToLatest = useCallback(() => {
+    pendingScrollToLatestRef.current = true;
+    setShowScrollToLatest(false);
+  }, []);
+
+  const openConversationById = useCallback(
+    (conversationId: string) => {
+      armScrollToLatest();
+      setActiveConversation(conversationId);
+    },
+    [armScrollToLatest, setActiveConversation]
+  );
+
   const handleBack = useCallback(() => {
+    pendingScrollToLatestRef.current = false;
     setActiveConversation(null);
   }, [setActiveConversation]);
 
@@ -550,7 +604,7 @@ export default function ChatAppScreen() {
   const openRequestsModal = useCallback(() => {
     setShowRequests(true);
     getAllFriendRequests().catch((error) => {
-      console.error("Loi khi tai danh sach loi moi:", error);
+      console.error("Lỗi khi tải danh sách lời mời:", error);
     });
   }, [getAllFriendRequests]);
 
@@ -558,7 +612,7 @@ export default function ChatAppScreen() {
     setShowAddFriend(true);
     resetAddFriendState();
     loadSocialData().catch((error) => {
-      console.error("Loi khi tai du lieu ket ban:", error);
+      console.error("Lỗi khi tải dữ liệu kết bạn:", error);
     });
   }, [loadSocialData, resetAddFriendState]);
 
@@ -566,7 +620,7 @@ export default function ChatAppScreen() {
     setShowNewMessage(true);
     resetNewMessageState();
     getFriends().catch((error) => {
-      console.error("Loi khi tai danh sach ban be:", error);
+      console.error("Lỗi khi tải danh sách bạn bè:", error);
     });
   }, [getFriends, resetNewMessageState]);
 
@@ -574,7 +628,7 @@ export default function ChatAppScreen() {
     setShowCreateGroup(true);
     resetCreateGroupState();
     getFriends().catch((error) => {
-      console.error("Loi khi tai danh sach ban be:", error);
+      console.error("Lỗi khi tải danh sách bạn bè:", error);
     });
   }, [getFriends, resetCreateGroupState]);
 
@@ -586,7 +640,7 @@ export default function ChatAppScreen() {
     setShowGroupManagement(true);
     resetGroupManagementState();
     getFriends().catch((error) => {
-      console.error("Loi khi tai danh sach ban be de quan ly nhom:", error);
+      console.error("Lỗi khi tải danh sách bạn bè để quản lý nhóm:", error);
     });
   }, [getFriends, resetGroupManagementState, selectedConvo]);
 
@@ -598,7 +652,7 @@ export default function ChatAppScreen() {
     const normalizedUsername = friendUsername.trim().toLowerCase();
 
     if (!normalizedUsername) {
-      toast.info("Nhap username de tim kiem.");
+      toast.info("Nhập tên đăng nhập để tìm kiếm.");
       return;
     }
 
@@ -640,7 +694,7 @@ export default function ChatAppScreen() {
     async (requestId: string) => {
       await acceptRequest(requestId);
       await loadSocialData();
-      toast.success("Da chap nhan loi moi ket ban.");
+      toast.success("Đã chấp nhận lời mời kết bạn.");
     },
     [acceptRequest, loadSocialData]
   );
@@ -649,7 +703,7 @@ export default function ChatAppScreen() {
     async (requestId: string) => {
       await declineRequest(requestId);
       await getAllFriendRequests();
-      toast.info("Da huy loi moi ket ban.");
+      toast.info("Đã hủy lời mời kết bạn.");
     },
     [declineRequest, getAllFriendRequests]
   );
@@ -657,7 +711,7 @@ export default function ChatAppScreen() {
   const handleOpenConversation = useCallback(
     async (friend: Friend) => {
       if (blockedUsers.has(friend._id)) {
-        toast.error("Ban khong the nhan tin voi nguoi nay.");
+        toast.error("Bạn không thể nhắn tin với người này.");
         return;
       }
 
@@ -669,13 +723,14 @@ export default function ChatAppScreen() {
       resetNewMessageState();
 
       if (existingConversation) {
-        setActiveConversation(existingConversation._id);
+        openConversationById(existingConversation._id);
         return;
       }
 
+      armScrollToLatest();
       await createConversation("direct", "", [friend._id]);
     },
-    [blockedUsers, createConversation, directConversations, resetNewMessageState, setActiveConversation]
+    [armScrollToLatest, blockedUsers, createConversation, directConversations, openConversationById, resetNewMessageState]
   );
 
   const handleFriendListSelect = useCallback(
@@ -702,12 +757,12 @@ export default function ChatAppScreen() {
     }
 
     if (!groupName.trim()) {
-      toast.warning("Nhap ten nhom truoc khi tao.");
+      toast.warning("Nhập tên nhóm trước khi tạo.");
       return;
     }
 
     if (selectedGroupMembers.length === 0) {
-      toast.warning("Chon it nhat mot ban de tao nhom.");
+      toast.warning("Chọn ít nhất một bạn để tạo nhóm.");
       return;
     }
 
@@ -745,16 +800,16 @@ export default function ChatAppScreen() {
     }
 
     if (selectedMembersToAdd.length === 0) {
-      toast.info("Chon it nhat mot ban de them vao nhom.");
+      toast.info("Chọn ít nhất một bạn để thêm vào nhóm.");
       return;
     }
 
     try {
       await addGroupMembers(selectedConvo._id, selectedMembersToAdd.map((friend) => friend._id));
       resetGroupManagementState();
-      toast.success("Da them thanh vien vao nhom.");
+      toast.success("Đã thêm thành viên vào nhóm.");
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Them thanh vien that bai.");
+      toast.error(error?.response?.data?.message || "Thêm thành viên thất bại.");
     }
   }, [addGroupMembers, resetGroupManagementState, selectedConvo, selectedMembersToAdd]);
 
@@ -782,9 +837,9 @@ export default function ChatAppScreen() {
     onAfterSuccess?: () => void
   ) => {
     Alert.alert(title, message, [
-      { text: "Huy", style: "cancel" },
+      { text: "Hủy", style: "cancel" },
       {
-        text: "Dong y",
+        text: "Đồng ý",
         style: "destructive",
         onPress: () => {
           void action()
@@ -793,7 +848,7 @@ export default function ChatAppScreen() {
               onAfterSuccess?.();
             })
             .catch((error: any) => {
-              toast.error(error?.response?.data?.message || "Thao tac that bai.");
+              toast.error(error?.response?.data?.message || "Thao tác thất bại.");
             });
         },
       },
@@ -808,12 +863,12 @@ export default function ChatAppScreen() {
     const nextRole = participant.role === "deputy" ? "member" : "deputy";
 
     confirmGroupAction(
-      nextRole === "deputy" ? "Bo nhiem pho nhom" : "Thu hoi quyen pho nhom",
+      nextRole === "deputy" ? "Bổ nhiệm phó nhóm" : "Thu hồi quyền phó nhóm",
       nextRole === "deputy"
-        ? `Bo nhiem ${participant.displayName} lam pho nhom?`
-        : `Thu hoi quyen pho nhom cua ${participant.displayName}?`,
+        ? `Bổ nhiệm ${participant.displayName} làm phó nhóm?`
+        : `Thu hồi quyền phó nhóm của ${participant.displayName}?`,
       () => updateGroupMemberRole(selectedConvo._id, participant._id, nextRole),
-      nextRole === "deputy" ? "Da bo nhiem pho nhom." : "Da thu hoi quyen pho nhom."
+      nextRole === "deputy" ? "Đã bổ nhiệm phó nhóm." : "Đã thu hồi quyền phó nhóm."
     );
   }, [confirmGroupAction, selectedConvo, updateGroupMemberRole]);
 
@@ -823,10 +878,10 @@ export default function ChatAppScreen() {
     }
 
     confirmGroupAction(
-      "Chuyen quyen chu nhom",
-      `Chuyen quyen chu nhom cho ${participant.displayName}?`,
+      "Chuyển quyền chủ nhóm",
+      `Chuyển quyền chủ nhóm cho ${participant.displayName}?`,
       () => transferGroupOwnership(selectedConvo._id, participant._id),
-      "Da chuyen quyen chu nhom."
+      "Đã chuyển quyền chủ nhóm."
     );
   }, [confirmGroupAction, selectedConvo, transferGroupOwnership]);
 
@@ -836,10 +891,10 @@ export default function ChatAppScreen() {
     }
 
     confirmGroupAction(
-      "Xoa thanh vien",
-      `Xoa ${participant.displayName} khoi nhom?`,
+      "Xóa thành viên",
+      `Xóa ${participant.displayName} khỏi nhóm?`,
       () => removeGroupMember(selectedConvo._id, participant._id),
-      "Da xoa thanh vien khoi nhom."
+      "Đã xóa thành viên khỏi nhóm."
     );
   }, [confirmGroupAction, removeGroupMember, selectedConvo]);
 
@@ -849,10 +904,10 @@ export default function ChatAppScreen() {
     }
 
     confirmGroupAction(
-      "Roi nhom",
-      "Ban co chac chan muon roi khoi nhom nay?",
+      "Rời nhóm",
+      "Bạn có chắc chắn muốn rời khỏi nhóm này?",
       () => leaveGroup(selectedConvo._id),
-      "Da roi nhom.",
+      "Đã rời nhóm.",
       () => {
         setShowGroupManagement(false);
         resetGroupManagementState();
@@ -866,10 +921,10 @@ export default function ChatAppScreen() {
     }
 
     confirmGroupAction(
-      "Giai tan nhom",
-      "Giai tan nhom chat nay? Hanh dong nay khong the hoan tac.",
+      "Giải tán nhóm",
+      "Giải tán nhóm chat này? Hành động này không thể hoàn tác.",
       () => disbandGroup(selectedConvo._id),
-      "Da giai tan nhom chat.",
+      "Đã giải tán nhóm chat.",
       () => {
         setShowGroupManagement(false);
         resetGroupManagementState();
@@ -883,7 +938,7 @@ export default function ChatAppScreen() {
     }
 
     fetchMessages(selectedConversationId).catch((error) => {
-      console.error("Loi khi tai tin nhan:", error);
+      console.error("Lỗi khi tải tin nhắn:", error);
     });
   }, [fetchMessages, messages, selectedConversationId]);
   useEffect(() => {
@@ -909,7 +964,7 @@ export default function ChatAppScreen() {
     }
 
     markAsSeen().catch((error) => {
-      console.error("Loi khi danh dau da xem:", error);
+      console.error("Lỗi khi đánh dấu đã xem:", error);
     });
   }, [markAsSeen, selectedConversationId]);
 
@@ -931,7 +986,7 @@ export default function ChatAppScreen() {
     }
 
     fetchMessages(selectedConversationId).catch((error) => {
-      console.error("Loi khi tai them attachment:", error);
+      console.error("Lỗi khi tải thêm tệp đính kèm:", error);
     });
   }, [
     fetchMessages,
@@ -955,7 +1010,13 @@ export default function ChatAppScreen() {
     return () => clearTimeout(timeout);
   }, [latestMessageId, selectedConvo]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!selectedConversationId) {
+      pendingScrollToLatestRef.current = false;
+      return;
+    }
+
+    pendingScrollToLatestRef.current = true;
     setShowScrollToLatest(false);
   }, [selectedConversationId]);
 
@@ -963,6 +1024,28 @@ export default function ChatAppScreen() {
     flatListRef.current?.scrollToEnd({ animated: true });
     setShowScrollToLatest(false);
   }, []);
+
+  const flushPendingScrollToLatest = useCallback(() => {
+    if (!pendingScrollToLatestRef.current || !selectedConversationId) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        flatListRef.current?.scrollToEnd({ animated: false });
+        pendingScrollToLatestRef.current = false;
+        setShowScrollToLatest(false);
+      });
+    });
+  }, [selectedConversationId]);
+
+  useEffect(() => {
+    if (!pendingScrollToLatestRef.current || !selectedConversationId || messageItems.length === 0) {
+      return;
+    }
+
+    flushPendingScrollToLatest();
+  }, [flushPendingScrollToLatest, messageItems.length, selectedConversationId]);
 
   const handleMessageScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -1004,7 +1087,7 @@ export default function ChatAppScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Doan chat",
+      title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Đoạn chat",
       headerTitle: selectedConvo
         ? () =>
           selectedConversationFriend ? (
@@ -1170,12 +1253,19 @@ export default function ChatAppScreen() {
 
           <FlatList
             ref={flatListRef}
+            key={selectedConversationId ?? "chat-empty"}
             data={messageItems}
-            keyExtractor={(item) => item._id}
+            keyExtractor={keyExtractor}
+            initialNumToRender={18}
+            maxToRenderPerBatch={12}
+            windowSize={8}
+            removeClippedSubviews={Platform.OS === "android"}
             contentContainerStyle={[
               styles.messageListContent,
               { paddingTop: pinnedMessages.length > 0 ? 120 : 14 },
             ]}
+            onLayout={flushPendingScrollToLatest}
+            onContentSizeChange={flushPendingScrollToLatest}
             onScroll={handleMessageScroll}
             scrollEventThrottle={16}
             keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
@@ -1190,23 +1280,15 @@ export default function ChatAppScreen() {
             ListEmptyComponent={
               <View style={styles.emptyMessages}>
                 <Text style={[styles.emptyMessageText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Chua co tin nhan nao trong cuoc tro chuyen nay.
+                  Chưa có tin nhắn nào trong cuộc trò chuyện này.
                 </Text>
               </View>
             }
-            renderItem={({ item, index }) => (
-              <MessageItem
-                message={item}
-                index={index}
-                messages={messageItems}
-                previousMessage={index > 0 ? messageItems[index - 1] : undefined}
-                selectedConvo={selectedConvo}
-              />
-            )}
+            renderItem={renderMessageItem}
           />
 
           {isConversationBlocked ? (
-            <Text style={styles.blockedNotice}>Ban khong the tra loi cuoc tro chuyen nay.</Text>
+            <Text style={styles.blockedNotice}>Bạn không thể trả lời cuộc trò chuyện này.</Text>
           ) : null}
 
           {typingLabel && typingLeadUser ? (
@@ -1264,7 +1346,7 @@ export default function ChatAppScreen() {
               ]}
             >
               <ChevronDown size={18} color={isDark ? "#f8fafc" : "#0f172a"} />
-              <Text style={[styles.scrollToLatestText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin moi nhat</Text>
+              <Text style={[styles.scrollToLatestText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin mới nhất</Text>
             </Pressable>
           ) : null}
 
@@ -1279,7 +1361,7 @@ export default function ChatAppScreen() {
 
         <OverlayModal
           visible={showGroupManagement && selectedConvo?.type === "group"}
-          title={selectedConvo?.group?.name || "Quan ly nhom"}
+          title={selectedConvo?.group?.name || "Quản lý nhóm"}
           onClose={() => {
             setShowGroupManagement(false);
             resetGroupManagementState();
@@ -1295,8 +1377,8 @@ export default function ChatAppScreen() {
                 },
               ]}
             >
-              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Thanh vien nhom</Text>
-              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Vai tro cua ban: {selectedGroupRole ? GROUP_ROLE_LABELS[selectedGroupRole.role] : "Khong xac dinh"}</Text>
+              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Thành viên nhóm</Text>
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Vai trò của bạn: {selectedGroupRole ? GROUP_ROLE_LABELS[selectedGroupRole.role] : "Không xác định"}</Text>
 
               {selectedConvo?.type === "group"
                 ? selectedConvo.participants.map((participant) => (
@@ -1314,7 +1396,7 @@ export default function ChatAppScreen() {
                       <UserAvatar name={participant.displayName} avatarUrl={participant.avatarUrl} size={42} />
                       <View style={styles.requestTextBlock}>
                         <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                          {participant.displayName}{participant._id === user?._id ? " (Ban)" : ""}
+                          {participant.displayName}{participant._id === user?._id ? " (Bạn)" : ""}
                         </Text>
                         <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                           {GROUP_ROLE_LABELS[participant.role]}
@@ -1336,14 +1418,14 @@ export default function ChatAppScreen() {
                           ]}
                         >
                           <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                            {participant.role === "deputy" ? "Thu hoi pho" : "Bo nhiem pho"}
+                            {participant.role === "deputy" ? "Thu hồi phó" : "Bổ nhiệm phó"}
                           </Text>
                         </Pressable>
                       ) : null}
 
                       {selectedGroupRole?.role === "owner" && participant._id !== user?._id ? (
                         <Pressable onPress={() => handleTransferOwner(participant)} style={[styles.primaryButton, styles.groupActionButton]}>
-                          <Text style={styles.primaryButtonText}>Chuyen chu nhom</Text>
+                          <Text style={styles.primaryButtonText}>Chuyển chủ nhóm</Text>
                         </Pressable>
                       ) : null}
 
@@ -1359,7 +1441,7 @@ export default function ChatAppScreen() {
                             },
                           ]}
                         >
-                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Xoa khoi nhom</Text>
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Xóa khỏi nhóm</Text>
                         </Pressable>
                       ) : null}
                     </View>
@@ -1377,11 +1459,11 @@ export default function ChatAppScreen() {
                 },
               ]}
             >
-              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Them thanh vien</Text>
+              <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Thêm thành viên</Text>
               <TextInput
                 value={groupManageQuery}
                 onChangeText={setGroupManageQuery}
-                placeholder="Tim ban de them vao nhom"
+                placeholder="Tìm bạn để thêm vào nhóm"
                 placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                 style={[
                   styles.textInput,
@@ -1419,7 +1501,7 @@ export default function ChatAppScreen() {
 
               <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                 {filteredFriendsForGroupManagement.length === 0 ? (
-                  <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Khong con ban phu hop de them vao nhom.</Text>
+                  <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>Không còn bạn phù hợp để thêm vào nhóm.</Text>
                 ) : (
                   filteredFriendsForGroupManagement.map((friend) => (
                     <Pressable
@@ -1442,14 +1524,14 @@ export default function ChatAppScreen() {
                         </View>
                       </View>
 
-                      <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Them</Text>
+                      <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Thêm</Text>
                     </Pressable>
                   ))
                 )}
               </ScrollView>
 
               <Pressable onPress={handleAddMembersToCurrentGroup} disabled={chatLoading || selectedMembersToAdd.length === 0} style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>{chatLoading ? "Dang xu ly..." : "Them thanh vien"}</Text>
+                <Text style={styles.primaryButtonText}>{chatLoading ? "Đang xử lý..." : "Thêm thành viên"}</Text>
               </Pressable>
             </View>
 
@@ -1465,12 +1547,12 @@ export default function ChatAppScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Roi nhom</Text>
+                <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Rời nhóm</Text>
               </Pressable>
 
               {selectedGroupRole?.role === "owner" ? (
                 <Pressable onPress={handleDisbandCurrentGroup} style={[styles.primaryButton, styles.groupFooterButton, { backgroundColor: "#e11d48" }]}>
-                  <Text style={styles.primaryButtonText}>Giai tan nhom</Text>
+                  <Text style={styles.primaryButtonText}>Giải tán nhóm</Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1495,35 +1577,78 @@ export default function ChatAppScreen() {
         <View style={styles.loaderState}>
           <ActivityIndicator size="small" color="#8b5cf6" />
           <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-            Dang tai danh sach doan chat...
+            Đang tải danh sách đoạn chat...
           </Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.conversationList} showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
+            <SidebarActionCard
+              title="Danh Sách Bạn Bè"
+              onPress={openFriendListModal}
+              icon={<MessageCircle size={18} color="#ffffff" />}
+              accessory={
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    openAddFriendModal();
+                  }}
+                  style={({ pressed }) => [
+                    styles.sidebarActionAccessoryButton,
+                    {
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.82)" : "#f8fafc",
+                      borderColor: isDark ? "rgba(148, 163, 184, 0.18)" : "#d7def0",
+                      opacity: pressed ? 0.9 : 1,
+                    },
+                  ]}
+                >
+                  <UserPlus size={16} color={isDark ? "#e2e8f0" : "#4f46e5"} />
+                </Pressable>
+              }
+            />
+
+            <SidebarActionCard
+              title="Tạo Nhóm Mới"
+              onPress={openCreateGroupModal}
+              icon={<Users size={18} color="#ffffff" />}
+            />
+          </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderCompact}>
               <View style={styles.sectionTitleBlock}>
                 <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Ban be
+                  Cuộc trò chuyện
                 </Text>
+
               </View>
 
-              <View style={styles.sectionActions}>
-                <SectionActionButton label="Ban be" onPress={openFriendListModal} />
-                <SectionActionButton label="Ket ban" onPress={openAddFriendModal} />
-                <SectionActionButton label="Tin nhan moi" onPress={openNewMessageModal} />
-              </View>
+              <Pressable
+                onPress={openNewMessageModal}
+                style={({ pressed }) => [
+                  styles.inlineActionButton,
+                  {
+                    backgroundColor: isDark ? "#1f2937" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#d7def0",
+                    opacity: pressed ? 0.9 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.inlineActionButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin nhắn mới</Text>
+              </Pressable>
             </View>
 
-            {directConversations.length > 0 ? (
-              directConversations.map((conversation) => {
-                const otherUser = getDirectParticipant(conversation, user?._id);
+            {sortedConversations.length > 0 ? (
+              sortedConversations.map((conversation) => {
+                const otherUser = conversation.type === "direct"
+                  ? getDirectParticipant(conversation, user?._id)
+                  : null;
 
                 return (
                   <ChatCard
                     key={conversation._id}
                     conversation={conversation}
-                    onPress={() => setActiveConversation(conversation._id)}
+                    onPress={() => openConversationById(conversation._id)}
                     currentUserId={user?._id}
                     isOnline={!!otherUser && onlineUserIds.has(otherUser._id)}
                   />
@@ -1540,49 +1665,7 @@ export default function ChatAppScreen() {
                 ]}
               >
                 <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Chua co doan chat voi ban be nao.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <View style={styles.sectionTitleBlock}>
-                <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                  Group
-                </Text>
-                <Text style={[styles.sectionSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Tao nhom de tro chuyen voi nhieu ban cung luc.
-                </Text>
-              </View>
-
-              <View style={styles.sectionActions}>
-                <SectionActionButton label="Tao nhom" onPress={openCreateGroupModal} />
-              </View>
-            </View>
-
-            {groupConversations.length > 0 ? (
-              groupConversations.map((conversation) => (
-                <ChatCard
-                  key={conversation._id}
-                  conversation={conversation}
-                  onPress={() => setActiveConversation(conversation._id)}
-                  currentUserId={user?._id}
-                />
-              ))
-            ) : (
-              <View
-                style={[
-                  styles.emptySection,
-                  {
-                    backgroundColor: isDark ? "#111827" : "#ffffff",
-                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
-                  },
-                ]}
-              >
-                <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Chua co nhom chat nao.
+                  Chưa có cuộc trò chuyện nào.
                 </Text>
               </View>
             )}
@@ -1590,13 +1673,13 @@ export default function ChatAppScreen() {
         </ScrollView>
       )}
 
-      <OverlayModal visible={showRequests} title="Loi moi ket ban" onClose={() => setShowRequests(false)}>
+      <OverlayModal visible={showRequests} title="Lời mời kết bạn" onClose={() => setShowRequests(false)}>
         <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-          <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Da nhan</Text>
+          <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Đã nhận</Text>
 
           {receivedList.length === 0 ? (
             <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              Ban chua co loi moi ket ban nao.
+              Bạn chưa có lời mời kết bạn nào.
             </Text>
           ) : (
             receivedList.map((request) => {
@@ -1639,7 +1722,7 @@ export default function ChatAppScreen() {
                         },
                       ]}
                     >
-                      <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Huy</Text>
+                      <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Hủy</Text>
                     </Pressable>
 
                     <Pressable
@@ -1647,7 +1730,7 @@ export default function ChatAppScreen() {
                       disabled={friendStoreLoading}
                       style={styles.primaryButton}
                     >
-                      <Text style={styles.primaryButtonText}>Chap nhan</Text>
+                      <Text style={styles.primaryButtonText}>Chấp nhận</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1662,12 +1745,12 @@ export default function ChatAppScreen() {
               { color: isDark ? "#f8fafc" : "#0f172a" },
             ]}
           >
-            Da gui
+            Đã gửi
           </Text>
 
           {sentList.length === 0 ? (
             <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              Ban chua gui loi moi ket ban nao.
+              Bạn chưa gửi lời mời kết bạn nào.
             </Text>
           ) : (
             sentList.map((request) => {
@@ -1698,7 +1781,7 @@ export default function ChatAppScreen() {
                     </View>
                   </View>
 
-                  <Text style={[styles.pendingLabel, { color: isDark ? "#94a3b8" : "#64748b" }]}>Dang cho phan hoi</Text>
+                  <Text style={[styles.pendingLabel, { color: isDark ? "#94a3b8" : "#64748b" }]}>Đang chờ phản hồi</Text>
                 </View>
               );
             })
@@ -1708,7 +1791,7 @@ export default function ChatAppScreen() {
 
       <OverlayModal
         visible={showAddFriend}
-        title="Ket ban"
+        title="Kết bạn"
         onClose={() => {
           setShowAddFriend(false);
           resetAddFriendState();
@@ -1724,7 +1807,7 @@ export default function ChatAppScreen() {
             }}
             autoCapitalize="none"
             autoCorrect={false}
-            placeholder="Nhap username can tim"
+            placeholder="Nhập tên đăng nhập cần tìm"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -1741,12 +1824,12 @@ export default function ChatAppScreen() {
             disabled={searchStatus === "loading" || friendStoreLoading}
             style={styles.primaryButton}
           >
-            <Text style={styles.primaryButtonText}>{searchStatus === "loading" ? "Dang tim..." : "Tim nguoi dung"}</Text>
+            <Text style={styles.primaryButtonText}>{searchStatus === "loading" ? "Đang tìm..." : "Tìm người dùng"}</Text>
           </Pressable>
 
           {searchStatus === "not_found" && (
             <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              Khong tim thay nguoi dung phu hop.
+              Không tìm thấy người dùng phù hợp.
             </Text>
           )}
 
@@ -1775,7 +1858,7 @@ export default function ChatAppScreen() {
                   <TextInput
                     value={friendRequestMessage}
                     onChangeText={setFriendRequestMessage}
-                    placeholder="Loi nhan (khong bat buoc)"
+                    placeholder="Lời nhắn (không bắt buộc)"
                     placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                     multiline
                     style={[
@@ -1794,17 +1877,17 @@ export default function ChatAppScreen() {
                     style={styles.primaryButton}
                   >
                     <Text style={styles.primaryButtonText}>
-                      {friendStoreLoading ? "Dang gui..." : "Gui loi moi ket ban"}
+                      {friendStoreLoading ? "Đang gửi..." : "Gửi lời mời kết bạn"}
                     </Text>
                   </Pressable>
                 </>
               ) : (
                 <Text style={[styles.statusText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  {searchedUserRelationship === "self" && "Ban khong the gui loi moi cho chinh minh."}
-                  {searchedUserRelationship === "friend" && "Nguoi nay da la ban cua ban."}
-                  {searchedUserRelationship === "sent" && "Ban da gui loi moi cho nguoi nay roi."}
+                  {searchedUserRelationship === "self" && "Bạn không thể gửi lời mời cho chính mình."}
+                  {searchedUserRelationship === "friend" && "Người này đã là bạn của bạn."}
+                  {searchedUserRelationship === "sent" && "Bạn đã gửi lời mời cho người này rồi."}
                   {searchedUserRelationship === "received" &&
-                    "Nguoi nay da gui loi moi cho ban. Hay mo cua so loi moi de chap nhan."}
+                    "Người này đã gửi lời mời cho bạn. Hãy mở cửa sổ lời mời để chấp nhận."}
                 </Text>
               )}
             </View>
@@ -1814,7 +1897,7 @@ export default function ChatAppScreen() {
 
       <OverlayModal
         visible={showNewMessage}
-        title="Tin nhan moi"
+        title="Tin nhắn mới"
         onClose={() => {
           setShowNewMessage(false);
           resetNewMessageState();
@@ -1824,7 +1907,7 @@ export default function ChatAppScreen() {
           <TextInput
             value={newMessageQuery}
             onChangeText={setNewMessageQuery}
-            placeholder="Tim theo ten hoac username"
+            placeholder="Tìm theo tên hoặc tên đăng nhập"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -1840,8 +1923,8 @@ export default function ChatAppScreen() {
             {filteredFriendsForMessage.length === 0 ? (
               <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                 {friends.length === 0
-                  ? "Ban chua co ban be nao de bat dau tro chuyen."
-                  : "Khong tim thay ban be phu hop."}
+                  ? "Bạn chưa có bạn bè nào để bắt đầu trò chuyện."
+                  : "Không tìm thấy bạn bè phù hợp."}
               </Text>
             ) : (
               filteredFriendsForMessage.map((friend) => (
@@ -1867,7 +1950,7 @@ export default function ChatAppScreen() {
                     </View>
                   </View>
 
-                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Mo chat</Text>
+                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Mở chat</Text>
                 </Pressable>
               ))
             )}
@@ -1877,7 +1960,7 @@ export default function ChatAppScreen() {
 
       <OverlayModal
         visible={showCreateGroup}
-        title="Tao nhom"
+        title="Tạo nhóm"
         onClose={() => {
           setShowCreateGroup(false);
           resetCreateGroupState();
@@ -1887,7 +1970,7 @@ export default function ChatAppScreen() {
           <TextInput
             value={groupName}
             onChangeText={setGroupName}
-            placeholder="Nhap ten nhom"
+            placeholder="Nhập tên nhóm"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -1902,7 +1985,7 @@ export default function ChatAppScreen() {
           <TextInput
             value={groupQuery}
             onChangeText={setGroupQuery}
-            placeholder="Tim ban de them vao nhom"
+            placeholder="Tìm bạn để thêm vào nhóm"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -1942,8 +2025,8 @@ export default function ChatAppScreen() {
             {filteredFriendsForGroup.length === 0 ? (
               <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                 {friends.length === 0
-                  ? "Ban chua co ban be nao de tao nhom."
-                  : "Khong tim thay ban be phu hop."}
+                  ? "Bạn chưa có bạn bè nào để tạo nhóm."
+                  : "Không tìm thấy bạn bè phù hợp."}
               </Text>
             ) : (
               filteredFriendsForGroup.map((friend) => (
@@ -1969,7 +2052,7 @@ export default function ChatAppScreen() {
                     </View>
                   </View>
 
-                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Them</Text>
+                  <Text style={[styles.linkText, { color: isDark ? "#c084fc" : "#7c3aed" }]}>Thêm</Text>
                 </Pressable>
               ))
             )}
@@ -1981,7 +2064,7 @@ export default function ChatAppScreen() {
             style={styles.primaryButton}
           >
             <Text style={styles.primaryButtonText}>
-              {chatLoading || isCreatingGroup ? "Dang tao..." : "Tao nhom chat"}
+              {chatLoading || isCreatingGroup ? "Đang tạo..." : "Tạo nhóm chat"}
             </Text>
           </Pressable>
         </ScrollView>
@@ -2102,7 +2185,6 @@ const styles = StyleSheet.create({
   typingBubbleDots: {
     marginTop: 2,
     flexDirection: "row",
-    alignItems: "center",
     gap: 5,
     alignItems: "flex-start",
   },
@@ -2136,22 +2218,48 @@ const styles = StyleSheet.create({
   },
   conversationList: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 22 },
   section: { gap: 12 },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 12,
-  },
+  sectionHeaderCompact: { gap: 10 },
   sectionTitleBlock: { flex: 1, gap: 4 },
   sectionTitle: { fontSize: 20, fontWeight: "800" },
   sectionSubtitle: { fontSize: 13, lineHeight: 18 },
-  sectionActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-    gap: 8,
+  sidebarActionCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  sectionActionButton: {
+  sidebarActionCardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  sidebarActionCardLead: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 12,
+  },
+  sidebarActionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#d946ef",
+  },
+  sidebarActionTitle: { fontSize: 16, fontWeight: "800" },
+  sidebarActionAccessory: { marginLeft: 8 },
+  sidebarActionAccessoryButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineActionButton: {
+    alignSelf: "flex-start",
     minHeight: 34,
     borderRadius: 17,
     borderWidth: 1,
@@ -2159,7 +2267,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  sectionActionText: { fontSize: 12, fontWeight: "700" },
+  inlineActionButtonText: { fontSize: 12, fontWeight: "700" },
   emptySection: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 18 },
   emptySectionText: { fontSize: 14, lineHeight: 20 },
   loaderState: {

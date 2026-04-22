@@ -3,9 +3,9 @@ import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
-import type { Conversation, Message, Participant } from "@/types/chat";
+import type { Conversation, Message, Participant, ReactionUser } from "@/types/chat";
 import { Pin } from "lucide-react-native";
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Alert,
   Image,
@@ -39,36 +39,34 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
   }
 
   if (replyTo?.messageType === "voice") {
-    return "Tin nhan thoai";
+    return "Tin nhắn thoại";
   }
 
   if (replyTo?.messageType === "call") {
-    return "Cuoc goi";
+    return "Cuộc gọi";
   }
 
   if ((replyTo?.imgUrls?.length ?? 0) > 0) {
-    return replyTo?.imgUrls?.length === 1 ? "Anh dinh kem" : `${replyTo?.imgUrls?.length} anh dinh kem`;
+    return replyTo?.imgUrls?.length === 1 ? "Ảnh đính kèm" : `${replyTo?.imgUrls?.length} ảnh đính kèm`;
   }
 
   if ((replyTo?.fileUrls?.length ?? 0) > 0) {
-    return replyTo?.fileUrls?.length === 1 ? "Tep dinh kem" : `${replyTo?.fileUrls?.length} tep dinh kem`;
+    return replyTo?.fileUrls?.length === 1 ? "Tệp đính kèm" : `${replyTo?.fileUrls?.length} tệp đính kèm`;
   }
 
-  return "Tin nhan";
+  return "Tin nhắn";
 };
 
 interface MessageItemProps {
   message: Message;
-  index: number;
-  messages: Message[];
   previousMessage?: Message;
   selectedConvo: Conversation;
 }
 
 const MESSAGE_RECEIPT_LABELS = {
-  sent: "Da gui",
-  delivered: "Da nhan",
-  seen: "Da xem",
+  sent: "Đã gửi",
+  delivered: "Đã nhận",
+  seen: "Đã xem",
 } as const;
 
 type MessageReceiptStatus = keyof typeof MESSAGE_RECEIPT_LABELS;
@@ -94,13 +92,17 @@ const getReceiptTone = (status: MessageReceiptStatus, isDark: boolean) => {
   };
 };
 
-export default function MessageItem({
-  message,
-  index,
-  messages,
-  previousMessage,
-  selectedConvo,
-}: MessageItemProps) {
+const getReactionUsersLabel = (users: ReactionUser[], currentUserId?: string) => {
+  if (users.length === 0) {
+    return "Chưa có ai thả cảm xúc này.";
+  }
+
+  return users
+    .map((item) => (item._id === currentUserId ? "Bạn" : item.displayName || "Thành viên"))
+    .join(", ");
+};
+
+function MessageItem({ message, previousMessage, selectedConvo }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const {
@@ -119,8 +121,9 @@ export default function MessageItem({
   const [showActions, setShowActions] = useState(false);
   const [showForwardPicker, setShowForwardPicker] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [reactionDetailEmoji, setReactionDetailEmoji] = useState<string | null>(null);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
-  const previous = previousMessage ?? messages[index - 1];
+  const previous = previousMessage;
   const previousCreatedAt = previous?.createdAt
     ? new Date(previous.createdAt).getTime()
     : 0;
@@ -155,8 +158,8 @@ export default function MessageItem({
   const otherFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
   const replySenderName = message.replyTo
     ? (message.replyTo.senderId === currentUserId
-      ? "Ban"
-      : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thanh vien")
+      ? "Bạn"
+      : selectedConvo.participants.find((item) => item._id === message.replyTo?.senderId)?.displayName || "Thành viên")
     : "";
   const receiptTargets = selectedConvo.participants.filter((item) => item._id !== message.senderId);
   const deliveredSet = new Set((message.deliveredTo || []).map((item) => item.toString()));
@@ -178,6 +181,8 @@ export default function MessageItem({
     ? `${MESSAGE_RECEIPT_LABELS[receiptStatus]} ${receiptProgress}`
     : MESSAGE_RECEIPT_LABELS[receiptStatus];
   const canViewReceiptDetails = isOwn && selectedConvo.type === "group";
+  const reactionEntries = Object.entries(message.reactions || {}).filter(([, users]) => users.length > 0);
+  const activeReactionUsers = reactionDetailEmoji ? message.reactions?.[reactionDetailEmoji] || [] : [];
   const showTimeSeparator = isShowTime && !isLastOwnMessage;
   const receiptTone = getReceiptTone(receiptStatus, isDark);
 
@@ -185,12 +190,12 @@ export default function MessageItem({
 
   const getConversationLabel = (conversation: Conversation) => {
     if (conversation.type === "group") {
-      return conversation.group?.name || "Nhom chat";
+      return conversation.group?.name || "Nhóm chat";
     }
 
     return (
       conversation.participants.find((participant) => participant._id !== currentUserId)
-        ?.displayName || "Tro chuyen truc tiep"
+        ?.displayName || "Trò chuyện trực tiếp"
     );
   };
 
@@ -204,12 +209,21 @@ export default function MessageItem({
   const handleReact = async (emoji: string) => {
     try {
       const res = await chatService.reactMessage(message._id, emoji);
-      updateMessage(res.message);
+      updateMessage(res);
     } catch (err) {
       console.error("React lỗi:", err);
     } finally {
       setShowActions(false);
     }
+  };
+
+  const handleReactionPress = (emoji: string) => {
+    if (selectedConvo.type === "group") {
+      setReactionDetailEmoji(emoji);
+      return;
+    }
+
+    void handleReact(emoji);
   };
   const handleTogglePin = () => {
     closeActions();
@@ -219,12 +233,12 @@ export default function MessageItem({
   const handleRecall = () => {
     closeActions();
     Alert.alert(
-      "Thu hoi",
-      "Tin nhan se bi thu hoi cho tat ca thanh vien. Tiep tuc?",
+      "Thu hồi",
+      "Tin nhắn sẽ bị thu hồi cho tất cả thành viên. Tiếp tục?",
       [
         { text: "Huy", style: "cancel" },
         {
-          text: "Thu hoi",
+          text: "Thu hồi",
           style: "destructive",
           onPress: () => {
             void recallMessage(message._id);
@@ -245,8 +259,8 @@ export default function MessageItem({
       await forwardMessage(conversationId, message._id);
       setShowForwardPicker(false);
     } catch (error) {
-      console.error("Loi khi chuyen tiep tin nhan:", error);
-      Alert.alert("Chuyen tiep that bai", "Khong the chuyen tiep tin nhan nay.");
+      console.error("Lỗi khi chuyển tiếp tin nhắn:", error);
+      Alert.alert("Chuyển tiếp thất bại", "Không thể chuyển tiếp tin nhắn này.");
     } finally {
       setForwardingConversationId(null);
     }
@@ -265,8 +279,8 @@ export default function MessageItem({
         mimeType
       );
     } catch (error) {
-      console.error("Loi khi tai file:", error);
-      Alert.alert("Tai file that bai", "Khong the tai tep dinh kem nay.");
+      console.error("Lỗi khi tải tệp:", error);
+      Alert.alert("Tải tệp thất bại", "Không thể tải tệp đính kèm này.");
     }
   };
 
@@ -314,6 +328,50 @@ export default function MessageItem({
     </View>
   );
 
+  const renderReactionSection = (
+    title: string,
+    users: ReactionUser[]
+  ) => (
+    <View style={styles.receiptSection}>
+      <Text style={[styles.receiptSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+        {title}
+      </Text>
+
+      {users.length === 0 ? (
+        <Text style={[styles.receiptEmptyText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+          Chưa có ai thả cảm xúc này.
+        </Text>
+      ) : (
+        users.map((item) => (
+          <View
+            key={item._id}
+            style={[
+              styles.receiptUserRow,
+              {
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#334155" : "#e2e8f0",
+              },
+            ]}
+          >
+            <UserAvatar
+              name={item.displayName}
+              avatarUrl={item.avatarUrl}
+              size={32}
+            />
+            <View style={styles.reactionUserTextGroup}>
+              <Text style={[styles.receiptUserName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                {item._id === currentUserId ? "Bạn" : item.displayName}
+              </Text>
+              <Text style={[styles.reactionUserMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                Đã thả {reactionDetailEmoji}
+              </Text>
+            </View>
+          </View>
+        ))
+      )}
+    </View>
+  );
+
   const renderContent = () => {
     if (message.isRecalled) {
       return (
@@ -324,7 +382,7 @@ export default function MessageItem({
               { color: isDark ? "#94a3b8" : "#64748b" },
             ]}
           >
-            Tin nhan da thu hoi
+            Tin nhắn đã thu hồi
           </Text>
         </View>
       );
@@ -339,7 +397,7 @@ export default function MessageItem({
               { color: isDark ? "#94a3b8" : "#64748b" },
             ]}
           >
-            Ban da xoa tin nhan nay
+            Bạn đã xóa tin nhắn này
           </Text>
         </View>
       );
@@ -369,7 +427,7 @@ export default function MessageItem({
                 { color: isOwn ? "#ffffffcc" : isDark ? "#94a3b8" : "#64748b" },
               ]}
             >
-              Da chuyen tiep
+              Đã chuyển tiếp
             </Text>
           </View>
         ) : null}
@@ -509,15 +567,16 @@ export default function MessageItem({
             {renderContent()}
             {renderPinIcon()}
           </Pressable>
-          {message.reactions && Object.keys(message.reactions).length > 0 && (
+          {reactionEntries.length > 0 && (
             <View style={styles.reactionRow}>
-              {Object.entries(message.reactions).map(([emoji, users]) => {
-                const isMine = users.includes(currentUserId!);
+              {reactionEntries.map(([emoji, users]) => {
+                const isMine = users.some((item) => item._id === currentUserId);
 
                 return (
                   <Pressable
                     key={emoji}
-                    onPress={() => handleReact(emoji)}
+                    onPress={() => handleReactionPress(emoji)}
+                    accessibilityHint={getReactionUsersLabel(users, currentUserId)}
                     style={[
                       styles.reactionItem,
                       {
@@ -529,7 +588,7 @@ export default function MessageItem({
                       },
                     ]}
                   >
-                    <Text style={{ fontSize: 12 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "600" }}>
                       {emoji} {users.length}
                     </Text>
                   </Pressable>
@@ -620,7 +679,7 @@ export default function MessageItem({
                 { color: isDark ? "#f8fafc" : "#0f172a" },
               ]}
             >
-              Tuy chon tin nhan
+              Tùy chọn tin nhắn
             </Text>
 
             {canTogglePin ? (
@@ -640,7 +699,7 @@ export default function MessageItem({
                     { color: isDark ? "#f8fafc" : "#0f172a" },
                   ]}
                 >
-                  {message.isPinned ? "Bo ghim" : "Ghim tin nhan"}
+                  {message.isPinned ? "Bỏ ghim" : "Ghim tin nhắn"}
                 </Text>
               </Pressable>
             ) : null}
@@ -662,7 +721,7 @@ export default function MessageItem({
                     { color: isDark ? "#f8fafc" : "#0f172a" },
                   ]}
                 >
-                  Tra loi
+                  Trả lời
                 </Text>
               </Pressable>
             ) : null}
@@ -684,7 +743,7 @@ export default function MessageItem({
                     { color: isDark ? "#f8fafc" : "#0f172a" },
                   ]}
                 >
-                  Chuyen tiep
+                  Chuyển tiếp
                 </Text>
               </Pressable>
             ) : null}
@@ -709,7 +768,7 @@ export default function MessageItem({
                     { color: isDark ? "#f8fafc" : "#0f172a" },
                   ]}
                 >
-                  Xem trang thai
+                  Xem trạng thái
                 </Text>
               </Pressable>
             ) : null}
@@ -728,7 +787,7 @@ export default function MessageItem({
                 <Text
                   style={[styles.actionButtonText, styles.actionDangerText]}
                 >
-                  Thu hoi
+                  Thu hồi
                 </Text>
               </Pressable>
             ) : null}
@@ -771,7 +830,7 @@ export default function MessageItem({
                   { color: isDark ? "#cbd5e1" : "#475569" },
                 ]}
               >
-                Dong
+                Đóng
               </Text>
             </Pressable>
 
@@ -806,13 +865,13 @@ export default function MessageItem({
                 { color: isDark ? "#f8fafc" : "#0f172a" },
               ]}
             >
-              Chuyen tiep den
+              Chuyển tiếp đến
             </Text>
 
             {availableConversations.length === 0 ? (
               <View style={styles.emptyForwardState}>
                 <Text style={{ color: isDark ? "#94a3b8" : "#64748b" }}>
-                  Chua co cuoc tro chuyen nao khac de chuyen tiep.
+                  Chưa có cuộc trò chuyện nào khác để chuyển tiếp.
                 </Text>
               </View>
             ) : (
@@ -840,12 +899,12 @@ export default function MessageItem({
                       {getConversationLabel(conversation)}
                     </Text>
                     <Text style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: 12 }}>
-                      {conversation.type === "group" ? "Nhom" : "Tro chuyen truc tiep"}
+                      {conversation.type === "group" ? "Nhóm" : "Trò chuyện trực tiếp"}
                     </Text>
                   </View>
 
                   <Text style={{ color: isDark ? "#94a3b8" : "#64748b", fontSize: 12 }}>
-                    {forwardingConversationId === conversation._id ? "Dang gui..." : "Chon"}
+                    {forwardingConversationId === conversation._id ? "Đang gửi..." : "Chọn"}
                   </Text>
                 </Pressable>
               ))
@@ -867,7 +926,7 @@ export default function MessageItem({
                   { color: isDark ? "#cbd5e1" : "#475569" },
                 ]}
               >
-                Dong
+                Đóng
               </Text>
             </Pressable>
           </View>
@@ -893,7 +952,7 @@ export default function MessageItem({
             ]}
           >
             <Text style={[styles.actionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Trang thai tin nhan
+              Trạng thái tin nhắn
             </Text>
 
             <Text style={[styles.receiptMessageTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
@@ -901,19 +960,19 @@ export default function MessageItem({
             </Text>
 
             {renderReceiptSection(
-              `Da xem (${seenParticipants.length})`,
+              `Đã xem (${seenParticipants.length})`,
               seenParticipants,
-              "Chua co ai xem tin nhan nay."
+              "Chưa có ai xem tin nhắn này."
             )}
             {renderReceiptSection(
-              `Da nhan (${deliveredOnlyParticipants.length})`,
+              `Đã nhận (${deliveredOnlyParticipants.length})`,
               deliveredOnlyParticipants,
-              "Chua co ai chi moi nhan ma chua xem."
+              "Chưa có ai chỉ mới nhận mà chưa xem."
             )}
             {renderReceiptSection(
-              `Da gui (${pendingParticipants.length})`,
+              `Đã gửi (${pendingParticipants.length})`,
               pendingParticipants,
-              "Tat ca thanh vien con lai da nhan tin nhan nay."
+              "Tất cả thành viên còn lại đã nhận tin nhắn này."
             )}
 
             <Pressable
@@ -927,8 +986,74 @@ export default function MessageItem({
               ]}
             >
               <Text style={[styles.actionButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                Dong
+                Đóng
               </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(reactionDetailEmoji)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReactionDetailEmoji(null)}
+      >
+        <View style={styles.actionRoot}>
+          <Pressable style={styles.actionBackdrop} onPress={() => setReactionDetailEmoji(null)} />
+
+          <View
+            style={[
+              styles.receiptModalCard,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text style={[styles.actionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Phản ứng {reactionDetailEmoji}
+            </Text>
+
+            <Text style={[styles.receiptMessageTime, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              {activeReactionUsers.length} thành viên đã thả cảm xúc này
+            </Text>
+
+            {renderReactionSection(
+              `Danh sách (${activeReactionUsers.length})`,
+              activeReactionUsers
+            )}
+
+            {reactionDetailEmoji ? (
+              <Pressable
+                onPress={() => void handleReact(reactionDetailEmoji)}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.actionButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                  {activeReactionUsers.some((item) => item._id === currentUserId)
+                    ? `Bỏ ${reactionDetailEmoji}`
+                    : `Thả ${reactionDetailEmoji}`}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={() => setReactionDetailEmoji(null)}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>Đóng</Text>
             </Pressable>
           </View>
         </View>
@@ -936,6 +1061,14 @@ export default function MessageItem({
     </View>
   );
 }
+
+export default memo(MessageItem, (prevProps, nextProps) => {
+  return (
+    prevProps.message === nextProps.message &&
+    prevProps.previousMessage === nextProps.previousMessage &&
+    prevProps.selectedConvo === nextProps.selectedConvo
+  );
+});
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: 10 },
@@ -980,6 +1113,13 @@ const styles = StyleSheet.create({
   receiptUserName: {
     fontSize: 14,
     fontWeight: "600",
+  },
+  reactionUserTextGroup: {
+    flex: 1,
+  },
+  reactionUserMeta: {
+    fontSize: 12,
+    marginTop: 2,
   },
   metaRow: {
     marginTop: 4,
@@ -1112,13 +1252,14 @@ const styles = StyleSheet.create({
 
   reactionRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6,
     marginTop: 4,
   },
 
   reactionItem: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 12,
   },
 });

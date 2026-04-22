@@ -99,16 +99,16 @@ export default function AppNavigator() {
             name="Chat"
             component={ChatAppScreen}
             options={{
-              title: "Chat",
-              tabBarLabel: "Chat",
+              title: "Trò chuyện",
+              tabBarLabel: "Trò chuyện",
             }}
           />
           <Tab.Screen
             name="Settings"
             component={SettingsScreen}
             options={{
-              title: "Settings",
-              tabBarLabel: "Settings",
+              title: "Cài đặt",
+              tabBarLabel: "Cài đặt",
             }}
           />
         </Tab.Navigator>

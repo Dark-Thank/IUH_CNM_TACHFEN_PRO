@@ -15,11 +15,11 @@ const getAuthErrorMessage = (error: any, fallbackMessage: string) => {
   }
 
   if (error?.code === "ECONNABORTED") {
-    return "Khong the ket noi backend trong 10 giay. Hay kiem tra server va EXPO_PUBLIC_BACKEND_HOST.";
+    return "Không thể kết nối tới backend trong 10 giây. Hãy kiểm tra server và EXPO_PUBLIC_BACKEND_HOST.";
   }
 
   if (!error?.response) {
-    return "Khong ket noi duoc toi backend. Hay kiem tra dien thoai cung mang Wi-Fi va IP backend trong MobileApp/.env.";
+    return "Không kết nối được tới backend. Hãy kiểm tra điện thoại cùng mạng Wi-Fi và IP backend trong MobileApp/.env.";
   }
 
   return fallbackMessage;
@@ -65,13 +65,13 @@ export const useAuthStore = create<AuthState>()(
 
           // store pending otp email so UI can show OTP verify flow
           set({ pendingOtpEmail: email });
-          const successMsg = "Da gui ma OTP toi email. Vui long xac thuc de hoan tat dang ky.";
+          const successMsg = "Đã gửi mã OTP tới email. Vui lòng xác thực để hoàn tất đăng ký.";
           toast.success(successMsg);
           return { ok: true } as const;
         } catch (error: any) {
           const message = getAuthErrorMessage(
             error,
-            "Dang ky khong thanh cong."
+            "Đăng ký không thành công."
           );
 
           // Avoid noisy Axios stack traces for expected client errors (4xx)
@@ -114,14 +114,14 @@ export const useAuthStore = create<AuthState>()(
           const res = await authService.signIn(username, password);
           set({ pendingOtpEmail: res.email });
 
-          toast.success("Da gui ma OTP toi email. Vui long kiem tra email.");
+          toast.success("Đã gửi mã OTP tới email. Vui lòng kiểm tra email.");
           return res;
         } catch (error) {
           console.error(error);
           // Hiển thị message cụ thể từ backend nếu có
           const serverMessage = getAuthErrorMessage(
             error,
-            "Ten dang nhap hoac mat khau khong trung khop."
+            "Tên đăng nhập hoặc mật khẩu không trùng khớp."
           );
           toast.error(serverMessage || "Tên đăng nhập hoặc mật khẩu không trùng khớp.");
           // Không throw error ra ngoài để tránh RN alert mặc định
@@ -140,10 +140,10 @@ export const useAuthStore = create<AuthState>()(
           await get().fetchMe();
           await useChatStore.getState().fetchConversations();
           set({ pendingOtpEmail: null });
-          toast.success("Dang nhap thanh cong!");
+          toast.success("Đăng nhập thành công!");
         } catch (error) {
           console.error(error);
-          toast.error("Xac thuc OTP that bai.");
+          toast.error("Xác thực OTP thất bại.");
           throw error;
         } finally {
           set({ loading: false });
@@ -154,11 +154,11 @@ export const useAuthStore = create<AuthState>()(
         try {
           await authService.signOut();
           get().clearState();
-          toast.success("Logout thanh cong.");
+          toast.success("Đăng xuất thành công.");
         } catch (error) {
           console.error(error);
           get().clearState();
-          toast.error("Loi xay ra khi logout. Hay thu lai.");
+          toast.error("Lỗi xảy ra khi đăng xuất. Hãy thử lại.");
         }
       },
 
@@ -172,7 +172,7 @@ export const useAuthStore = create<AuthState>()(
           console.error(error);
           authSession.clear();
           set({ user: null, accessToken: null });
-          toast.error("Loi xay ra khi lay du lieu nguoi dung.");
+          toast.error("Lỗi xảy ra khi lấy dữ liệu người dùng.");
         } finally {
           set({ loading: false });
         }
@@ -191,7 +191,7 @@ export const useAuthStore = create<AuthState>()(
           }
         } catch (error) {
           console.error(error);
-          toast.error("Phien dang nhap da het han. Vui long dang nhap lai.");
+          toast.error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
           get().clearState();
         } finally {
           set({ loading: false });

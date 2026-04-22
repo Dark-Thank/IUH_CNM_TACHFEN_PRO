@@ -306,6 +306,11 @@ export const chatService = {
     return res.data.message;
   },
 
+  async recallMessage(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/recall`);
+    return res.data;
+  },
+
 
   async downloadMessageFile(
     messageId: string,

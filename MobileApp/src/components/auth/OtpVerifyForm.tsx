@@ -1,7 +1,6 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useState } from "react";
-import { toast } from "@/lib/toast";
 import {
     ActivityIndicator,
     KeyboardAvoidingView,

@@ -80,7 +80,7 @@ export default function SettingsScreen() {
         bio: trimmedBio,
       });
     } catch (error) {
-      console.error("Khong the cap nhat profile", error);
+      console.error("Không thể cập nhật hồ sơ", error);
     } finally {
       setSaving(false);
     }
@@ -88,15 +88,15 @@ export default function SettingsScreen() {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      "Xoa tai khoan",
-      "Toan bo du lieu lien quan den tai khoan se bi xoa. Ban co chac chan muon tiep tuc?",
+      "Xóa tài khoản",
+      "Toàn bộ dữ liệu liên quan đến tài khoản sẽ bị xóa. Bạn có chắc chắn muốn tiếp tục?",
       [
         {
-          text: "Huy",
+          text: "Hủy",
           style: "cancel",
         },
         {
-          text: "Xoa",
+          text: "Xóa",
           style: "destructive",
           onPress: async () => {
             accountSheetRef.current?.dismiss();
@@ -105,7 +105,7 @@ export default function SettingsScreen() {
             try {
               await deleteAccount();
             } catch (error) {
-              console.error("Khong the xoa tai khoan", error);
+              console.error("Không thể xóa tài khoản", error);
             } finally {
               setDeleting(false);
             }
@@ -139,7 +139,7 @@ export default function SettingsScreen() {
 
           <View style={styles.profileText}>
             <Text style={[styles.profileName, { color: colors.text }]}>
-              {user?.displayName || "Tachfen user"}
+              {user?.displayName || "Người dùng Tachfen"}
             </Text>
             <Text style={[styles.profileMeta, { color: colors.muted }]}>
               @{user?.username || "username"}
@@ -154,7 +154,7 @@ export default function SettingsScreen() {
           ]}
         >
           <View style={styles.sectionHeader}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao dien</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Giao diện</Text>
           </View>
 
           <View style={styles.settingRow}>
@@ -167,7 +167,7 @@ export default function SettingsScreen() {
             </View>
 
             <View style={styles.settingText}>
-              <Text style={[styles.settingTitle, { color: colors.text }]}>Dark mode</Text>
+              <Text style={[styles.settingTitle, { color: colors.text }]}>Chế độ tối</Text>
             </View>
 
             <Switch value={isDark} onValueChange={toggleTheme} />
@@ -187,9 +187,9 @@ export default function SettingsScreen() {
           </View>
 
           <View style={styles.settingText}>
-            <Text style={[styles.settingTitle, { color: colors.text }]}>Tai khoan</Text>
+            <Text style={[styles.settingTitle, { color: colors.text }]}>Tài khoản</Text>
             <Text style={[styles.settingDesc, { color: colors.muted }]}>
-              Xem va sua thong tin tai khoan cua ban
+              Xem và sửa thông tin tài khoản của bạn
             </Text>
           </View>
 
@@ -210,7 +210,7 @@ export default function SettingsScreen() {
       >
         <LogOut size={19} color="#ffffff" />
         <Text style={styles.signOutText}>
-          {loading ? "Dang dang xuat..." : "Dang xuat"}
+          {loading ? "Đang đăng xuất..." : "Đăng xuất"}
         </Text>
       </Pressable>
 
@@ -221,19 +221,19 @@ export default function SettingsScreen() {
         handleIndicatorStyle={{ backgroundColor: colors.muted }}
       >
         <BottomSheetView style={styles.sheetContent}>
-          <Text style={[styles.sheetTitle, { color: colors.text }]}>Tai khoan</Text>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>Tài khoản</Text>
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
             <Text style={[styles.infoLabel, { color: colors.muted }]}>Email</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user?.email || "Chua co email"}
+              {user?.email || "Chưa có email"}
             </Text>
           </View>
 
           <View style={[styles.infoBox, { borderColor: colors.border }]}>
-            <Text style={[styles.infoLabel, { color: colors.muted }]}>Username</Text>
+            <Text style={[styles.infoLabel, { color: colors.muted }]}>Tên đăng nhập</Text>
             <Text style={[styles.infoValue, { color: colors.text }]}>
-              {user?.username || "Chua cap nhat"}
+              {user?.username || "Chưa cập nhật"}
             </Text>
           </View>
 
@@ -251,7 +251,7 @@ export default function SettingsScreen() {
               </View>
 
               <Text style={[styles.infoValue, { color: colors.text }]}>
-                {user?.avatarUrl ? "Da co avatar" : "Chua co avatar"}
+                {user?.avatarUrl ? "Đã có ảnh đại diện" : "Chưa có ảnh đại diện"}
               </Text>
             </View>
           </View>
@@ -266,7 +266,7 @@ export default function SettingsScreen() {
             >
               <View style={styles.inputGroup}>
                 <Text style={[styles.inputLabel, { color: colors.muted }]}>
-                  Ten hien thi
+                  Tên hiển thị
                 </Text>
                 <TextInput
                   value={displayName}
@@ -283,7 +283,7 @@ export default function SettingsScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: colors.muted }]}>Gioi thieu</Text>
+                <Text style={[styles.inputLabel, { color: colors.muted }]}>Giới thiệu</Text>
                 <TextInput
                   value={bio}
                   onChangeText={setBio}
@@ -313,16 +313,16 @@ export default function SettingsScreen() {
                 ]}
               >
                 <Text style={styles.saveButtonText}>
-                  {saving ? "Dang luu..." : "Luu thay doi"}
+                  {saving ? "Đang lưu..." : "Lưu thay đổi"}
                 </Text>
               </Pressable>
 
               <View style={[styles.dangerZone, { borderColor: colors.border }]}>
                 <Text style={[styles.dangerTitle, { color: colors.danger }]}>
-                  Khu vuc nguy hiem
+                  Khu vực nguy hiểm
                 </Text>
                 <Text style={[styles.dangerDesc, { color: colors.muted }]}>
-                  Xoa tai khoan se xoa du lieu lien quan den ban trong he thong.
+                  Xóa tài khoản sẽ xóa dữ liệu liên quan đến bạn trong hệ thống.
                 </Text>
 
                 <Pressable
@@ -337,7 +337,7 @@ export default function SettingsScreen() {
                   ]}
                 >
                   <Text style={styles.deleteButtonText}>
-                    {deleting ? "Dang xoa tai khoan..." : "Xoa tai khoan"}
+                    {deleting ? "Đang xóa tài khoản..." : "Xóa tài khoản"}
                   </Text>
                 </Pressable>
               </View>

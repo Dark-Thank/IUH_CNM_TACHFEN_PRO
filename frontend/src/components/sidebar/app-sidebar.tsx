@@ -16,13 +16,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, LifeBuoyIcon, SendIcon, FrameIcon, PieChartIcon, MapIcon, TerminalIcon } from "lucide-react"
 import { Moon, Sun } from "lucide-react";
 import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
 import NewGroupChatModal from "../chat/NewGroupChatModal";
-import GroupChatList from "../chat/GroupChatList";
-import DirectMessageList from "../chat/DirectMessageList";
+import ConversationList from "../chat/ConversationList";
 import { useThemeStore } from "@/stores/useThemeStore"
 import { useAuthStore } from "@/stores/useAuthStore"
 import ConversationSkeleton from "../skeleton/ConversationSkeleton"
@@ -56,28 +54,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent className="beautiful-scrollbar">
-        {/* Create New Chat */}
         <SidebarGroup>
-          <SidebarGroupContent>
+          <SidebarGroupLabel className="uppercase">khám phá</SidebarGroupLabel>
+          <SidebarGroupContent className="space-y-3">
             <CreateNewChat />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        {/* Group Chat */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="mb-3">
-              <NewGroupChatModal />
-            </div>
-            {convoLoading ? <ConversationSkeleton /> : <GroupChatList />}
+            <NewGroupChatModal />
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Dirrect Message */}
         <SidebarGroup>
-          <SidebarGroupLabel className="uppercase">bạn bè</SidebarGroupLabel>
+          <SidebarGroupLabel className="uppercase">cuộc trò chuyện</SidebarGroupLabel>
           <SidebarGroupContent>
-            <DirectMessageList />
+            {convoLoading ? <ConversationSkeleton /> : <ConversationList />}
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

@@ -5,12 +5,21 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useChatStore } from "./useChatStore";
 
+type ServiceError = {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+};
+
 export const useAuthStore = create<AuthState>()(
   persist((set, get) => ({
     accessToken: null,
     user: null,
     loading: false,
     pendingOtpEmail: null,
+    pendingOtpForReset: false,
     setAccessToken: (accessToken) => {
       set({ accessToken });
     },
@@ -19,7 +28,7 @@ export const useAuthStore = create<AuthState>()(
       set({ user });
     },
     clearState: () => {
-      set({ accessToken: null, user: null, loading: false });
+      set({ accessToken: null, user: null, loading: false, pendingOtpEmail: null, pendingOtpForReset: false });
       useChatStore.getState().reset();
       localStorage.clear();
       sessionStorage.clear();
@@ -35,12 +44,12 @@ export const useAuthStore = create<AuthState>()(
         //  gọi api
 
         await authService.signUp(username, password, email, firstName, lastName);
-        set({ pendingOtpEmail: email });
+        set({ pendingOtpEmail: email, pendingOtpForReset: false });
         toast.success("Đã gửi mã OTP tới email. Vui lòng xác thực để hoàn tất đăng ký.");
         return true;
       } catch (error) {
         console.error(error);
-        const msg = error?.response?.data?.message || "Đăng ký không thành công";
+        const msg = (error as ServiceError)?.response?.data?.message || "Đăng ký không thành công";
         toast.error(msg);
         return false;
       } finally {
@@ -56,10 +65,9 @@ export const useAuthStore = create<AuthState>()(
         const res = await authService.signIn(username, password);
         // res = { message, userId, email }
         // store pending email for OTP verify
-        set({ pendingOtpEmail: res.email });
+        set({ pendingOtpEmail: res.email, pendingOtpForReset: false });
 
         toast.success("Đã gửi mã OTP tới email. Vui lòng kiểm tra email.");
-        return res;
       } catch (error) {
         console.error(error);
         toast.error("Đăng nhập không thành công!");
@@ -76,12 +84,26 @@ export const useAuthStore = create<AuthState>()(
         const { accessToken } = res;
         get().setAccessToken(accessToken);
         await get().fetchMe();
-        useChatStore.getState().fetchConversations();
-        set({ pendingOtpEmail: null });
+        await useChatStore.getState().fetchConversations();
+        set({ pendingOtpEmail: null, pendingOtpForReset: false });
         toast.success("Đăng nhập thành công!");
       } catch (error) {
         console.error(error);
         toast.error("Xác thực OTP thất bại.");
+        throw error;
+      } finally {
+        set({ loading: false });
+      }
+    },
+
+    forgotPassword: async (email) => {
+      try {
+        set({ loading: true, pendingOtpEmail: email, pendingOtpForReset: true });
+        await authService.forgotPassword(email);
+        toast.success("Nếu email tồn tại, mã reset đã được gửi.");
+      } catch (error) {
+        console.error(error);
+        toast.error("Gửi mã reset thất bại.");
         throw error;
       } finally {
         set({ loading: false });
@@ -138,6 +160,6 @@ export const useAuthStore = create<AuthState>()(
     },
   }), {
     name: "auth-storage",
-    partialize: (state) => ({ user: state.user }),
+    partialize: (state) => ({ user: state.user, pendingOtpEmail: state.pendingOtpEmail, pendingOtpForReset: state.pendingOtpForReset }),
   })
 );

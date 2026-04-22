@@ -6,6 +6,7 @@ import { io } from "../socket/index.js";
 import {
     emitConversationRemoved,
     emitConversationUpsert,
+    formatMessagesForClient,
     formatConversationForSocket,
     getConversationParticipantIds,
 } from "../utils/messageHelper.js";
@@ -328,7 +329,7 @@ export const getMessages = async (req, res) => {
             messages.pop();
         }
 
-        messages = messages.reverse();
+        messages = await formatMessagesForClient(messages.reverse());
 
         return res.status(200).json({ messages, nextCursor, });
 
@@ -394,7 +395,9 @@ export const markAsSeen = async (req, res) => {
                 _id: { $in: unreadMessages.map((message) => message._id) },
             });
 
-            refreshedMessages.forEach((message) => {
+            const formattedMessages = await formatMessagesForClient(refreshedMessages);
+
+            formattedMessages.forEach((message) => {
                 io.to(conversationId).emit("update-message", { message });
             });
         }

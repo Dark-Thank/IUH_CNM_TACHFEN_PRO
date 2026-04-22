@@ -4,9 +4,8 @@ import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
-import type { Conversation, Message, Participant } from "@/types/chat";
+import type { Conversation, Message, Participant, ReactionUser } from "@/types/chat";
 import { MoreVertical, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play, Send, Trash2, Video } from "lucide-react";
-import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import {
@@ -76,6 +75,16 @@ const ReceiptUserList = ({
       ))}
     </div>
   );
+};
+
+const getReactionUsersLabel = (users: ReactionUser[], currentUserId?: string) => {
+  if (users.length === 0) {
+    return "Chưa có ai thả cảm xúc này.";
+  }
+
+  return users
+    .map((item) => (item._id === currentUserId ? "Bạn" : item.displayName || "Thành viên"))
+    .join(", ");
 };
 
 interface MessageItemProps {
@@ -231,6 +240,7 @@ const MessageItem = ({
   const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage, setReplyingMessage } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [reactionDialogEmoji, setReactionDialogEmoji] = useState<string | null>(null);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
 
@@ -297,6 +307,8 @@ const MessageItem = ({
     ? `${MESSAGE_RECEIPT_LABELS[receiptStatus]} ${receiptProgress}`
     : MESSAGE_RECEIPT_LABELS[receiptStatus];
   const canViewReceiptDetails = isOwn && selectedConvo.type === "group";
+  const reactionEntries = Object.entries(message.reactions || {}).filter(([, users]) => users.length > 0);
+  const activeReactionUsers = reactionDialogEmoji ? message.reactions?.[reactionDialogEmoji] || [] : [];
   const showTimeSeparator = isShowTime && !isLastOwnMessage;
   const messageFooterTime = formatMessageTime(new Date(message.createdAt));
   const receiptTone = MESSAGE_RECEIPT_STYLES[receiptStatus];
@@ -334,6 +346,15 @@ const MessageItem = ({
 
   const handleReact = async (emoji: string) => {
     await reactToMessage(message._id, emoji);
+  };
+
+  const handleReactionBadgeClick = async (emoji: string) => {
+    if (selectedConvo.type === "group") {
+      setReactionDialogEmoji(emoji);
+      return;
+    }
+
+    await handleReact(emoji);
   };
 
   const handleReply = () => {
@@ -401,16 +422,29 @@ const MessageItem = ({
                       : "chat-bubble-received"
             )}
           >
-            {message.reactions && Object.keys(message.reactions).length > 0 && (
-              <div className="flex gap-1 mt-1">
-                {Object.entries(message.reactions).map(([emoji, users]) => (
-                  <span
-                    key={emoji}
-                    className="text-xs bg-gray-200 px-2 py-0.5 rounded-full"
-                  >
-                    {emoji} {users.length}
-                  </span>
-                ))}
+            {reactionEntries.length > 0 && (
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {reactionEntries.map(([emoji, users]) => {
+                  const reactedByMe = users.some((item) => item._id === user?._id);
+
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      title={getReactionUsersLabel(users, user?._id)}
+                      onClick={() => void handleReactionBadgeClick(emoji)}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition",
+                        reactedByMe
+                          ? "border-primary/30 bg-primary/15 text-primary"
+                          : "border-border/70 bg-muted/70 text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <span>{emoji}</span>
+                      <span>{users.length}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
             {message.isRecalled ? (
@@ -739,6 +773,64 @@ const MessageItem = ({
                 />
               </div>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(reactionDialogEmoji)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReactionDialogEmoji(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Phản ứng {reactionDialogEmoji ?? ""}
+            </DialogTitle>
+            <DialogDescription>
+              {activeReactionUsers.length} thành viên đã thả cảm xúc này trong nhóm.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {activeReactionUsers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Chưa có ai thả cảm xúc này.</p>
+            ) : (
+              activeReactionUsers.map((item) => (
+                <div
+                  key={item._id}
+                  className="flex items-center gap-3 rounded-lg border border-border/70 bg-background px-3 py-2"
+                >
+                  <UserAvatar
+                    type="chat"
+                    name={item.displayName}
+                    avatarUrl={item.avatarUrl ?? undefined}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {item._id === user?._id ? "Bạn" : item.displayName}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Đã thả {reactionDialogEmoji}</p>
+                  </div>
+                </div>
+              ))
+            )}
+
+            {reactionDialogEmoji ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => void handleReact(reactionDialogEmoji)}
+              >
+                {activeReactionUsers.some((item) => item._id === user?._id)
+                  ? `Bỏ ${reactionDialogEmoji}`
+                  : `Thả ${reactionDialogEmoji}`}
+              </Button>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

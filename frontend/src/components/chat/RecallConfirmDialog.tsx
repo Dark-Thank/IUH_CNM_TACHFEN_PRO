@@ -1,17 +1,16 @@
-import React, { useState, useRef } from "react";
+import { useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
-import { Trash2, X } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useChatStore } from "@/stores/useChatStore";
 
 interface RecallConfirmDialogProps {
   messageId: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export default function RecallConfirmDialog({ messageId, children }: RecallConfirmDialogProps) {
   const [open, setOpen] = useState(false);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const recallMessage = useChatStore((state) => state.recallMessage);
 
   const handleConfirm = async () => {
@@ -35,10 +34,10 @@ export default function RecallConfirmDialog({ messageId, children }: RecallConfi
       }}>
         {children}
       </div>
-      
+
       <Dialog open={open} onOpenChange={setOpen}>
         {/* Giữ nguyên phần DialogContent của bạn */}
-        <DialogContent 
+        <DialogContent
           className="sm:max-w-md p-0 max-h-[90vh] overflow-hidden"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -49,7 +48,7 @@ export default function RecallConfirmDialog({ messageId, children }: RecallConfi
                 Thu hồi tin nhắn
               </DialogTitle>
               <DialogDescription className="text-sm mt-2">
-                Tin nhắn này sẽ bị xóa khỏi tất cả thiết bị tham gia. 
+                Tin nhắn này sẽ bị xóa khỏi tất cả thiết bị tham gia.
                 <br />
                 <span className="font-semibold text-destructive mt-1 block">
                   Không thể khôi phục sau khi xác nhận!
@@ -58,16 +57,16 @@ export default function RecallConfirmDialog({ messageId, children }: RecallConfi
             </DialogHeader>
 
             <DialogFooter className="mt-6 pt-4 border-t border-border gap-3">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 className="flex-1"
                 onClick={handleClose}
               >
                 Hủy
               </Button>
-              <Button 
-                type="button" 
+              <Button
+                type="button"
                 className="flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90 font-medium shadow-lg"
                 onClick={handleConfirm}
               >

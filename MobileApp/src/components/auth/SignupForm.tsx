@@ -60,7 +60,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
     }
 
     if (username.trim().length < 3) {
-      nextErrors.username = "Username phải có ít nhất 3 ký tự.";
+      nextErrors.username = "Tên đăng nhập phải có ít nhất 3 ký tự.";
     }
 
     if (!emailRegex.test(email.trim())) {
@@ -99,7 +99,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
     if (typeof message === "string") {
       const lower = message.toLowerCase();
       if (lower.includes("username") || lower.includes("username đã tồn tại") || lower.includes("username đã")) {
-        setErrors((current) => ({ ...current, username: "Username đã tồn tại." }));
+        setErrors((current) => ({ ...current, username: "Tên đăng nhập đã tồn tại." }));
       }
       if (lower.includes("email") || lower.includes("email đã tồn tại") || lower.includes("email đã")) {
         setErrors((current) => ({ ...current, email: "Email đã tồn tại." }));
@@ -160,7 +160,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
                       setLastName(value);
                       setErrors((current) => ({ ...current, lastName: undefined }));
                     }}
-                    placeholder="Nguyen"
+                    placeholder="Nguyễn"
                     placeholderTextColor={colors.placeholder}
                     style={[styles.input, { color: colors.text }]}
                   />
@@ -207,7 +207,7 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
             </View>
 
             <View style={styles.field}>
-              <Text style={[styles.label, { color: colors.text }]}>Username</Text>
+              <Text style={[styles.label, { color: colors.text }]}>Tên đăng nhập</Text>
               <View
                 style={[
                   styles.inputShell,

@@ -6,6 +6,8 @@ export interface AuthState {
   accessToken: string | null;
   user: User | null;
   loading: boolean;
+  pendingOtpEmail: string | null;
+  pendingOtpForReset: boolean;
 
   setAccessToken: (accessToken: string) => void;
   setUser: (user: User) => void;
@@ -16,8 +18,10 @@ export interface AuthState {
     email: string,
     firstName: string,
     lastName: string
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   signIn: (username: string, password: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
   refresh: () => Promise<void>;

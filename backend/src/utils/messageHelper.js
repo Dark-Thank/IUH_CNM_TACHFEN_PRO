@@ -1,3 +1,5 @@
+import User from "../models/User.js";
+
 export const getMessagePreviewContent = (message) => {
     const trimmedContent = typeof message?.content === "string"
         ? message.content.trim()
@@ -81,6 +83,159 @@ const toPlainUnreadCounts = (unreadCounts) => {
     }
 
     return Object.fromEntries(Object.entries(unreadCounts));
+};
+
+const toPlainObject = (value) => {
+    if (!value) {
+        return value;
+    }
+
+    if (typeof value.toObject === "function") {
+        return value.toObject({ flattenMaps: true });
+    }
+
+    return value;
+};
+
+const toPlainIdArray = (values = []) => (
+    (values || [])
+        .map((value) => getEntityId(value))
+        .filter(Boolean)
+);
+
+const getReactionEntries = (reactions) => {
+    if (!reactions) {
+        return [];
+    }
+
+    if (reactions instanceof Map) {
+        return [...reactions.entries()];
+    }
+
+    return Object.entries(reactions);
+};
+
+const buildReactionUserFallback = (userId) => ({
+    _id: userId,
+    displayName: "Thành viên",
+    avatarUrl: null,
+});
+
+const formatReactions = (reactions, reactionUsers = new Map()) => {
+    const entries = getReactionEntries(reactions);
+
+    if (entries.length === 0) {
+        return {};
+    }
+
+    return Object.fromEntries(
+        entries
+            .map(([emoji, users]) => {
+                const formattedUsers = (users || [])
+                    .map((userId) => getEntityId(userId))
+                    .filter(Boolean)
+                    .map((userId) => reactionUsers.get(userId) || buildReactionUserFallback(userId));
+
+                return [emoji, formattedUsers];
+            })
+            .filter(([, users]) => users.length > 0)
+    );
+};
+
+const collectReactionUserIds = (messages = []) => {
+    const userIds = new Set();
+
+    messages.forEach((message) => {
+        const rawMessage = toPlainObject(message);
+
+        getReactionEntries(rawMessage?.reactions).forEach(([, users]) => {
+            (users || []).forEach((userId) => {
+                const normalizedId = getEntityId(userId);
+
+                if (normalizedId) {
+                    userIds.add(normalizedId);
+                }
+            });
+        });
+    });
+
+    return [...userIds];
+};
+
+const loadReactionUsers = async (messages = []) => {
+    const userIds = collectReactionUserIds(messages);
+
+    if (userIds.length === 0) {
+        return new Map();
+    }
+
+    const users = await User.find({ _id: { $in: userIds } })
+        .select("displayName avatarUrl")
+        .lean();
+
+    return new Map(
+        users.map((user) => [
+            user._id.toString(),
+            {
+                _id: user._id.toString(),
+                displayName: user.displayName || "",
+                avatarUrl: user.avatarUrl ?? null,
+            },
+        ])
+    );
+};
+
+const buildFormattedMessage = (message, reactionUsers = new Map()) => {
+    const rawMessage = toPlainObject(message);
+
+    if (!rawMessage) {
+        return rawMessage;
+    }
+
+    return {
+        ...rawMessage,
+        _id: getEntityId(rawMessage._id),
+        conversationId: getEntityId(rawMessage.conversationId),
+        senderId: getEntityId(rawMessage.senderId),
+        pinnedBy: getEntityId(rawMessage.pinnedBy),
+        recallBy: getEntityId(rawMessage.recallBy),
+        deletedForUsers: toPlainIdArray(rawMessage.deletedForUsers),
+        deliveredTo: toPlainIdArray(rawMessage.deliveredTo),
+        seenBy: toPlainIdArray(rawMessage.seenBy),
+        reactions: formatReactions(rawMessage.reactions, reactionUsers),
+        callMeta: rawMessage.callMeta
+            ? {
+                ...rawMessage.callMeta,
+                callerId: getEntityId(rawMessage.callMeta.callerId),
+                recipientId: getEntityId(rawMessage.callMeta.recipientId),
+            }
+            : rawMessage.callMeta,
+        forwardedFrom: rawMessage.forwardedFrom
+            ? {
+                ...rawMessage.forwardedFrom,
+                messageId: getEntityId(rawMessage.forwardedFrom.messageId),
+                conversationId: getEntityId(rawMessage.forwardedFrom.conversationId),
+                senderId: getEntityId(rawMessage.forwardedFrom.senderId),
+            }
+            : rawMessage.forwardedFrom,
+        replyTo: rawMessage.replyTo
+            ? {
+                ...rawMessage.replyTo,
+                messageId: getEntityId(rawMessage.replyTo.messageId),
+                senderId: getEntityId(rawMessage.replyTo.senderId),
+            }
+            : rawMessage.replyTo,
+    };
+};
+
+export const formatMessageForClient = async (message) => {
+    const reactionUsers = await loadReactionUsers([message]);
+    return buildFormattedMessage(message, reactionUsers);
+};
+
+export const formatMessagesForClient = async (messages = []) => {
+    const reactionUsers = await loadReactionUsers(messages);
+    return messages.map((message) => buildFormattedMessage(message, reactionUsers));
 };
 
 export const getConversationParticipantIds = (conversation) => (

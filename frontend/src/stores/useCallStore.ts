@@ -100,21 +100,6 @@ const setCurrentCallStatus = (
   }));
 };
 
-const getHangupReason = (call: CallSession) => {
-  if (call.status === "incoming") {
-    return "declined";
-  }
-
-  if (
-    call.direction === "outgoing" &&
-    (call.status === "acquiring-media" || call.status === "outgoing-ringing")
-  ) {
-    return "cancelled";
-  }
-
-  return "ended";
-};
-
 const buildPeerConnection = (callId: string, conversationId: string, targetId: string, set: any) => {
   if (peerConnection) {
     return peerConnection;

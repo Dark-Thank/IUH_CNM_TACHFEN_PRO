@@ -5,8 +5,8 @@ const show = (title: string, message: string) => {
 };
 
 export const toast = {
-  success: (message: string) => show("Success", message),
-  error: (message: string) => show("Error", message),
-  info: (message: string) => show("Info", message),
-  warning: (message: string) => show("Warning", message),
+  success: (message: string) => show("Thành công", message),
+  error: (message: string) => show("Lỗi", message),
+  info: (message: string) => show("Thông báo", message),
+  warning: (message: string) => show("Cảnh báo", message),
 };

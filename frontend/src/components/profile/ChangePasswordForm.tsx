@@ -32,19 +32,6 @@ export default function ChangePasswordForm() {
         }
     };
 
-    const confirmOtp = async () => {
-        try {
-            if (!user?.email) return toast.error("Không tìm thấy email người dùng.");
-            // newPassword should be read from form values
-            const formValues = (await import('react-hook-form')).then(() => null);
-            // Instead get newPassword from DOM via form state is cumbersome; simpler: read values via register's ref
-            // We'll re-use the form's current values by using the form's getValues
-            // But react-hook-form getValues isn't available here, so restructure: use handleSubmit wrapper
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
     const onSubmit = async (data: { oldPassword: string; newPassword: string }) => {
         await requestChange(data);
     };

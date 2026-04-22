@@ -48,6 +48,12 @@ export interface VoiceMeta {
   mimeType?: string | null;
 }
 
+export interface ReactionUser {
+  _id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
 export interface CallMeta {
   callType: "audio" | "video";
   outcome: "completed" | "busy" | "declined" | "missed" | "cancelled" | "disconnected" | "reconnect-timeout";
@@ -118,6 +124,6 @@ export interface Message {
   createdAt: string;
   isOwn?: boolean;
   reactions?: {
-    [emoji: string]: string[];
+    [emoji: string]: ReactionUser[];
   };
 }

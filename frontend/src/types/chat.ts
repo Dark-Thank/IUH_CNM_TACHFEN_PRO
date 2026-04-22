@@ -43,6 +43,12 @@ export interface VoiceMeta {
   mimeType?: string | null;
 }
 
+export interface ReactionUser {
+  _id: string;
+  displayName: string;
+  avatarUrl?: string | null;
+}
+
 export interface ReplyToMessage {
   messageId: string;
   senderId: string;
@@ -124,7 +130,7 @@ export interface Message {
   createdAt: string;
   isOwn?: boolean;
   reactions?: {
-    [emoji: string]: string[];
+    [emoji: string]: ReactionUser[];
   };
 }
 
