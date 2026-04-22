@@ -78,6 +78,15 @@ const ConversationSchema = new mongoose.Schema({
         of: Number,
         default: {},
     },
+    invitationToken: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
+    invitationExpiry: {
+        type: Date,
+        default: null,
+    },
 
 }, { timestamps: true });
 

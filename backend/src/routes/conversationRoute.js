@@ -3,8 +3,10 @@ import {
     addGroupMembers,
     createConversation,
     disbandGroup,
+    generateInvitationLink,
     getConversations,
     getMessages,
+    joinGroupByToken,
     leaveGroup,
     markAsSeen,
     removeGroupMember,
@@ -16,6 +18,7 @@ import { checkFriendship } from '../middlewares/friendMiddleware.js';
 const router = express.Router();
 
 router.post('/', checkFriendship, createConversation);
+router.post('/join-by-token', joinGroupByToken);
 router.get('/', getConversations);
 router.get('/:conversationId/messages', getMessages);
 router.patch("/:conversationId/seen", markAsSeen);
@@ -26,5 +29,6 @@ router.patch('/:conversationId/members/:memberId/role', updateGroupMemberRole);
 router.patch('/:conversationId/owner', transferGroupOwnership);
 router.post('/:conversationId/leave', leaveGroup);
 router.delete('/:conversationId', disbandGroup);
+router.post('/:conversationId/generate-invite', generateInvitationLink);
 
 export default router;

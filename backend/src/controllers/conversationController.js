@@ -10,6 +10,7 @@ import {
     formatConversationForSocket,
     getConversationParticipantIds,
 } from "../utils/messageHelper.js";
+import crypto from "crypto";
 
 const GROUP_ROLES = {
     OWNER: "owner",
@@ -494,6 +495,46 @@ export const addGroupMembers = async (req, res) => {
     }
 };
 
+export const generateInvitationLink = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user._id;
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Nhóm chat không tồn tại" });
+        }
+
+        if (conversation.type !== "group") {
+            return res.status(400).json({ message: "Chỉ nhóm chat mới có thể mời" });
+        }
+
+        if (conversation.group?.createdBy.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Chỉ người tạo nhóm mới có thể tạo link mời" });
+        }
+
+        const invitationToken = crypto.randomBytes(18).toString("hex");
+        const invitationExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+        conversation.invitationToken = invitationToken;
+        conversation.invitationExpiry = invitationExpiry;
+        await conversation.save();
+
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const invitationUrl = `${frontendUrl}/join-group/${invitationToken}`;
+
+        return res.status(200).json({
+            invitationUrl,
+            invitationToken,
+            invitationExpiry,
+            message: "Tạo link mời thành công",
+        });
+    } catch (error) {
+        console.error("Lỗi khi tạo link mời:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
 export const removeGroupMember = async (req, res) => {
     try {
         const { conversationId, memberId } = req.params;
@@ -677,6 +718,57 @@ export const disbandGroup = async (req, res) => {
         return res.status(200).json({ message: "Đã giải tán nhóm", conversationId });
     } catch (error) {
         console.error("Lỗi khi giải tán nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const joinGroupByToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const userId = req.user._id;
+
+        if (!token) {
+            return res.status(400).json({ message: "Token không hợp lệ" });
+        }
+
+        const conversation = await Conversation.findOne({ invitationToken: token });
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Link mời không tồn tại hoặc đã hết hạn" });
+        }
+
+        if (conversation.type !== "group") {
+            return res.status(400).json({ message: "Link mời chỉ áp dụng cho nhóm chat" });
+        }
+
+        if (conversation.invitationExpiry && new Date() > conversation.invitationExpiry) {
+            return res.status(400).json({ message: "Link mời đã hết hạn" });
+        }
+
+        const isAlreadyMember = conversation.participants.some(
+            (participant) => participant.userId.toString() === userId.toString()
+        );
+
+        if (isAlreadyMember) {
+            return res.status(400).json({ message: "Bạn đã là thành viên của nhóm này" });
+        }
+
+        conversation.participants.push({ userId, role: GROUP_ROLES.MEMBER });
+        seedUnreadCountsForParticipants(conversation);
+        await conversation.save();
+
+        await populateConversation(conversation);
+        const formattedConversation = formatConversationForSocket(conversation);
+
+        emitConversationUpsert(io, conversation);
+        io.to(userId.toString()).emit("new-group", formattedConversation);
+
+        return res.status(200).json({
+            conversation: formattedConversation,
+            message: "Tham gia nhóm thành công",
+        });
+    } catch (error) {
+        console.error("Lỗi khi tham gia nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };

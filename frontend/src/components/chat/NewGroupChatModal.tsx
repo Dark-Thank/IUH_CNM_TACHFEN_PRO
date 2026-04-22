@@ -1,5 +1,6 @@
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Card } from "../ui/card";
 import {
   Dialog,
@@ -19,25 +20,35 @@ import SelectedUsersList from "../newGroupChat/SelectedUsersList";
 import { useChatStore } from "@/stores/useChatStore";
 import { toast } from "sonner";
 
+interface NewGroupChatModalProps {
+  trigger?: ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
 
-const NewGroupChatModal = () => {
+const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewGroupChatModalProps) => {
   const submitLockRef = useRef(false);
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { loading, createConversation } = useChatStore();
+  const open = controlledOpen ?? uncontrolledOpen;
+
+  const setOpen = (nextOpen: boolean) => {
+    onOpenChange?.(nextOpen);
+
+    if (controlledOpen === undefined) {
+      setUncontrolledOpen(nextOpen);
+    }
+  };
 
   const resetForm = () => {
     setGroupName("");
     setSearch("");
     setInvitedUsers([]);
-  };
-
-  const handleGetFriends = async () => {
-    await getFriends();
   };
 
   const handleSelectFriend = (friend: Friend) => {
@@ -91,6 +102,10 @@ const NewGroupChatModal = () => {
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
+        if (nextOpen) {
+          void getFriends();
+        }
+
         setOpen(nextOpen);
 
         if (!nextOpen) {
@@ -98,21 +113,24 @@ const NewGroupChatModal = () => {
         }
       }}
     >
-      <DialogTrigger asChild>
-        <Card
-          onClick={handleGetFriends}
-          className="glass cursor-pointer p-3 transition-smooth hover:shadow-soft group/card"
-        >
-          <div className="flex items-center gap-4">
-            <div className="flex size-8 items-center justify-center rounded-full bg-gradient-chat transition-bounce group-hover/card:scale-110">
-              <Users className="size-4 text-white" />
-            </div>
-            <span className="truncate text-sm font-medium capitalize">
-              Tạo nhóm mới
-            </span>
-          </div>
-        </Card>
-      </DialogTrigger>
+      {controlledOpen === undefined ? (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Card
+              className="glass cursor-pointer p-3 transition-smooth hover:shadow-soft group/card"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex size-8 items-center justify-center rounded-full bg-gradient-chat transition-bounce group-hover/card:scale-110">
+                  <Users className="size-4 text-white" />
+                </div>
+                <span className="truncate text-sm font-medium capitalize">
+                  Tạo nhóm mới
+                </span>
+              </div>
+            </Card>
+          )}
+        </DialogTrigger>
+      ) : null}
 
       <DialogContent className="sm:max-w-106.25 border-none">
         <DialogHeader>
