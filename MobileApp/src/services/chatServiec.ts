@@ -304,10 +304,46 @@ export const chatService = {
 
     return downloadResult.uri;
   },
+  
 
   async deleteMessageForMe(messageId: string) {
     const res = await api.put(`/messages/${messageId}/delete-for-me`);
     return res.data;
   },
+  async updateGroupName(conversationId: string, name: string) {
+  const res = await api.patch(`/conversations/${conversationId}/rename`, {
+    name,
+  });
+
+  return res.data;
+},
+async updateGroupAvatar(
+  conversationId: string,
+  file: {
+    uri: string;
+    name?: string;
+    type?: string;
+  }
+) {
+  const formData = new FormData();
+
+  formData.append("avatar", {
+    uri: file.uri,
+    name: file.name || "avatar.jpg",
+    type: file.type || "image/jpeg",
+  } as any);
+
+  const res = await api.put(
+    `/conversations/${conversationId}/avatar`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return res.data;
+}
 };
 

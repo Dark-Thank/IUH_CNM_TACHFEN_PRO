@@ -14,6 +14,7 @@ export interface SeenUser {
 export interface Group {
   name: string;
   createdBy: string;
+  avatar?: string | null; 
 }
 
 export interface LastMessage {

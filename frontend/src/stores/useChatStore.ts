@@ -231,24 +231,21 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy khi ra add message:", error);
         }
       },
-      updateConversation: (conversation: any) => {
-        set((state) => {
-          const existingConversation = state.conversations.find(
-            (item) => item._id === conversation._id
-          );
-
-          if (!existingConversation) {
-            return state;
+updateConversation: (updated: Partial<Conversation> & { _id: string }) =>
+  set((state) => ({
+    conversations: state.conversations.map((c) =>
+      c._id !== updated._id
+        ? c
+        : {
+            ...c,
+            group: {
+              ...c.group,
+              ...updated.group,
+            },
           }
-
-          return {
-            conversations: mergeConversationList(state.conversations, {
-              ...existingConversation,
-              ...conversation,
-            }),
-          };
-        });
-      },
+    ),
+  })),
+  
 
       upsertConversation: (conversation) => {
         set((state) => ({

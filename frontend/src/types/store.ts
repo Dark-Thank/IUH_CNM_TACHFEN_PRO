@@ -64,7 +64,9 @@ export interface ChatState {
 
   // update convo
   upsertConversation: (conversation: Conversation) => void;
-  updateConversation: (conversation: unknown) => void;
+updateConversation: (
+  conversation: Partial<Conversation> & { _id: string }
+) => void;
   markAsSeen: () => Promise<void>;
   addConvo: (convo: Conversation) => void;
   createConversation: (

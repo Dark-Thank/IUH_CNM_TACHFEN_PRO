@@ -1,10 +1,13 @@
 import { useMemo } from "react";
 import { Download, FileText, ImageIcon } from "lucide-react";
 import { chatService } from "@/services/chatServiec";
-import type { Message } from "@/types/chat";
+import type { Message,Conversation } from "@/types/chat";
+import ConversationSettings from "./ConversationSettings";
 
 type Props = {
+  
   messages: Message[];
+   conversation: Conversation; 
 };
 
 type FileEntry = {
@@ -48,7 +51,8 @@ const formatFileSize = (size?: number) => {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const ConversationAssetsPanel = ({ messages }: Props) => {
+const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
+  console.log("conversation:", conversation);
   const sortedMessages = useMemo(
     () =>
       [...messages].sort(
@@ -111,6 +115,7 @@ const ConversationAssetsPanel = ({ messages }: Props) => {
         </div>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-4">
+          <ConversationSettings conversation={conversation} />
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <ImageIcon className="size-4 text-primary" />
@@ -127,7 +132,7 @@ const ConversationAssetsPanel = ({ messages }: Props) => {
               <div className="grid grid-cols-2 gap-3">
                 {images.map((image) => (
                   <div
-                    key={`${image.messageId}-${image.imageIndex}`}
+                    key={`${image.url}-${image.createdAt}`}
                     className="rounded-xl border bg-card p-2 shadow-sm"
                   >
                     <button
@@ -166,7 +171,7 @@ const ConversationAssetsPanel = ({ messages }: Props) => {
               <div className="space-y-3">
                 {files.map((entry) => (
                   <div
-                    key={`${entry.messageId}-${entry.fileIndex}`}
+                    key={`${entry.file.url}-${entry.createdAt}`}
                     className="rounded-xl border bg-card p-3 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">

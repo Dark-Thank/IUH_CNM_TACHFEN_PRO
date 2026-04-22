@@ -131,7 +131,12 @@ const ChatWindowLayout = () => {
           <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />
         </div>
 
-        {showAssetsPanel && <ConversationAssetsPanel messages={messageItems} />}
+        {showAssetsPanel && (
+  <ConversationAssetsPanel
+    messages={messageItems}
+    conversation={selectedConvo}
+  />
+)}
       </div>
     </SidebarInset>
   );
