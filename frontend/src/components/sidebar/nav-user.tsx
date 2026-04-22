@@ -41,21 +41,19 @@ export function NavUser({
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />
-              }
-            >
-              <Avatar>
-                <AvatarImage src={user.avatarUrl} alt={user.displayName} />
-                <AvatarFallback>{user.displayName.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.displayName}</span>
-                <span className="truncate text-xs">{user.username}</span>
-              </div>
-              <ChevronsUpDownIcon className="ml-auto size-4" />
-            </DropdownMenuTrigger>
+            <SidebarMenuButton asChild size="lg" className="aria-expanded:bg-muted">
+              <DropdownMenuTrigger>
+                <Avatar>
+                  <AvatarImage src={user.avatarUrl} alt={user.displayName} />
+                  <AvatarFallback>{user.displayName.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-medium">{user.displayName}</span>
+                  <span className="truncate text-xs">{user.username}</span>
+                </div>
+                <ChevronsUpDownIcon className="ml-auto size-4" />
+              </DropdownMenuTrigger>
+            </SidebarMenuButton>
             <DropdownMenuContent
               className="min-w-56 rounded-lg"
               side={isMobile ? "bottom" : "right"}
@@ -79,14 +77,14 @@ export function NavUser({
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
                 <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-                  <UserIcon className="text-muted-foreground dark:group-focus:!text-accent-foreground"
+                  <UserIcon className="text-muted-foreground dark:group-focus:text-accent-foreground!"
                   />
                   Tài khoản
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => setfriendRequestOpen(true)}
                 >
-                  <Bell className="text-muted-foreground dark:group-focus:!text-accent-foreground" />
+                  <Bell className="text-muted-foreground dark:group-focus:text-accent-foreground!" />
                   Thông báo
                 </DropdownMenuItem>
               </DropdownMenuGroup>
@@ -104,7 +102,7 @@ export function NavUser({
         open={friendRequestOpen}
         setOpen={setfriendRequestOpen}
       />
-      
+
       <ProfileDialog
         open={profileOpen}
         setOpen={setProfileOpen}
