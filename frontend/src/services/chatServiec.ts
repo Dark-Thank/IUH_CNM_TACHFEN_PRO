@@ -98,6 +98,16 @@ export const chatService = {
 
     triggerBrowserDownload(res.data, fileName);
   },
+
+  async generateInvitationLink(conversationId: string) {
+    const res = await api.post(`/conversations/${conversationId}/generate-invite`);
+    return res.data;
+  },
+
+  async joinGroupByToken(token: string) {
+    const res = await api.post("/conversations/join-by-token", { token });
+    return res.data;
+  },
 };
 
 

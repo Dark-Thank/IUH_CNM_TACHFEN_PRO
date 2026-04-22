@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PanelRightClose, PanelRightOpen, Phone, Video } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Phone, Video, Link2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
@@ -13,6 +13,7 @@ import { SidebarTrigger } from "../ui/sidebar";
 import GroupChatAvatar from "./GroupChatAvatar";
 import StatusBadge from "./StatusBadge";
 import UserAvatar from "./UserAvatar";
+import { ShareGroupLinkModal } from "./ShareGroupLinkModal";
 
 type Props = {
   chat?: Conversation;
@@ -26,6 +27,7 @@ const ChatWindowHeader = ({
   onToggleAttachmentsPanel,
 }: Props) => {
   const [showProfile, setShowProfile] = useState(false);
+  const [showShareLink, setShowShareLink] = useState(false);
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
@@ -131,6 +133,18 @@ const ChatWindowHeader = ({
                 <span className="sr-only">Gọi video</span>
               </Button>
             </div>
+          ) : chat.type === "group" ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              onClick={() => setShowShareLink(true)}
+              title="Chia sẻ nhóm"
+            >
+              <Link2 className="size-4" />
+              <span className="sr-only">Chia sẻ nhóm</span>
+            </Button>
           ) : null}
 
           <Button
@@ -154,6 +168,12 @@ const ChatWindowHeader = ({
         friend={profileFriend}
         open={showProfile}
         onOpenChange={setShowProfile}
+      />
+
+      <ShareGroupLinkModal
+        isOpen={showShareLink}
+        onClose={() => setShowShareLink(false)}
+        conversation={chat}
       />
     </>
   );

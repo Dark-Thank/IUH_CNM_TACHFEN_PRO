@@ -2,6 +2,7 @@ import Block from "../models/Block.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
+import crypto from "crypto";
 
 export const createConversation = async (req, res) => {
     try {
@@ -250,4 +251,115 @@ export const markAsSeen = async (req, res) => {
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 }
+
+export const generateInvitationLink = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user._id;
+
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Nhóm chat không tồn tại" });
+        }
+
+        if (conversation.type !== "group") {
+            return res.status(400).json({ message: "Chỉ nhóm chat mới có thể mời" });
+        }
+
+        // Kiểm tra user có phải creator của group không
+        if (conversation.group?.createdBy.toString() !== userId.toString()) {
+            return res.status(403).json({ message: "Chỉ người tạo nhóm mới có thể tạo link mời" });
+        }
+
+        // Tạo token duy nhất (36 ký tự)
+        const invitationToken = crypto.randomBytes(18).toString('hex');
+        
+        // Token hết hạn sau 30 ngày
+        const invitationExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+        conversation.invitationToken = invitationToken;
+        conversation.invitationExpiry = invitationExpiry;
+        await conversation.save();
+
+        // Tạo URL invitation
+        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+        const invitationUrl = `${frontendUrl}/join-group/${invitationToken}`;
+
+        return res.status(200).json({
+            invitationUrl,
+            invitationToken,
+            invitationExpiry,
+            message: "Tạo link mời thành công",
+        });
+
+    } catch (error) {
+        console.error("Lỗi khi tạo link mời:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const joinGroupByToken = async (req, res) => {
+    try {
+        const { token } = req.body;
+        const userId = req.user._id;
+
+        if (!token) {
+            return res.status(400).json({ message: "Token không hợp lệ" });
+        }
+
+        const conversation = await Conversation.findOne({ invitationToken: token });
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Link mời không tồn tại hoặc đã hết hạn" });
+        }
+
+        // Kiểm tra token còn hạn không
+        if (conversation.invitationExpiry && new Date() > conversation.invitationExpiry) {
+            return res.status(400).json({ message: "Link mời đã hết hạn" });
+        }
+
+        // Kiểm tra user đã là thành viên chưa
+        const isAlreadyMember = conversation.participants.some(
+            p => p.userId.toString() === userId.toString()
+        );
+
+        if (isAlreadyMember) {
+            return res.status(400).json({ message: "Bạn đã là thành viên của nhóm này" });
+        }
+
+        // Thêm user vào nhóm
+        conversation.participants.push({ userId });
+        await conversation.save();
+
+        await conversation.populate([
+            { path: 'participants.userId', select: 'displayName avatarUrl' },
+            { path: 'lastMessage.senderId', select: 'displayName avatarUrl' },
+        ]);
+
+        const formatted = {
+            ...conversation.toObject(),
+            participants: conversation.participants.map(p => ({
+                _id: p.userId?._id,
+                displayName: p.userId?.displayName,
+                avatarUrl: p.userId?.avatarUrl ?? null,
+                joinedAt: p.joinedAt,
+            })),
+        };
+
+        // Thông báo cho các thành viên khác
+        io.to(conversation._id.toString()).emit("member-joined", {
+            conversation: formatted,
+        });
+
+        return res.status(200).json({
+            conversation: formatted,
+            message: "Tham gia nhóm thành công",
+        });
+
+    } catch (error) {
+        console.error("Lỗi khi tham gia nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
 

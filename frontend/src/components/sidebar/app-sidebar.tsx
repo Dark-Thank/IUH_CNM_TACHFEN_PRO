@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-
+import { useState } from "react"
 
 import { NavUser } from "@/components/sidebar/nav-user"
 import {
@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, LifeBuoyIcon, SendIcon, FrameIcon, PieChartIcon, MapIcon, TerminalIcon } from "lucide-react"
+import { TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, LifeBuoyIcon, SendIcon, FrameIcon, PieChartIcon, MapIcon, TerminalIcon, LogIn } from "lucide-react"
 import { Moon, Sun } from "lucide-react";
 import { Switch } from "../ui/switch";
 import CreateNewChat from "../chat/CreateNewChat";
@@ -25,6 +25,7 @@ import NewGroupChatModal from "../chat/NewGroupChatModal";
 import GroupChatList from "../chat/GroupChatList";
 import AddFriendModal from "../chat/AddFriendModal";
 import DirectMessageList from "../chat/DirectMessageList";
+import JoinGroupModal from "../chat/JoinGroupModal";
 import { useThemeStore } from "@/stores/useThemeStore"
 import { useAuthStore } from "@/stores/useAuthStore"
 import ConversationSkeleton from "../skeleton/ConversationSkeleton"
@@ -33,8 +34,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { isDark, toggleTheme } = useThemeStore();
   const { user } = useAuthStore();
   const { convoLoading } = useChatStore();
+  const [isJoinGroupOpen, setIsJoinGroupOpen] = useState(false);
   return (
-    <Sidebar variant="inset" {...props}>
+    <>
+      <Sidebar variant="inset" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -68,7 +71,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <div className="flex items-center justify-between">
             <SidebarGroupLabel className="uppercase">nhóm chat</SidebarGroupLabel>
-            <NewGroupChatModal />
+            <div className="flex items-center gap-1">
+              <SidebarGroupAction
+                title="Tham gia nhóm"
+                onClick={() => setIsJoinGroupOpen(true)}
+                className="cursor-pointer"
+              >
+                <LogIn className="size-4" />
+              </SidebarGroupAction>
+              <NewGroupChatModal />
+            </div>
           </div>
           <SidebarGroupContent>
             {convoLoading ? <ConversationSkeleton /> : <GroupChatList />}
@@ -94,5 +106,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         {user && <NavUser user={user} />}
       </SidebarFooter>
     </Sidebar>
+
+    <JoinGroupModal
+      isOpen={isJoinGroupOpen}
+      onClose={() => setIsJoinGroupOpen(false)}
+    />
+    </>
   )
 }

@@ -20,7 +20,8 @@ export interface LastMessage {
   _id: string;
   content: string | null;
   createdAt: string;
-  sender: {
+  // ĐỔI TÊN TỪ sender THÀNH senderId ĐỂ KHỚP VỚI BACKEND
+  senderId: {
     _id: string;
     displayName: string;
     avatarUrl?: string | null;
