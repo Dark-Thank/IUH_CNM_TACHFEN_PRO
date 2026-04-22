@@ -84,6 +84,94 @@ const voiceMetaSchema = new mongoose.Schema({
     },
 }, { _id: false });
 
+const pollOptionSchema = new mongoose.Schema({
+    text: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    voterIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    }],
+}, { timestamps: false });
+
+const pollMetaSchema = new mongoose.Schema({
+    question: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    options: {
+        type: [pollOptionSchema],
+        default: [],
+    },
+    expiresAt: {
+        type: Date,
+        default: null,
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    closedAt: {
+        type: Date,
+        default: null,
+    },
+    closedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+}, { _id: false });
+
+const appointmentResponseSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    status: {
+        type: String,
+        enum: ["going", "maybe", "declined"],
+        required: true,
+    },
+    respondedAt: {
+        type: Date,
+        default: Date.now,
+    },
+}, { _id: false });
+
+const appointmentMetaSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    description: {
+        type: String,
+        default: null,
+    },
+    location: {
+        type: String,
+        default: null,
+    },
+    scheduledAt: {
+        type: Date,
+        required: true,
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    responses: {
+        type: [appointmentResponseSchema],
+        default: [],
+    },
+}, { _id: false });
+
 const replyToSchema = new mongoose.Schema({
     messageId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -101,7 +189,7 @@ const replyToSchema = new mongoose.Schema({
     },
     messageType: {
         type: String,
-        enum: ["text", "call", "voice"],
+        enum: ["text", "call", "voice", "poll", "appointment"],
         default: "text",
     },
     imgUrls: {
@@ -141,7 +229,7 @@ const messageSchema = new mongoose.Schema({
     },
     messageType: {
         type: String,
-        enum: ["text", "call", "voice"],
+        enum: ["text", "call", "voice", "poll", "appointment"],
         default: "text",
     },
     callMeta: {
@@ -150,6 +238,14 @@ const messageSchema = new mongoose.Schema({
     },
     voiceMeta: {
         type: voiceMetaSchema,
+        default: null,
+    },
+    pollMeta: {
+        type: pollMetaSchema,
+        default: null,
+    },
+    appointmentMeta: {
+        type: appointmentMetaSchema,
         default: null,
     },
 

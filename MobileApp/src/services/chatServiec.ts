@@ -2,7 +2,7 @@ import { authSession } from "@/lib/authSession";
 import api from "@/lib/axios";
 import { getApiBaseUrl } from "@/lib/backendUrl";
 import { toast } from "@/lib/toast";
-import type { ConversationResponse, Message } from "@/types/chat";
+import type { AppointmentResponseStatus, ConversationResponse, Message } from "@/types/chat";
 
 import { useBlockStore } from "../stores/useBlockStore";
 
@@ -203,6 +203,47 @@ export const chatService = {
     return data.message;
   },
 
+  async createGroupPoll(payload: {
+    conversationId: string;
+    question: string;
+    options: string[];
+    expiresAt?: string | null;
+  }) {
+    const res = await api.post("/messages/group/poll", payload);
+    return res.data.message;
+  },
+
+  async voteOnGroupPoll(messageId: string, optionId: string) {
+    const res = await api.post(`/messages/${messageId}/poll-vote`, { optionId });
+    return res.data.message;
+  },
+
+  async closeGroupPoll(messageId: string) {
+    const res = await api.post(`/messages/${messageId}/poll-close`);
+    return res.data.message;
+  },
+
+  async createGroupAppointment(payload: {
+    conversationId: string;
+    title: string;
+    description?: string;
+    location?: string;
+    scheduledAt: string;
+  }) {
+    const res = await api.post("/messages/group/appointment", payload);
+    return res.data.message;
+  },
+
+  async respondToGroupAppointment(messageId: string, status: AppointmentResponseStatus) {
+    const res = await api.post(`/messages/${messageId}/appointment-response`, { status });
+    return res.data.message;
+  },
+
+  async deleteGroupAppointment(messageId: string) {
+    const res = await api.delete(`/messages/${messageId}/appointment`);
+    return res.data.message;
+  },
+
   // ======================
   // MARK AS SEEN
   // ======================
@@ -264,6 +305,11 @@ export const chatService = {
 
   async togglePinMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/pin`);
+    return res.data.message;
+  },
+
+  async recallMessage(messageId: string) {
+    const res = await api.put(`/messages/${messageId}/recall`);
     return res.data.message;
   },
 

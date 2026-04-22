@@ -31,7 +31,7 @@ export interface ReplyToMessage {
   messageId: string;
   senderId: string;
   content: string | null;
-  messageType?: "text" | "call" | "voice";
+  messageType?: "text" | "call" | "voice" | "poll" | "appointment";
   imgUrls?: string[];
   fileUrls?: {
     url: string;
@@ -57,6 +57,38 @@ export interface CallMeta {
   endedAt?: string | null;
 }
 
+export interface PollOption {
+  _id: string;
+  text: string;
+  voterIds: string[];
+}
+
+export interface PollMeta {
+  question: string;
+  options: PollOption[];
+  expiresAt?: string | null;
+  createdBy: string;
+  closedAt?: string | null;
+  closedBy?: string | null;
+}
+
+export type AppointmentResponseStatus = "going" | "maybe" | "declined";
+
+export interface AppointmentResponse {
+  userId: string;
+  status: AppointmentResponseStatus;
+  respondedAt: string;
+}
+
+export interface AppointmentMeta {
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  scheduledAt: string;
+  createdBy: string;
+  responses: AppointmentResponse[];
+}
+
 export interface Conversation {
   _id: string;
   type: "direct" | "group";
@@ -65,7 +97,7 @@ export interface Conversation {
   lastMessageAt: string;
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;
-  unreadCounts: Record<string, number>; // key = userId, value = unread count
+  unreadCounts: Record<string, number>;
   createdAt: string;
   updatedAt: string;
 }
@@ -94,9 +126,11 @@ export interface Message {
     }[];
     createdAt: string;
   } | null;
-  messageType?: "text" | "call" | "voice";
+  messageType?: "text" | "call" | "voice" | "poll" | "appointment";
   callMeta?: CallMeta | null;
   voiceMeta?: VoiceMeta | null;
+  pollMeta?: PollMeta | null;
+  appointmentMeta?: AppointmentMeta | null;
   isRecalled?: boolean;
   recalledAt?: string | null;
   isPinned?: boolean;

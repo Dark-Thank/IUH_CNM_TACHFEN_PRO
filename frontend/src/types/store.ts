@@ -1,5 +1,5 @@
 import type { Socket } from "socket.io-client";
-import type { Conversation, Message } from "./chat";
+import type { AppointmentResponseStatus, Conversation, Message } from "./chat";
 import type { Friend, FriendRequest, User } from "./user";
 
 export interface AuthState {
@@ -54,6 +54,21 @@ export interface ChatState {
 
   sendDirectMessage: (userId: string, formData: FormData) => Promise<void>;
   sendGroupMessage: (conversationId: string, formData: FormData) => Promise<void>;
+  createGroupPoll: (conversationId: string, payload: {
+    question: string;
+    options: string[];
+    expiresAt?: string | null;
+  }) => Promise<void>;
+  voteOnGroupPoll: (messageId: string, optionId: string) => Promise<void>;
+  closeGroupPoll: (messageId: string) => Promise<void>;
+  createGroupAppointment: (conversationId: string, payload: {
+    title: string;
+    description?: string;
+    location?: string;
+    scheduledAt: string;
+  }) => Promise<void>;
+  respondToGroupAppointment: (messageId: string, status: AppointmentResponseStatus) => Promise<void>;
+  deleteGroupAppointment: (messageId: string) => Promise<void>;
   forwardMessage: (targetConversationId: string, messageId: string) => Promise<void>;
   togglePinMessage: (messageId: string) => Promise<void>;
   recallMessage: (messageId: string) => Promise<void>;

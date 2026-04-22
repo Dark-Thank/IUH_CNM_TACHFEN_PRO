@@ -16,6 +16,8 @@ import {
   View,
 
 } from "react-native";
+import AppointmentMessageCard from "./AppointmentMessageCard";
+import PollMessageCard from "./PollMessageCard";
 import UserAvatar from "./UserAvatar";
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 
@@ -82,6 +84,10 @@ export default function MessageItem({
     recallMessage,
     togglePinMessage,
     deleteMessageForMe,
+    voteOnGroupPoll,
+    closeGroupPoll,
+    respondToGroupAppointment,
+    deleteGroupAppointment,
     setReplyingMessage,
     updateMessage,
   } = useChatStore();
@@ -107,9 +113,13 @@ export default function MessageItem({
   );
 
   const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
+  const isPollMessage = message.messageType === "poll" && Boolean(message.pollMeta);
+  const isAppointmentMessage = message.messageType === "appointment" && Boolean(message.appointmentMeta);
+  const isStructuredMessage = isPollMessage || isAppointmentMessage;
+  const useOwnAccentBubble = isOwn && !isStructuredMessage;
   const canTogglePin = !message.isRecalled && !isDeletedForMe;
   const canReply = !message.isRecalled && !isDeletedForMe;
-  const canForward = !message.isRecalled && !isDeletedForMe && Boolean(
+  const canForward = !message.isRecalled && !isDeletedForMe && !isStructuredMessage && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
   const canRecall =
@@ -153,12 +163,24 @@ export default function MessageItem({
   const handleReact = async (emoji: string) => {
     try {
       const res = await chatService.reactMessage(message._id, emoji);
-      updateMessage(res.message);
+      updateMessage(res);
     } catch (err) {
       console.error("React lỗi:", err);
     } finally {
       setShowActions(false);
     }
+  };
+  const handleVotePoll = async (optionId: string) => {
+    await voteOnGroupPoll(message._id, optionId);
+  };
+  const handleClosePoll = async () => {
+    await closeGroupPoll(message._id);
+  };
+  const handleAppointmentResponse = async (status: "going" | "maybe" | "declined") => {
+    await respondToGroupAppointment(message._id, status);
+  };
+  const handleDeleteAppointment = async () => {
+    await deleteGroupAppointment(message._id);
   };
   const handleTogglePin = () => {
     closeActions();
@@ -253,13 +275,13 @@ export default function MessageItem({
     return (
       <View>
         {message.replyTo ? (
-          <View style={[styles.replyPreview, { borderLeftColor: isOwn ? "#ffffff80" : isDark ? "#475569" : "#94a3b8" }]}>
-            <Text style={[styles.replySender, { color: isOwn ? "#ffffff" : isDark ? "#e2e8f0" : "#0f172a" }]}>
+          <View style={[styles.replyPreview, { borderLeftColor: useOwnAccentBubble ? "#ffffff80" : isDark ? "#475569" : "#94a3b8" }]}>
+            <Text style={[styles.replySender, { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#e2e8f0" : "#0f172a" }]}>
               {replySenderName}
             </Text>
             <Text
               numberOfLines={2}
-              style={[styles.replyText, { color: isOwn ? "#ffffffcc" : isDark ? "#cbd5e1" : "#475569" }]}
+              style={[styles.replyText, { color: useOwnAccentBubble ? "#ffffffcc" : isDark ? "#cbd5e1" : "#475569" }]}
             >
               {getReplyPreviewContent(message.replyTo)}
             </Text>
@@ -271,12 +293,30 @@ export default function MessageItem({
             <Text
               style={[
                 styles.forwardedBadgeText,
-                { color: isOwn ? "#ffffffcc" : isDark ? "#94a3b8" : "#64748b" },
+                { color: useOwnAccentBubble ? "#ffffffcc" : isDark ? "#94a3b8" : "#64748b" },
               ]}
             >
               Da chuyen tiep
             </Text>
           </View>
+        ) : null}
+
+        {isPollMessage ? (
+          <PollMessageCard
+            message={message}
+            viewerId={currentUserId}
+            onVote={handleVotePoll}
+            onClose={handleClosePoll}
+          />
+        ) : null}
+
+        {isAppointmentMessage ? (
+          <AppointmentMessageCard
+            message={message}
+            viewerId={currentUserId}
+            onRespond={handleAppointmentResponse}
+            onDelete={handleDeleteAppointment}
+          />
         ) : null}
 
         {isVoice && voiceAttachment ? (
@@ -291,7 +331,7 @@ export default function MessageItem({
               <Text
                 style={[
                   styles.voiceCaption,
-                  { color: isOwn ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+                  { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
                 ]}
               >
                 {message.content}
@@ -300,11 +340,11 @@ export default function MessageItem({
           </View>
         ) : null}
 
-        {!isVoice && message.content ? (
+        {!isVoice && !isStructuredMessage && message.content ? (
           <Text
             style={[
               styles.messageText,
-              { color: isOwn ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+              { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
             ]}
           >
             {message.content}
@@ -356,7 +396,7 @@ export default function MessageItem({
       <View style={styles.pinIconContainer}>
         <Pin
           size={12}
-          color={isOwn ? "#ffffff80" : isDark ? "#94a3b8" : "#64748b"}
+          color={useOwnAccentBubble ? "#ffffff80" : isDark ? "#94a3b8" : "#64748b"}
         />
       </View>
     );
@@ -402,7 +442,7 @@ export default function MessageItem({
             delayLongPress={260}
             style={[
               styles.bubble,
-              isOwn
+              useOwnAccentBubble
                 ? { backgroundColor: isDark ? "#a855f7" : "#8b5cf6" }
                 : {
                   backgroundColor: isDark ? "#1f2937" : "#ffffff",

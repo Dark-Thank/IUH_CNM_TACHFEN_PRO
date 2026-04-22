@@ -73,6 +73,15 @@ const resolveForwardedMessage = async (forwardedFromMessageId, userId) => {
     };
   }
 
+  if (["poll", "appointment"].includes(forwardedMessage.messageType)) {
+    return {
+      error: {
+        status: 400,
+        payload: { message: "Khong the chuyen tiep loai tin nhan nay" },
+      },
+    };
+  }
+
   const isParticipant = await Conversation.exists({
     _id: forwardedMessage.conversationId,
     "participants.userId": userId,
@@ -201,6 +210,207 @@ const buildVoiceMessageMeta = ({ content, uploadedFiles, voiceDurationSeconds })
       mimeType: audioFiles[0].mimetype || null,
     },
   };
+};
+
+const POLL_MAX_OPTIONS = 10;
+const APPOINTMENT_RESPONSE_STATUSES = ["going", "maybe", "declined"];
+
+const parseStringArray = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+};
+
+const parseDateValue = (value, { required = false } = {}) => {
+  if (value === undefined || value === null || value === "") {
+    return required ? { error: "Truong ngay gio la bat buoc" } : { value: null };
+  }
+
+  const parsed = new Date(value);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return { error: "Ngay gio khong hop le" };
+  }
+
+  return { value: parsed };
+};
+
+const parsePollPayload = ({ question, options, expiresAt }) => {
+  const normalizedQuestion = normalizeOptionalText(question);
+
+  if (!normalizedQuestion) {
+    return { error: "Noi dung binh chon khong duoc de trong" };
+  }
+
+  const parsedOptions = parseStringArray(options);
+
+  if (!parsedOptions) {
+    return { error: "Danh sach lua chon khong hop le" };
+  }
+
+  const normalizedOptions = parsedOptions
+    .map((option) => normalizeOptionalText(option))
+    .filter(Boolean);
+
+  if (normalizedOptions.length < 2) {
+    return { error: "Can it nhat 2 lua chon" };
+  }
+
+  if (normalizedOptions.length > POLL_MAX_OPTIONS) {
+    return { error: `Chi ho tro toi da ${POLL_MAX_OPTIONS} lua chon` };
+  }
+
+  const loweredSet = new Set();
+
+  for (const optionText of normalizedOptions) {
+    const lowered = optionText.toLowerCase();
+
+    if (loweredSet.has(lowered)) {
+      return { error: "Cac lua chon khong duoc trung nhau" };
+    }
+
+    loweredSet.add(lowered);
+  }
+
+  const expiresAtResult = parseDateValue(expiresAt);
+
+  if (expiresAtResult.error) {
+    return { error: expiresAtResult.error };
+  }
+
+  if (expiresAtResult.value && expiresAtResult.value.getTime() <= Date.now()) {
+    return { error: "Han binh chon phai lon hon thoi diem hien tai" };
+  }
+
+  return {
+    value: {
+      question: normalizedQuestion,
+      options: normalizedOptions,
+      expiresAt: expiresAtResult.value,
+    },
+  };
+};
+
+const parseAppointmentPayload = ({ title, description, location, scheduledAt }) => {
+  const normalizedTitle = normalizeOptionalText(title);
+
+  if (!normalizedTitle) {
+    return { error: "Tieu de lich hen khong duoc de trong" };
+  }
+
+  const scheduledAtResult = parseDateValue(scheduledAt, { required: true });
+
+  if (scheduledAtResult.error) {
+    return { error: scheduledAtResult.error };
+  }
+
+  if (scheduledAtResult.value.getTime() <= Date.now()) {
+    return { error: "Thoi gian lich hen phai lon hon thoi diem hien tai" };
+  }
+
+  return {
+    value: {
+      title: normalizedTitle,
+      description: normalizeOptionalText(description) || null,
+      location: normalizeOptionalText(location) || null,
+      scheduledAt: scheduledAtResult.value,
+    },
+  };
+};
+
+const isPollClosed = (pollMeta) => {
+  if (!pollMeta) {
+    return false;
+  }
+
+  if (pollMeta.closedAt) {
+    return true;
+  }
+
+  if (pollMeta.expiresAt && new Date(pollMeta.expiresAt).getTime() <= Date.now()) {
+    return true;
+  }
+
+  return false;
+};
+
+const applyRecallMutation = (message, userId) => {
+  message.isRecalled = true;
+  message.recalledAt = new Date();
+  message.recallBy = userId;
+  message.content = null;
+  message.imgUrls = [];
+  message.fileUrls = [];
+  message.voiceMeta = null;
+  message.pollMeta = null;
+  message.appointmentMeta = null;
+};
+
+const ensureGroupConversation = (conversation) => {
+  if (!conversation || conversation.type !== "group") {
+    return {
+      status: 400,
+      payload: { message: "Tinh nang nay chi dung cho nhom chat" },
+    };
+  }
+
+  return null;
+};
+
+const loadAuthorizedGroupMessage = async (messageId, userId) => {
+  const message = await Message.findById(messageId);
+
+  if (!message) {
+    return {
+      error: {
+        status: 404,
+        payload: { message: "Tin nhan khong ton tai" },
+      },
+    };
+  }
+
+  const conversation = await Conversation.findById(message.conversationId);
+
+  if (!conversation) {
+    return {
+      error: {
+        status: 404,
+        payload: { message: "Cuoc tro chuyen khong ton tai" },
+      },
+    };
+  }
+
+  const groupError = ensureGroupConversation(conversation);
+
+  if (groupError) {
+    return { error: groupError };
+  }
+
+  const isMember = conversation.participants.some(
+    (participant) => participant.userId.toString() === userId.toString()
+  );
+
+  if (!isMember) {
+    return {
+      error: {
+        status: 403,
+        payload: { message: "Ban khong phai thanh vien cua nhom nay" },
+      },
+    };
+  }
+
+  return { message, conversation };
 };
 
 const buildAsciiFilename = (value = "download") => {
@@ -627,6 +837,284 @@ export const sendGroupMessage = async (req, res) => {
 
 };
 
+export const createGroupPoll = async (req, res) => {
+  try {
+    const senderId = req.user._id;
+    const conversation = req.conversation;
+    const groupError = ensureGroupConversation(conversation);
+
+    if (groupError) {
+      return res.status(groupError.status).json(groupError.payload);
+    }
+
+    const parsedPayload = parsePollPayload(req.body);
+
+    if (parsedPayload.error) {
+      return res.status(400).json({ message: parsedPayload.error });
+    }
+
+    const { question, options, expiresAt } = parsedPayload.value;
+    const message = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      content: question,
+      messageType: "poll",
+      pollMeta: {
+        question,
+        options: options.map((optionText) => ({
+          text: optionText,
+          voterIds: [],
+        })),
+        expiresAt,
+        createdBy: senderId,
+        closedAt: null,
+        closedBy: null,
+      },
+    });
+
+    updateConversationAfterCreateMessage(conversation, message, senderId);
+    await conversation.save();
+    emitNewMessage(io, conversation, message);
+
+    return res.status(201).json({ message });
+  } catch (error) {
+    console.error("Loi khi tao binh chon nhom:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const voteOnGroupPoll = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { optionId } = req.body;
+    const userId = req.user._id;
+
+    if (!optionId) {
+      return res.status(400).json({ message: "Thieu lua chon can binh chon" });
+    }
+
+    const result = await loadAuthorizedGroupMessage(messageId, userId);
+
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.payload);
+    }
+
+    const { message } = result;
+
+    if (message.messageType !== "poll" || !message.pollMeta) {
+      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+    }
+
+    if (isPollClosed(message.pollMeta)) {
+      return res.status(400).json({ message: "Binh chon da dong" });
+    }
+
+    const selectedOption = message.pollMeta.options.find(
+      (option) => option._id.toString() === optionId.toString()
+    );
+
+    if (!selectedOption) {
+      return res.status(404).json({ message: "Khong tim thay lua chon" });
+    }
+
+    const alreadySelected = selectedOption.voterIds.some(
+      (voterId) => voterId.toString() === userId.toString()
+    );
+
+    message.pollMeta.options.forEach((option) => {
+      option.voterIds = option.voterIds.filter(
+        (voterId) => voterId.toString() !== userId.toString()
+      );
+    });
+
+    if (!alreadySelected) {
+      selectedOption.voterIds.push(userId);
+    }
+
+    await message.save();
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Loi khi vote binh chon:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const closeGroupPoll = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const result = await loadAuthorizedGroupMessage(messageId, userId);
+
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.payload);
+    }
+
+    const { message } = result;
+
+    if (message.messageType !== "poll" || !message.pollMeta) {
+      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+    }
+
+    if (message.pollMeta.createdBy.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Chi nguoi tao moi co the dong binh chon" });
+    }
+
+    if (message.pollMeta.closedAt) {
+      return res.status(200).json({ message });
+    }
+
+    if (message.pollMeta.expiresAt && new Date(message.pollMeta.expiresAt).getTime() <= Date.now()) {
+      return res.status(400).json({ message: "Binh chon da dong" });
+    }
+
+    message.pollMeta.closedAt = new Date();
+    message.pollMeta.closedBy = userId;
+    await message.save();
+
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Loi khi dong binh chon:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const createGroupAppointment = async (req, res) => {
+  try {
+    const senderId = req.user._id;
+    const conversation = req.conversation;
+    const groupError = ensureGroupConversation(conversation);
+
+    if (groupError) {
+      return res.status(groupError.status).json(groupError.payload);
+    }
+
+    const parsedPayload = parseAppointmentPayload(req.body);
+
+    if (parsedPayload.error) {
+      return res.status(400).json({ message: parsedPayload.error });
+    }
+
+    const { title, description, location, scheduledAt } = parsedPayload.value;
+    const now = new Date();
+    const message = await Message.create({
+      conversationId: conversation._id,
+      senderId,
+      content: title,
+      messageType: "appointment",
+      appointmentMeta: {
+        title,
+        description,
+        location,
+        scheduledAt,
+        createdBy: senderId,
+        responses: [{
+          userId: senderId,
+          status: "going",
+          respondedAt: now,
+        }],
+      },
+    });
+
+    updateConversationAfterCreateMessage(conversation, message, senderId);
+    await conversation.save();
+    emitNewMessage(io, conversation, message);
+
+    return res.status(201).json({ message });
+  } catch (error) {
+    console.error("Loi khi tao lich hen nhom:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const respondToGroupAppointment = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { status } = req.body;
+    const userId = req.user._id;
+
+    if (!APPOINTMENT_RESPONSE_STATUSES.includes(status)) {
+      return res.status(400).json({ message: "Trang thai xac nhan khong hop le" });
+    }
+
+    const result = await loadAuthorizedGroupMessage(messageId, userId);
+
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.payload);
+    }
+
+    const { message } = result;
+
+    if (message.messageType !== "appointment" || !message.appointmentMeta) {
+      return res.status(400).json({ message: "Tin nhan nay khong phai lich hen" });
+    }
+
+    const existingResponse = message.appointmentMeta.responses.find(
+      (response) => response.userId.toString() === userId.toString()
+    );
+
+    if (existingResponse) {
+      existingResponse.status = status;
+      existingResponse.respondedAt = new Date();
+    } else {
+      message.appointmentMeta.responses.push({
+        userId,
+        status,
+        respondedAt: new Date(),
+      });
+    }
+
+    await message.save();
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Loi khi xac nhan lich hen:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const deleteGroupAppointment = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const result = await loadAuthorizedGroupMessage(messageId, userId);
+
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.payload);
+    }
+
+    const { message } = result;
+
+    if (message.isRecalled) {
+      return res.status(200).json({ message });
+    }
+
+    if (message.messageType !== "appointment" || !message.appointmentMeta) {
+      return res.status(400).json({ message: "Tin nhan nay khong phai lich hen" });
+    }
+
+    if (message.appointmentMeta.createdBy.toString() !== userId.toString()) {
+      return res.status(403).json({ message: "Chi nguoi tao moi co the xoa lich hen" });
+    }
+
+    applyRecallMutation(message, userId);
+    await message.save();
+
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Loi khi xoa lich hen:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
 export const togglePinMessage = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -685,6 +1173,8 @@ export const recallMessage = async (req, res) => {
     message.imgUrls = [];          // Hide images
     message.fileUrls = [];         // 🔥 HIDE FILES - Fix filename display
     message.voiceMeta = null;
+    message.pollMeta = null;
+    message.appointmentMeta = null;
 
     await message.save();
 

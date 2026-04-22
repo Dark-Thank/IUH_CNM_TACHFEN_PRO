@@ -8,22 +8,38 @@ export const getMessagePreviewContent = (message) => {
     }
 
     if (message?.messageType === "voice") {
-        return "Tin nhắn thoại";
+        return "Tin nhan thoai";
     }
 
     if (message?.messageType === "call") {
-        return message?.content || "Cuộc gọi";
+        return message?.content || "Cuoc goi";
+    }
+
+    if (message?.messageType === "poll") {
+        const question = typeof message?.pollMeta?.question === "string"
+            ? message.pollMeta.question.trim()
+            : "";
+
+        return question ? `Binh chon: ${question}` : "Binh chon moi";
+    }
+
+    if (message?.messageType === "appointment") {
+        const title = typeof message?.appointmentMeta?.title === "string"
+            ? message.appointmentMeta.title.trim()
+            : "";
+
+        return title ? `Lich hen: ${title}` : "Lich hen moi";
     }
 
     if (Array.isArray(message?.imgUrls) && message.imgUrls.length > 0) {
-        return message.imgUrls.length > 1 ? "Đã gửi nhiều ảnh" : "Đã gửi một ảnh";
+        return message.imgUrls.length > 1 ? "Da gui nhieu anh" : "Da gui mot anh";
     }
 
     if (Array.isArray(message?.fileUrls) && message.fileUrls.length > 0) {
-        return message.fileUrls.length > 1 ? "Đã gửi nhiều tệp" : "Đã gửi một tệp";
+        return message.fileUrls.length > 1 ? "Da gui nhieu tep" : "Da gui mot tep";
     }
 
-    return "Tin nhắn mới";
+    return "Tin nhan moi";
 };
 
 export const updateConversationAfterCreateMessage = (conversation, message,
@@ -48,7 +64,7 @@ export const updateConversationAfterCreateMessage = (conversation, message,
         const isSender = memberId === senderId.toString();
         const prevCount = conversation.unreadCounts.get(memberId) || 0;
         conversation.unreadCounts.set(memberId, isSender ? 0 : prevCount + 1);
-    })
+    });
 };
 
 const getEntityId = (value) => {

@@ -22,6 +22,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import AppointmentMessageCard from "./AppointmentMessageCard";
+import PollMessageCard from "./PollMessageCard";
 import RecallConfirmDialog from "./RecallConfirmDialog";
 import UserAvatar from "./UserAvatar";
 
@@ -178,7 +180,18 @@ const MessageItem = ({
   lastMessageStatus,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
-  const { conversations, forwardMessage, togglePinMessage, deleteMessageForMe, reactToMessage, setReplyingMessage } = useChatStore();
+  const {
+    conversations,
+    forwardMessage,
+    togglePinMessage,
+    deleteMessageForMe,
+    reactToMessage,
+    setReplyingMessage,
+    voteOnGroupPoll,
+    closeGroupPoll,
+    respondToGroupAppointment,
+    deleteGroupAppointment,
+  } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
@@ -211,11 +224,15 @@ const MessageItem = ({
   const isDeletedForCurrentUser = message.deletedForUsers?.includes(user?._id || "") ?? false;
   const isCallMessage = message.messageType === "call" && Boolean(message.callMeta);
   const isVoice = isVoiceMessage(message);
+  const isPollMessage = message.messageType === "poll" && Boolean(message.pollMeta);
+  const isAppointmentMessage = message.messageType === "appointment" && Boolean(message.appointmentMeta);
   const voiceAttachment = getVoiceAttachment(message);
   const downloadableFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
-  const canForward = !message.isRecalled && !isDeletedForCurrentUser && Boolean(
-    message.content || message.imgUrls?.length || message.fileUrls?.length
-  );
+  const canForward = !message.isRecalled
+    && !isDeletedForCurrentUser
+    && !isPollMessage
+    && !isAppointmentMessage
+    && Boolean(message.content || message.imgUrls?.length || message.fileUrls?.length);
   const canReply = !message.isRecalled && !isDeletedForCurrentUser;
   const availableConversations = conversations.filter(
     (conversation) => conversation._id !== message.conversationId
@@ -265,6 +282,22 @@ const MessageItem = ({
     setReplyingMessage(message);
   };
 
+  const handleVotePoll = async (optionId: string) => {
+    await voteOnGroupPoll(message._id, optionId);
+  };
+
+  const handleClosePoll = async () => {
+    await closeGroupPoll(message._id);
+  };
+
+  const handleAppointmentResponse = async (status: "going" | "maybe" | "declined") => {
+    await respondToGroupAppointment(message._id, status);
+  };
+
+  const handleDeleteAppointment = async () => {
+    await deleteGroupAppointment(message._id);
+  };
+
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
   return (
     <>
@@ -311,6 +344,8 @@ const MessageItem = ({
                 ? "p-3 border rounded-lg bg-muted/50 text-muted-foreground"
                 : isCallMessage
                   ? "w-[min(22rem,70vw)] border bg-card text-card-foreground shadow-sm"
+                  : isPollMessage || isAppointmentMessage
+                    ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
                   : isVoice
                     ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
                     : isOwn
@@ -397,6 +432,20 @@ const MessageItem = ({
                   </Button>
                 )}
               </div>
+            ) : isPollMessage ? (
+              <PollMessageCard
+                message={message}
+                viewerId={user?._id}
+                onVote={handleVotePoll}
+                onClose={handleClosePoll}
+              />
+            ) : isAppointmentMessage ? (
+              <AppointmentMessageCard
+                message={message}
+                viewerId={user?._id}
+                onRespond={handleAppointmentResponse}
+                onDelete={handleDeleteAppointment}
+              />
             ) : (
               <>
                 {message.replyTo && (

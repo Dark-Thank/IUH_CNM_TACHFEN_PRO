@@ -156,6 +156,165 @@ export const useChatStore = create<ChatState>()(
           throw error;
         }
       },
+      createGroupPoll: async (conversationId, payload) => {
+        try {
+          await chatService.createGroupPoll({
+            conversationId,
+            question: payload.question,
+            options: payload.options,
+            expiresAt: payload.expiresAt ?? null,
+          });
+        } catch (error) {
+          console.error("Loi khi tao binh chon nhom:", error);
+          throw error;
+        }
+      },
+      voteOnGroupPoll: async (messageId, optionId) => {
+        try {
+          const updatedMessage = await chatService.voteOnGroupPoll(messageId, optionId);
+
+          set((state) => {
+            const convoId = state.activeConversationId;
+            if (!convoId) return state;
+
+            const convoMessages = state.messages[convoId];
+            if (!convoMessages) return state;
+
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...convoMessages,
+                  items: convoMessages.items.map((message) =>
+                    message._id === messageId
+                      ? {
+                        ...message,
+                        pollMeta: updatedMessage.pollMeta,
+                        updatedAt: updatedMessage.updatedAt,
+                      }
+                      : message
+                  ),
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Loi khi vote binh chon:", error);
+          throw error;
+        }
+      },
+      closeGroupPoll: async (messageId) => {
+        try {
+          const updatedMessage = await chatService.closeGroupPoll(messageId);
+
+          set((state) => {
+            const convoId = state.activeConversationId;
+            if (!convoId) return state;
+
+            const convoMessages = state.messages[convoId];
+            if (!convoMessages) return state;
+
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...convoMessages,
+                  items: convoMessages.items.map((message) =>
+                    message._id === messageId
+                      ? {
+                        ...message,
+                        pollMeta: updatedMessage.pollMeta,
+                        updatedAt: updatedMessage.updatedAt,
+                      }
+                      : message
+                  ),
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Loi khi dong binh chon:", error);
+          throw error;
+        }
+      },
+      createGroupAppointment: async (conversationId, payload) => {
+        try {
+          await chatService.createGroupAppointment({
+            conversationId,
+            title: payload.title,
+            description: payload.description,
+            location: payload.location,
+            scheduledAt: payload.scheduledAt,
+          });
+        } catch (error) {
+          console.error("Loi khi tao lich hen nhom:", error);
+          throw error;
+        }
+      },
+      respondToGroupAppointment: async (messageId, status) => {
+        try {
+          const updatedMessage = await chatService.respondToGroupAppointment(messageId, status);
+
+          set((state) => {
+            const convoId = state.activeConversationId;
+            if (!convoId) return state;
+
+            const convoMessages = state.messages[convoId];
+            if (!convoMessages) return state;
+
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...convoMessages,
+                  items: convoMessages.items.map((message) =>
+                    message._id === messageId
+                      ? {
+                        ...message,
+                        appointmentMeta: updatedMessage.appointmentMeta,
+                        updatedAt: updatedMessage.updatedAt,
+                      }
+                      : message
+                  ),
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Loi khi xac nhan lich hen:", error);
+          throw error;
+        }
+      },
+      deleteGroupAppointment: async (messageId) => {
+        try {
+          const updatedMessage = await chatService.deleteGroupAppointment(messageId);
+
+          set((state) => {
+            const convoId = state.activeConversationId;
+            if (!convoId) return state;
+
+            const convoMessages = state.messages[convoId];
+            if (!convoMessages) return state;
+
+            return {
+              messages: {
+                ...state.messages,
+                [convoId]: {
+                  ...convoMessages,
+                  items: convoMessages.items.map((message) =>
+                    message._id === messageId
+                      ? { ...message, ...updatedMessage }
+                      : message
+                  ),
+                },
+              },
+            };
+          });
+        } catch (error) {
+          console.error("Loi khi xoa lich hen:", error);
+          throw error;
+        }
+      },
       forwardMessage: async (targetConversationId, messageId) => {
         try {
           const { conversations } = get();
