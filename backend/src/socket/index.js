@@ -405,6 +405,30 @@ const findActiveCallByUserId = (userId) => {
     return callId ? activeCalls.get(callId) ?? null : null;
 };
 
+const findActiveGroupCallByConversationId = (conversationId) => {
+    for (const activeCall of activeCalls.values()) {
+        if (activeCall.isGroup && activeCall.conversationId === conversationId) {
+            return activeCall;
+        }
+    }
+
+    return null;
+};
+
+const emitCallRejoin = (activeCall, userId, conversationName = null) => {
+    emitToUser(userId, "call:rejoin", {
+        callId: activeCall.callId,
+        conversationId: activeCall.conversationId,
+        callerId: activeCall.callerId,
+        recipientId: userId,
+        participantIds: activeCall.participantIds,
+        isGroup: true,
+        conversationName: activeCall.conversationName ?? conversationName,
+        callType: activeCall.callType,
+        createdAt: activeCall.startedAt ?? new Date().toISOString(),
+    });
+};
+
 const broadcastOnlineUsers = async () => {
     try {
         const sockets = await io.fetchSockets();
@@ -496,6 +520,51 @@ io.on("connection", async (socket) => {
             }
 
             const isGroupCall = conversationContext.type === "group";
+
+            if (isGroupCall) {
+                const existingGroupCall = findActiveGroupCallByConversationId(conversationId);
+
+                if (existingGroupCall) {
+                    const activeCallIdForUser = userCallIndex.get(userId);
+
+                    if (activeCallIdForUser && activeCallIdForUser !== existingGroupCall.callId) {
+                        emitToUser(userId, "call:decline", {
+                            callId,
+                            conversationId,
+                            senderId: userId,
+                            targetId: existingGroupCall.callerId,
+                            reason: "busy",
+                        });
+                        return;
+                    }
+
+                    const hasAccepted = getAcceptedUserIds(existingGroupCall).includes(userId);
+
+                    if (hasAccepted) {
+                        emitCallRejoin(existingGroupCall, userId, conversationContext.groupName);
+                        return;
+                    }
+
+                    clearCallTimeout(existingGroupCall.callId);
+                    existingGroupCall.state = "connecting";
+                    existingGroupCall.startedAt = existingGroupCall.startedAt ?? new Date().toISOString();
+                    existingGroupCall.acceptedUserIds = Array.from(
+                        new Set([...getAcceptedUserIds(existingGroupCall), userId])
+                    );
+                    existingGroupCall.participantIds = Array.from(
+                        new Set([...(existingGroupCall.participantIds ?? []), userId])
+                    );
+                    existingGroupCall.invitedUserIds = getInvitedUserIds(existingGroupCall).filter(
+                        (participantId) => participantId !== userId
+                    );
+                    userCallIndex.set(userId, existingGroupCall.callId);
+
+                    emitCallRejoin(existingGroupCall, userId, conversationContext.groupName);
+
+                    emitParticipantJoined(existingGroupCall, userId);
+                    return;
+                }
+            }
 
             if (isGroupCall && callType !== "video") {
                 return;
@@ -790,6 +859,36 @@ io.on("connection", async (socket) => {
             targetId,
             candidate,
         });
+    });
+
+    socket.on("call:media-state", (payload = {}) => {
+        const callId = typeof payload.callId === "string" ? payload.callId.trim() : "";
+        const conversationId = typeof payload.conversationId === "string" ? payload.conversationId.trim() : "";
+        const mediaType = typeof payload.mediaType === "string" ? payload.mediaType.trim() : "";
+        const enabled = typeof payload.enabled === "boolean" ? payload.enabled : null;
+        const activeCall = activeCalls.get(callId);
+
+        if (
+            !activeCall ||
+            activeCall.conversationId !== conversationId ||
+            mediaType !== "camera" ||
+            enabled === null ||
+            !getTrackedUserIds(activeCall).includes(userId)
+        ) {
+            return;
+        }
+
+        getTrackedUserIds(activeCall)
+            .filter((participantId) => participantId !== userId)
+            .forEach((participantId) => {
+                emitToUser(participantId, "call:media-state", {
+                    callId,
+                    conversationId,
+                    senderId: userId,
+                    mediaType,
+                    enabled,
+                });
+            });
     });
 
     socket.join(userId);

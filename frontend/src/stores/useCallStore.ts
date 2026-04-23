@@ -4,7 +4,9 @@ import type {
     CallDeclinePayload,
     CallEndPayload,
     CallInvitePayload,
+    CallMediaStatePayload,
     CallParticipantPayload,
+    CallRejoinPayload,
     CallSession,
     CallSignalCandidatePayload,
     CallSignalDescriptionPayload,
@@ -24,10 +26,12 @@ type CallStore = {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   remoteStreams: Record<string, MediaStream>;
+  remoteCameraStates: Record<string, boolean>;
   isMicrophoneEnabled: boolean;
   isCameraEnabled: boolean;
   startOutgoingCall: (conversation: Conversation, callType: CallType) => Promise<void>;
   receiveIncomingCall: (payload: CallInvitePayload) => void;
+  handleCallRejoin: (payload: CallRejoinPayload) => void;
   acceptIncomingCall: () => Promise<void>;
   declineIncomingCall: (reason?: string) => void;
   endCall: (reason?: string) => void;
@@ -39,6 +43,7 @@ type CallStore = {
   handleCallState: (payload: CallStatePayload) => void;
   handleParticipantJoined: (payload: CallParticipantPayload) => Promise<void>;
   handleParticipantLeft: (payload: CallParticipantPayload) => void;
+  handleRemoteMediaState: (payload: CallMediaStatePayload) => void;
   handleRemoteOffer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteAnswer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteIceCandidate: (payload: CallSignalCandidatePayload) => Promise<void>;
@@ -46,6 +51,15 @@ type CallStore = {
 };
 
 const peerConnections = new Map<string, RTCPeerConnection>();
+const remoteVideoTrackListeners = new Map<
+  string,
+  {
+    track: MediaStreamTrack;
+    handleMute: () => void;
+    handleUnmute: () => void;
+    handleEnded: () => void;
+  }
+>();
 
 const stopStream = (stream: MediaStream | null) => {
   stream?.getTracks().forEach((track) => track.stop());
@@ -53,6 +67,37 @@ const stopStream = (stream: MediaStream | null) => {
 
 const pickPrimaryRemoteStream = (remoteStreams: Record<string, MediaStream>) =>
   Object.values(remoteStreams)[0] ?? null;
+
+const createInitialRemoteCameraStates = (
+  participantIds: string[],
+  currentUserId?: string | null,
+  callType?: CallType
+) => {
+  if (callType !== "video") {
+    return {};
+  }
+
+  return participantIds.reduce<Record<string, boolean>>((cameraStates, participantId) => {
+    if (participantId !== currentUserId) {
+      cameraStates[participantId] = true;
+    }
+
+    return cameraStates;
+  }, {});
+};
+
+const emitCameraState = (currentCall: CallSession | null, enabled: boolean) => {
+  if (!currentCall || currentCall.callType !== "video") {
+    return;
+  }
+
+  useSocketStore.getState().socket?.emit("call:media-state", {
+    callId: currentCall.callId,
+    conversationId: currentCall.conversationId,
+    mediaType: "camera",
+    enabled,
+  });
+};
 
 const resolvePeerFromConversation = (conversation: Conversation, currentUserId?: string | null) =>
   conversation.participants.find((participant) => participant._id !== currentUserId) ?? null;
@@ -122,6 +167,15 @@ const getConversationParticipant = (conversationId: string, participantId: strin
 };
 
 const closePeerConnection = (remoteUserId: string) => {
+  const remoteVideoTrackListener = remoteVideoTrackListeners.get(remoteUserId);
+
+  if (remoteVideoTrackListener) {
+    remoteVideoTrackListener.track.removeEventListener("mute", remoteVideoTrackListener.handleMute);
+    remoteVideoTrackListener.track.removeEventListener("unmute", remoteVideoTrackListener.handleUnmute);
+    remoteVideoTrackListener.track.removeEventListener("ended", remoteVideoTrackListener.handleEnded);
+    remoteVideoTrackListeners.delete(remoteUserId);
+  }
+
   const peerConnection = peerConnections.get(remoteUserId);
 
   if (!peerConnection) {
@@ -147,6 +201,68 @@ const setCurrentCallStatus = (
         }
       : null,
   }));
+};
+
+const setRemoteCameraState = (
+  set: (partial: Partial<CallStore> | ((state: CallStore) => Partial<CallStore>)) => void,
+  remoteUserId: string,
+  enabled: boolean
+) => {
+  set((state) => ({
+    remoteCameraStates: {
+      ...state.remoteCameraStates,
+      [remoteUserId]: enabled,
+    },
+  }));
+};
+
+const bindRemoteVideoTrackState = (
+  remoteUserId: string,
+  stream: MediaStream,
+  set: (partial: Partial<CallStore> | ((state: CallStore) => Partial<CallStore>)) => void
+) => {
+  const [videoTrack] = stream.getVideoTracks();
+  const existingListener = remoteVideoTrackListeners.get(remoteUserId);
+
+  if (existingListener?.track === videoTrack) {
+    return;
+  }
+
+  if (existingListener) {
+    existingListener.track.removeEventListener("mute", existingListener.handleMute);
+    existingListener.track.removeEventListener("unmute", existingListener.handleUnmute);
+    existingListener.track.removeEventListener("ended", existingListener.handleEnded);
+    remoteVideoTrackListeners.delete(remoteUserId);
+  }
+
+  if (!videoTrack) {
+    return;
+  }
+
+  const handleMute = () => {
+    setRemoteCameraState(set, remoteUserId, false);
+  };
+
+  const handleUnmute = () => {
+    setRemoteCameraState(set, remoteUserId, true);
+  };
+
+  const handleEnded = () => {
+    setRemoteCameraState(set, remoteUserId, false);
+  };
+
+  videoTrack.addEventListener("mute", handleMute);
+  videoTrack.addEventListener("unmute", handleUnmute);
+  videoTrack.addEventListener("ended", handleEnded);
+
+  remoteVideoTrackListeners.set(remoteUserId, {
+    track: videoTrack,
+    handleMute,
+    handleUnmute,
+    handleEnded,
+  });
+
+  setRemoteCameraState(set, remoteUserId, videoTrack.enabled && !videoTrack.muted && videoTrack.readyState !== "ended");
 };
 
 const getHangupReason = (call: CallSession) => {
@@ -186,6 +302,8 @@ const buildPeerConnection = (
       });
     },
     onRemoteStream: (stream) => {
+      bindRemoteVideoTrackState(remoteUserId, stream, set);
+
       set((state) => {
         const remoteStreams = {
           ...state.remoteStreams,
@@ -266,6 +384,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
   localStream: null,
   remoteStream: null,
   remoteStreams: {},
+  remoteCameraStates: {},
   isMicrophoneEnabled: true,
   isCameraEnabled: true,
 
@@ -307,6 +426,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
         localStream: null,
         remoteStream: null,
         remoteStreams: {},
+        remoteCameraStates: createInitialRemoteCameraStates(
+          conversation.participants.map((participant) => participant._id),
+          authUserId,
+          callType
+        ),
         isMicrophoneEnabled: true,
         isCameraEnabled: callType === "video",
         currentCall: {
@@ -375,11 +499,50 @@ export const useCallStore = create<CallStore>((set, get) => ({
       localStream: null,
       remoteStream: null,
       remoteStreams: {},
+      remoteCameraStates: createInitialRemoteCameraStates(
+        payload.participantIds ?? [payload.callerId, payload.recipientId],
+        useAuthStore.getState().user?._id,
+        payload.callType
+      ),
       isMicrophoneEnabled: true,
       isCameraEnabled: payload.callType === "video",
     });
 
     toast.info(`${peer.displayName} dang goi ${payload.callType === "video" ? "video" : "thoai"}.`);
+  },
+
+  handleCallRejoin: (payload) => {
+    const { currentCall, localStream } = get();
+
+    if (!currentCall || !currentCall.isGroup || currentCall.conversationId !== payload.conversationId || !localStream) {
+      return;
+    }
+
+    set((state) => ({
+      currentCall: state.currentCall
+        ? {
+            ...state.currentCall,
+            callId: payload.callId,
+            callerId: payload.callerId,
+            recipientId: payload.recipientId,
+            participantIds: payload.participantIds ?? state.currentCall.participantIds,
+            conversationName: payload.conversationName ?? state.currentCall.conversationName,
+            status: "negotiating",
+          }
+        : null,
+      remoteCameraStates: payload.participantIds
+        ? {
+            ...createInitialRemoteCameraStates(
+              payload.participantIds,
+              useAuthStore.getState().user?._id,
+              state.currentCall?.callType
+            ),
+            ...state.remoteCameraStates,
+          }
+        : state.remoteCameraStates,
+    }));
+
+    toast.info("Dang vao lai cuoc goi nhom dang dien ra.");
   },
 
   acceptIncomingCall: async () => {
@@ -477,11 +640,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
       return;
     }
 
+    const nextEnabled = !isCameraEnabled;
+
     localStream?.getVideoTracks().forEach((track) => {
-      track.enabled = !isCameraEnabled;
+      track.enabled = nextEnabled;
     });
 
-    set({ isCameraEnabled: !isCameraEnabled });
+    set({ isCameraEnabled: nextEnabled });
+    emitCameraState(currentCall, nextEnabled);
   },
 
   handleCallAccepted: async (payload) => {
@@ -495,7 +661,14 @@ export const useCallStore = create<CallStore>((set, get) => ({
   },
 
   handleCallDeclined: (payload) => {
-    if (get().currentCall?.callId !== payload.callId) {
+    const { currentCall } = get();
+
+    if (currentCall?.callId !== payload.callId) {
+      return;
+    }
+
+    if (currentCall.isGroup) {
+      toast.info("Mot thanh vien da tu choi cuoc goi.");
       return;
     }
 
@@ -520,11 +693,19 @@ export const useCallStore = create<CallStore>((set, get) => ({
     }
 
     if (payload.state === "reconnecting") {
+      if (!currentCall.isGroup && payload.affectedUserId === currentCall.peer._id) {
+        setRemoteCameraState(set, currentCall.peer._id, false);
+      }
+
       setCurrentCallStatus(set, "reconnecting");
       return;
     }
 
     if (payload.state === "connected") {
+      if (!currentCall.isGroup && payload.affectedUserId === currentCall.peer._id) {
+        setRemoteCameraState(set, currentCall.peer._id, true);
+      }
+
       setCurrentCallStatus(set, "connected");
     }
   },
@@ -557,13 +738,26 @@ export const useCallStore = create<CallStore>((set, get) => ({
 
     set((state) => {
       const remoteStreams = { ...state.remoteStreams };
+      const remoteCameraStates = { ...state.remoteCameraStates };
       delete remoteStreams[payload.participantId];
+      delete remoteCameraStates[payload.participantId];
 
       return {
         remoteStreams,
+        remoteCameraStates,
         remoteStream: pickPrimaryRemoteStream(remoteStreams),
       };
     });
+  },
+
+  handleRemoteMediaState: (payload) => {
+    const { currentCall } = get();
+
+    if (!currentCall || currentCall.callId !== payload.callId || payload.mediaType !== "camera") {
+      return;
+    }
+
+    setRemoteCameraState(set, payload.senderId, payload.enabled);
   },
 
   handleRemoteOffer: async (payload) => {
@@ -634,6 +828,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       localStream: null,
       remoteStream: null,
       remoteStreams: {},
+      remoteCameraStates: {},
       isMicrophoneEnabled: true,
       isCameraEnabled: true,
     });

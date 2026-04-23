@@ -180,6 +180,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       callStore.receiveIncomingCall(payload as any);
     }));
 
+    socket.on("call:rejoin", withCallStore((callStore, payload) => {
+      callStore.handleCallRejoin(payload as any);
+    }));
+
     socket.on("call:accept", withCallStore((callStore, payload) => {
       void callStore.handleCallAccepted(payload as any);
     }));
@@ -202,6 +206,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("call:participant-left", withCallStore((callStore, payload) => {
       callStore.handleParticipantLeft(payload as any);
+    }));
+
+    socket.on("call:media-state", withCallStore((callStore, payload) => {
+      callStore.handleRemoteMediaState(payload as any);
     }));
 
     socket.on("call:offer", withCallStore((callStore, payload) => {

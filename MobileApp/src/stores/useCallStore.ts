@@ -1,6 +1,6 @@
 import { createCallId, createMobilePeerConnection, getMobileUserMedia, serializeIceCandidate } from "@/lib/callWebRTC";
 import { toast } from "@/lib/toast";
-import type { CallStatus } from "@/types/call";
+import type { CallMediaStatePayload, CallRejoinPayload, CallStatus } from "@/types/call";
 import type { Conversation, Participant } from "@/types/chat";
 import type { CallState } from "@/types/store";
 import type { MediaStream, RTCPeerConnection } from "react-native-webrtc";
@@ -17,6 +17,37 @@ const stopStream = (stream: MediaStream | null) => {
 
 const pickPrimaryRemoteStream = (remoteStreams: Record<string, MediaStream>) =>
 	Object.values(remoteStreams)[0] ?? null;
+
+const createInitialRemoteCameraStates = (
+	participantIds: string[],
+	currentUserId?: string | null,
+	callType?: "audio" | "video"
+) => {
+	if (callType !== "video") {
+		return {};
+	}
+
+	return participantIds.reduce<Record<string, boolean>>((cameraStates, participantId) => {
+		if (participantId !== currentUserId) {
+			cameraStates[participantId] = true;
+		}
+
+		return cameraStates;
+	}, {});
+};
+
+const emitCameraState = (currentCall: CallState["currentCall"], enabled: boolean) => {
+	if (!currentCall || currentCall.callType !== "video") {
+		return;
+	}
+
+	useSocketStore.getState().socket?.emit("call:media-state", {
+		callId: currentCall.callId,
+		conversationId: currentCall.conversationId,
+		mediaType: "camera",
+		enabled,
+	});
+};
 
 const resolvePeerFromConversation = (conversation: Conversation, currentUserId?: string | null) =>
 	conversation.participants.find((participant) => participant._id !== currentUserId) ?? null;
@@ -215,6 +246,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 	localStream: null,
 	remoteStream: null,
 	remoteStreams: {},
+	remoteCameraStates: {},
 	isMicrophoneEnabled: true,
 	isCameraEnabled: true,
 
@@ -256,6 +288,11 @@ export const useCallStore = create<CallState>((set, get) => ({
 				localStream: null,
 				remoteStream: null,
 				remoteStreams: {},
+				remoteCameraStates: createInitialRemoteCameraStates(
+					conversation.participants.map((participant) => participant._id),
+					authUserId,
+					callType
+				),
 				isMicrophoneEnabled: true,
 				isCameraEnabled: callType === "video",
 				currentCall: {
@@ -324,11 +361,50 @@ export const useCallStore = create<CallState>((set, get) => ({
 			localStream: null,
 			remoteStream: null,
 			remoteStreams: {},
+			remoteCameraStates: createInitialRemoteCameraStates(
+				payload.participantIds ?? [payload.callerId, payload.recipientId],
+				useAuthStore.getState().user?._id,
+				payload.callType
+			),
 			isMicrophoneEnabled: true,
 			isCameraEnabled: payload.callType === "video",
 		});
 
 		toast.info(`${peer.displayName} dang goi ${payload.callType === "video" ? "video" : "thoai"}.`);
+	},
+
+	handleCallRejoin: (payload: CallRejoinPayload) => {
+		const { currentCall, localStream } = get();
+
+		if (!currentCall || !currentCall.isGroup || currentCall.conversationId !== payload.conversationId || !localStream) {
+			return;
+		}
+
+		set((state) => ({
+			currentCall: state.currentCall
+				? {
+					...state.currentCall,
+					callId: payload.callId,
+					callerId: payload.callerId,
+					recipientId: payload.recipientId,
+					participantIds: payload.participantIds ?? state.currentCall.participantIds,
+					conversationName: payload.conversationName ?? state.currentCall.conversationName,
+					status: "negotiating",
+				}
+				: null,
+			remoteCameraStates: payload.participantIds
+				? {
+					...createInitialRemoteCameraStates(
+						payload.participantIds,
+						useAuthStore.getState().user?._id,
+						state.currentCall?.callType
+					),
+					...state.remoteCameraStates,
+				}
+				: state.remoteCameraStates,
+		}));
+
+		toast.info("Dang vao lai cuoc goi nhom dang dien ra.");
 	},
 
 	acceptIncomingCall: async () => {
@@ -426,11 +502,14 @@ export const useCallStore = create<CallState>((set, get) => ({
 			return;
 		}
 
+		const nextEnabled = !isCameraEnabled;
+
 		localStream?.getVideoTracks().forEach((track) => {
-			track.enabled = !isCameraEnabled;
+			track.enabled = nextEnabled;
 		});
 
-		set({ isCameraEnabled: !isCameraEnabled });
+		set({ isCameraEnabled: nextEnabled });
+		emitCameraState(currentCall, nextEnabled);
 	},
 
 	handleCallAccepted: async (payload) => {
@@ -444,7 +523,14 @@ export const useCallStore = create<CallState>((set, get) => ({
 	},
 
 	handleCallDeclined: (payload) => {
-		if (get().currentCall?.callId !== payload.callId) {
+		const { currentCall } = get();
+
+		if (currentCall?.callId !== payload.callId) {
+			return;
+		}
+
+		if (currentCall.isGroup) {
+			toast.info("Mot thanh vien da tu choi cuoc goi.");
 			return;
 		}
 
@@ -506,13 +592,31 @@ export const useCallStore = create<CallState>((set, get) => ({
 
 		set((state) => {
 			const remoteStreams = { ...state.remoteStreams };
+			const remoteCameraStates = { ...state.remoteCameraStates };
 			delete remoteStreams[payload.participantId];
+			delete remoteCameraStates[payload.participantId];
 
 			return {
 				remoteStreams,
+				remoteCameraStates,
 				remoteStream: pickPrimaryRemoteStream(remoteStreams),
 			};
 		});
+	},
+
+	handleRemoteMediaState: (payload: CallMediaStatePayload) => {
+		const { currentCall } = get();
+
+		if (!currentCall || currentCall.callId !== payload.callId || payload.mediaType !== "camera") {
+			return;
+		}
+
+		set((state) => ({
+			remoteCameraStates: {
+				...state.remoteCameraStates,
+				[payload.senderId]: payload.enabled,
+			},
+		}));
 	},
 
 	handleRemoteOffer: async (payload) => {
@@ -581,6 +685,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 			localStream: null,
 			remoteStream: null,
 			remoteStreams: {},
+			remoteCameraStates: {},
 			isMicrophoneEnabled: true,
 			isCameraEnabled: true,
 		});

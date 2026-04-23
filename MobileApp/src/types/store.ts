@@ -5,7 +5,9 @@ import type {
     CallDeclinePayload,
     CallEndPayload,
     CallInvitePayload,
+    CallMediaStatePayload,
     CallParticipantPayload,
+    CallRejoinPayload,
     CallSession,
     CallSignalCandidatePayload,
     CallSignalDescriptionPayload,
@@ -116,10 +118,12 @@ export interface CallState {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
   remoteStreams: Record<string, MediaStream>;
+  remoteCameraStates: Record<string, boolean>;
   isMicrophoneEnabled: boolean;
   isCameraEnabled: boolean;
   startOutgoingCall: (conversation: Conversation, callType: CallType) => Promise<void>;
   receiveIncomingCall: (payload: CallInvitePayload) => void;
+  handleCallRejoin: (payload: CallRejoinPayload) => void;
   acceptIncomingCall: () => Promise<void>;
   declineIncomingCall: (reason?: string) => void;
   endCall: (reason?: string) => void;
@@ -131,6 +135,7 @@ export interface CallState {
   handleCallState: (payload: CallStatePayload) => void;
   handleParticipantJoined: (payload: CallParticipantPayload) => Promise<void>;
   handleParticipantLeft: (payload: CallParticipantPayload) => void;
+  handleRemoteMediaState: (payload: CallMediaStatePayload) => void;
   handleRemoteOffer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteAnswer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteIceCandidate: (payload: CallSignalCandidatePayload) => Promise<void>;
