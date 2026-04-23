@@ -277,93 +277,93 @@ export const createConversation = async (req, res) => {
     }
 };
 export const updateGroupAvatar = async (req, res) => {
-  try {
-    const { id } = req.params;
+    try {
+        const { id } = req.params;
 
-    if (!req.file) {
-      return res.status(400).json({ message: "No file uploaded" });
+        if (!req.file) {
+            return res.status(400).json({ message: "No file uploaded" });
+        }
+
+        const result = await uploadImageFromBuffer(req.file.buffer, {
+            originalName: req.file.originalname,
+        });
+
+        const updated = await Conversation.findByIdAndUpdate(
+            id,
+            {
+                "group.avatar": result.secure_url,
+            },
+            { new: true }
+        )
+            .populate([
+                { path: "participants.userId", select: "displayName avatarUrl" },
+                { path: "lastMessage.senderId", select: "displayName avatarUrl" },
+            ]);
+
+        //  (QUAN TRỌNG) emit realtime cho sidebar
+        io.to(id).emit("conversation-updated", updated);
+
+        return res.status(200).json({
+            conversation: updated,
+        });
+
+    } catch (error) {
+        console.error("Update avatar error:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
     }
-
-    const result = await uploadImageFromBuffer(req.file.buffer, {
-      originalName: req.file.originalname,
-    });
-
-    const updated = await Conversation.findByIdAndUpdate(
-      id,
-      {
-        "group.avatar": result.secure_url,
-      },
-      { new: true }
-    )
-    .populate([
-      { path: "participants.userId", select: "displayName avatarUrl" },
-      { path: "lastMessage.senderId", select: "displayName avatarUrl" },
-    ]);
-
-    //  (QUAN TRỌNG) emit realtime cho sidebar
-    io.to(id).emit("conversation-updated", updated);
-
-    return res.status(200).json({
-      conversation: updated,
-    });
-
-  } catch (error) {
-    console.error("Update avatar error:", error);
-    return res.status(500).json({ message: "Lỗi hệ thống" });
-  }
 };
 export const renameGroup = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name } = req.body;
-    const userId = req.user._id;
+    try {
+        const { id } = req.params;
+        const { name } = req.body;
+        const userId = req.user._id;
 
-    if (!name || !name.trim()) {
-      return res.status(400).json({ message: "Tên nhóm không hợp lệ" });
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: "Tên nhóm không hợp lệ" });
+        }
+
+        const conversation = await Conversation.findByIdAndUpdate(
+            id,
+            {
+                "group.name": name.trim(),
+                updatedAt: new Date(),
+            },
+            { new: true }
+        )
+            .populate([
+                { path: "participants.userId", select: "displayName avatarUrl" },
+                { path: "lastMessage.senderId", select: "displayName avatarUrl" },
+                { path: "seenBy", select: "displayName avatarUrl" },
+            ]);
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Không tìm thấy nhóm" });
+        }
+
+        //  format giống getConversations
+        const participants = (conversation.participants || []).map((p) => ({
+            _id: p.userId?._id,
+            displayName: p.userId?.displayName,
+            avatarUrl: p.userId?.avatarUrl ?? null,
+            joinedAt: p.joinedAt,
+        }));
+
+        const formatted = {
+            ...conversation.toObject(),
+            participants,
+        };
+
+        //  REALTIME SOCKET (QUAN TRỌNG)
+        conversation.participants.forEach((p) => {
+            io.to(p.userId.toString()).emit("conversation-updated", formatted);
+        });
+
+        return res.json({ conversation: formatted });
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({ message: "Server error" });
     }
-
-    const conversation = await Conversation.findByIdAndUpdate(
-      id,
-      {
-        "group.name": name.trim(),
-        updatedAt: new Date(),
-      },
-      { new: true }
-    )
-      .populate([
-        { path: "participants.userId", select: "displayName avatarUrl" },
-        { path: "lastMessage.senderId", select: "displayName avatarUrl" },
-        { path: "seenBy", select: "displayName avatarUrl" },
-      ]);
-
-    if (!conversation) {
-      return res.status(404).json({ message: "Không tìm thấy nhóm" });
-    }
-
-    //  format giống getConversations
-    const participants = (conversation.participants || []).map((p) => ({
-      _id: p.userId?._id,
-      displayName: p.userId?.displayName,
-      avatarUrl: p.userId?.avatarUrl ?? null,
-      joinedAt: p.joinedAt,
-    }));
-
-    const formatted = {
-      ...conversation.toObject(),
-      participants,
-    };
-
-    //  REALTIME SOCKET (QUAN TRỌNG)
-    conversation.participants.forEach((p) => {
-      io.to(p.userId.toString()).emit("conversation-updated", formatted);
-    });
-
-    return res.json({ conversation: formatted });
-
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Server error" });
-  }
 };
 export const getConversations = async (req, res) => {
     try {
