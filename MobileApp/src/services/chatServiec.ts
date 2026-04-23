@@ -402,6 +402,13 @@ export const chatService = {
 
     return res.data;
   },
+  async joinGroupByToken(token: string) {
+    const res = await api.post("/conversations/join-by-token", {
+      token,
+    });
+
+    return res.data;
+  },
   async updateGroupAvatar(
     conversationId: string,
     file: {

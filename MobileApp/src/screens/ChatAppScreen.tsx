@@ -7,8 +7,10 @@ import PinnedSection from "@/components/chat/PinnedSection";
 import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
 import ProfileModal from "@/components/chat/ProfileModal";
 import UserAvatar from "@/components/chat/UserAvatar";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { toast } from "@/lib/toast";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
+import { chatService } from "@/services/chatServiec";
 import { friendService } from "@/services/friendService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
@@ -115,6 +117,17 @@ const getRequestUser = (request: FriendRequest, type: "received" | "sent") =>
 
 const matchesQuery = (value: string, query: string) =>
   value.toLowerCase().includes(query.trim().toLowerCase());
+
+const parseInviteToken = (value: string) => {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  const matchedToken = trimmedValue.match(/\/join-group\/([a-f0-9]+)/i);
+  return matchedToken?.[1] ?? trimmedValue;
+};
 
 const GROUP_ROLE_LABELS: Record<"owner" | "deputy" | "member", string> = {
   owner: "Chủ nhóm",
@@ -230,6 +243,7 @@ export default function ChatAppScreen() {
   const [showAddFriend, setShowAddFriend] = useState(false);
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showJoinGroup, setShowJoinGroup] = useState(false);
   const [showFriendList, setShowFriendList] = useState(false);
   const [showConversationProfile, setShowConversationProfile] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
@@ -242,11 +256,16 @@ export default function ChatAppScreen() {
   const [newMessageQuery, setNewMessageQuery] = useState("");
   const [groupName, setGroupName] = useState("");
   const [groupQuery, setGroupQuery] = useState("");
+  const [joinGroupMode, setJoinGroupMode] = useState<"link" | "camera">("link");
+  const [joinGroupToken, setJoinGroupToken] = useState("");
+  const [joinGroupLoading, setJoinGroupLoading] = useState(false);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
   const [groupManageQuery, setGroupManageQuery] = useState("");
   const [selectedMembersToAdd, setSelectedMembersToAdd] = useState<Friend[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const joinScanLockRef = useRef(false);
 
   const {
     friends,
@@ -784,6 +803,74 @@ export default function ChatAppScreen() {
       setIsCreatingGroup(false);
     }
   }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupMembers]);
+
+  const resetJoinGroupState = useCallback(() => {
+    setJoinGroupMode("link");
+    setJoinGroupToken("");
+    setJoinGroupLoading(false);
+    joinScanLockRef.current = false;
+  }, []);
+
+  const handleCloseJoinGroupModal = useCallback(() => {
+    setShowJoinGroup(false);
+    resetJoinGroupState();
+  }, [resetJoinGroupState]);
+
+  const handleJoinGroup = useCallback(async (rawValue?: string) => {
+    const normalizedToken = parseInviteToken(rawValue ?? joinGroupToken);
+
+    if (!normalizedToken) {
+      toast.error("Nhập link mời hoặc mã nhóm trước.");
+      return;
+    }
+
+    try {
+      setJoinGroupLoading(true);
+      const data = await chatService.joinGroupByToken(normalizedToken);
+
+      toast.success(data?.message || "Tham gia nhóm thành công.");
+      await fetchConversations();
+      setActiveConversation(data.conversation._id);
+      handleCloseJoinGroupModal();
+    } catch (error: any) {
+      joinScanLockRef.current = false;
+      toast.error(error?.response?.data?.message || "Không thể tham gia nhóm.");
+    } finally {
+      setJoinGroupLoading(false);
+    }
+  }, [fetchConversations, handleCloseJoinGroupModal, joinGroupToken, setActiveConversation]);
+
+  const handleOpenJoinCamera = useCallback(async () => {
+    setJoinGroupMode("camera");
+    joinScanLockRef.current = false;
+
+    if (cameraPermission?.granted) {
+      return;
+    }
+
+    const permission = await requestCameraPermission();
+
+    if (!permission.granted) {
+      toast.error("Cần cấp quyền camera để quét mã QR.");
+    }
+  }, [cameraPermission?.granted, requestCameraPermission]);
+
+  const handleJoinGroupScan = useCallback((event: { data?: string }) => {
+    if (joinScanLockRef.current || joinGroupLoading) {
+      return;
+    }
+
+    const scannedToken = parseInviteToken(event.data || "");
+
+    if (!scannedToken) {
+      toast.error("Mã QR không hợp lệ.");
+      return;
+    }
+
+    joinScanLockRef.current = true;
+    setJoinGroupToken(scannedToken);
+    void handleJoinGroup(scannedToken);
+  }, [handleJoinGroup, joinGroupLoading]);
 
   const handleToggleMemberToAdd = useCallback((friend: Friend) => {
     setSelectedMembersToAdd((currentMembers) => {
@@ -1570,7 +1657,7 @@ export default function ChatAppScreen() {
         <ConversationAssetsModal
           visible={showConversationAssets}
           messages={messageItems}
-          conversation={selectedConvo} 
+          conversation={selectedConvo}
           onClose={() => setShowConversationAssets(false)}
         />
       </SafeAreaView>
@@ -1620,6 +1707,25 @@ export default function ChatAppScreen() {
               title="Tạo Nhóm Mới"
               onPress={openCreateGroupModal}
               icon={<Users size={18} color="#ffffff" />}
+              accessory={
+                <Pressable
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    setShowJoinGroup(true);
+                    resetJoinGroupState();
+                  }}
+                  style={({ pressed }) => [
+                    styles.sidebarActionAccessoryButton,
+                    {
+                      backgroundColor: isDark ? "rgba(15, 23, 42, 0.82)" : "#f8fafc",
+                      borderColor: isDark ? "rgba(148, 163, 184, 0.18)" : "#d7def0",
+                      opacity: pressed ? 0.9 : 1,
+                    },
+                  ]}
+                >
+                  <UserPlus size={16} color={isDark ? "#e2e8f0" : "#4f46e5"} />
+                </Pressable>
+              }
             />
           </View>
 
@@ -1964,6 +2070,129 @@ export default function ChatAppScreen() {
               ))
             )}
           </ScrollView>
+        </View>
+      </OverlayModal>
+
+      <OverlayModal
+        visible={showJoinGroup}
+        title="Tham gia nhóm"
+        onClose={handleCloseJoinGroupModal}
+      >
+        <View style={styles.modalContent}>
+          <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+            Nhập link mời hoặc quét mã QR để tham gia nhóm chat.
+          </Text>
+
+          <View
+            style={[
+              styles.joinGroupTabRow,
+              { backgroundColor: isDark ? "#0f172a" : "#f8fafc", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
+            ]}
+          >
+            <Pressable
+              onPress={() => {
+                joinScanLockRef.current = false;
+                setJoinGroupMode("link");
+              }}
+              style={[
+                styles.joinGroupTabButton,
+                joinGroupMode === "link" && { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+              ]}
+            >
+              <Text
+                style={{
+                  color: joinGroupMode === "link"
+                    ? isDark ? "#ddd6fe" : "#6d28d9"
+                    : isDark ? "#94a3b8" : "#64748b",
+                  fontWeight: "700",
+                }}
+              >
+                Link/Mã
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                void handleOpenJoinCamera();
+              }}
+              style={[
+                styles.joinGroupTabButton,
+                joinGroupMode === "camera" && { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+              ]}
+            >
+              <Text
+                style={{
+                  color: joinGroupMode === "camera"
+                    ? isDark ? "#ddd6fe" : "#6d28d9"
+                    : isDark ? "#94a3b8" : "#64748b",
+                  fontWeight: "700",
+                }}
+              >
+                Camera
+              </Text>
+            </Pressable>
+          </View>
+
+          {joinGroupMode === "link" ? (
+            <>
+              <TextInput
+                value={joinGroupToken}
+                onChangeText={setJoinGroupToken}
+                placeholder="Dán link mời hoặc nhập mã token"
+                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={[
+                  styles.textInput,
+                  {
+                    color: isDark ? "#f8fafc" : "#0f172a",
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                  },
+                ]}
+              />
+
+              <Pressable
+                onPress={() => {
+                  void handleJoinGroup();
+                }}
+                disabled={joinGroupLoading || !joinGroupToken.trim()}
+                style={[
+                  styles.primaryButton,
+                  (!joinGroupToken.trim() || joinGroupLoading) && { opacity: 0.6 },
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {joinGroupLoading ? "Đang tham gia..." : "Tham gia nhóm"}
+                </Text>
+              </Pressable>
+            </>
+          ) : cameraPermission?.granted ? (
+            <View style={styles.joinGroupCameraWrap}>
+              <View style={styles.joinGroupCameraFrame}>
+                <CameraView
+                  style={StyleSheet.absoluteFillObject}
+                  facing="back"
+                  barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                  onBarcodeScanned={handleJoinGroupScan}
+                />
+              </View>
+
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b", textAlign: "center" }]}>
+                Đưa mã QR vào giữa khung để tham gia nhóm.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.joinGroupCameraWrap}>
+              <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b", textAlign: "center" }]}>
+                Camera chưa được cấp quyền. Hãy cho phép truy cập để quét mã QR.
+              </Text>
+
+              <Pressable onPress={() => void handleOpenJoinCamera()} style={styles.secondaryButton}>
+                <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Mở camera</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </OverlayModal>
 
@@ -2313,6 +2542,29 @@ const styles = StyleSheet.create({
   modalSectionTitle: { fontSize: 15, fontWeight: "800" },
   modalSecondarySection: { marginTop: 8 },
   emptyModalText: { fontSize: 14, lineHeight: 20 },
+  joinGroupTabRow: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 4,
+    gap: 4,
+  },
+  joinGroupTabButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  joinGroupCameraWrap: {
+    gap: 12,
+  },
+  joinGroupCameraFrame: {
+    height: 260,
+    overflow: "hidden",
+    borderRadius: 20,
+    backgroundColor: "#020617",
+  },
   requestCard: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 12 },
   requestInfo: { flexDirection: "row", alignItems: "center", gap: 12 },
   requestTextBlock: { flex: 1, gap: 2 },
