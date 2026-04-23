@@ -19,6 +19,7 @@ import DateTimePickerField from "./DateTimePickerField";
 type GroupFeatureBarProps = {
   conversationId: string;
   disabled?: boolean;
+  mode?: "default" | "inline";
 };
 
 const defaultPollOptions = ["", ""];
@@ -81,6 +82,7 @@ const ActionModal = ({
 export default function GroupFeatureBar({
   conversationId,
   disabled = false,
+  mode = "default",
 }: GroupFeatureBarProps) {
   const { isDark } = useThemeStore();
   const { createGroupPoll, createGroupAppointment } = useChatStore();
@@ -205,43 +207,77 @@ export default function GroupFeatureBar({
 
   return (
     <>
-      <View style={styles.row}>
-        <Pressable
-          disabled={disabled}
-          onPress={() => setShowPollModal(true)}
-          style={[
-            styles.actionButton,
-            {
-              backgroundColor: isDark ? "#1f2937" : "#f8fafc",
-              borderColor: isDark ? "#334155" : "#e2e8f0",
-              opacity: disabled ? 0.5 : 1,
-            },
-          ]}
-        >
-          <ListChecks size={16} color={isDark ? "#e9d5ff" : "#7c3aed"} />
-          <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-            Tao vote
-          </Text>
-        </Pressable>
+      {mode === "inline" ? (
+        <>
+          <Pressable
+            accessibilityLabel="Tạo vote"
+            disabled={disabled}
+            onPress={() => setShowPollModal(true)}
+            style={[
+              styles.inlineActionButton,
+              {
+                backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <ListChecks size={18} color={isDark ? "#e9d5ff" : "#7c3aed"} />
+          </Pressable>
 
-        <Pressable
-          disabled={disabled}
-          onPress={() => setShowAppointmentModal(true)}
-          style={[
-            styles.actionButton,
-            {
-              backgroundColor: isDark ? "#1f2937" : "#f8fafc",
-              borderColor: isDark ? "#334155" : "#e2e8f0",
-              opacity: disabled ? 0.5 : 1,
-            },
-          ]}
-        >
-          <CalendarPlus size={16} color={isDark ? "#bfdbfe" : "#2563eb"} />
-          <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-            Tao lich hen
-          </Text>
-        </Pressable>
-      </View>
+          <Pressable
+            accessibilityLabel="Tạo lịch hẹn"
+            disabled={disabled}
+            onPress={() => setShowAppointmentModal(true)}
+            style={[
+              styles.inlineActionButton,
+              {
+                backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <CalendarPlus size={18} color={isDark ? "#bfdbfe" : "#2563eb"} />
+          </Pressable>
+        </>
+      ) : (
+        <View style={styles.row}>
+          <Pressable
+            disabled={disabled}
+            onPress={() => setShowPollModal(true)}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: isDark ? "#1f2937" : "#f8fafc",
+                borderColor: isDark ? "#334155" : "#e2e8f0",
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <ListChecks size={16} color={isDark ? "#e9d5ff" : "#7c3aed"} />
+            <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Tao vote
+            </Text>
+          </Pressable>
+
+          <Pressable
+            disabled={disabled}
+            onPress={() => setShowAppointmentModal(true)}
+            style={[
+              styles.actionButton,
+              {
+                backgroundColor: isDark ? "#1f2937" : "#f8fafc",
+                borderColor: isDark ? "#334155" : "#e2e8f0",
+                opacity: disabled ? 0.5 : 1,
+              },
+            ]}
+          >
+            <CalendarPlus size={16} color={isDark ? "#bfdbfe" : "#2563eb"} />
+            <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Tao lich hen
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       <ActionModal
         visible={showPollModal}
@@ -414,6 +450,13 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingTop: 10,
+  },
+  inlineActionButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
   },
   actionButton: {
     flex: 1,

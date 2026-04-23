@@ -145,17 +145,30 @@ const ChatWindowHeader = ({
               </Button>
             </div>
           ) : chat.type === "group" ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              onClick={() => setShowShareLink(true)}
-              title="Chia sẻ nhóm"
-            >
-              <Link2 className="size-4" />
-              <span className="sr-only">Chia sẻ nhóm</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => void startOutgoingCall(chat, "video")}
+                disabled={Boolean(currentCall)}
+              >
+                <Video className="size-4" />
+                <span className="sr-only">Gọi video nhóm</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="rounded-full"
+                onClick={() => setShowShareLink(true)}
+                title="Chia sẻ nhóm"
+              >
+                <Link2 className="size-4" />
+                <span className="sr-only">Chia sẻ nhóm</span>
+              </Button>
+            </div>
           ) : null}
 
           <Button

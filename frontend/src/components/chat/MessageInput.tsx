@@ -3,7 +3,7 @@ import { useChatStore } from '@/stores/useChatStore';
 import { useSocketStore } from '@/stores/useSocketStore';
 import type { Conversation } from "@/types/chat";
 import { ImagePlus, Mic, Paperclip, Send, Square, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Input } from "../ui/input";
@@ -76,7 +76,15 @@ const formatDuration = (seconds: number) => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
 };
 
-const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedConvo: Conversation, isBlocked: boolean }) => {
+const MessageInput = ({
+    selectedConvo,
+    isBlocked: propIsBlocked,
+    extraActions,
+}: {
+    selectedConvo: Conversation;
+    isBlocked: boolean;
+    extraActions?: ReactNode;
+}) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
     const { startTyping, stopTyping } = useSocketStore();
@@ -510,6 +518,8 @@ const MessageInput = ({ selectedConvo, isBlocked: propIsBlocked }: { selectedCon
                 >
                     {isRecording ? <Square className="size-4" /> : <Mic className="size-4" />}
                 </Button>
+
+                {extraActions}
 
                 {/* TEXT */}
                 <div className="flex-1 relative">

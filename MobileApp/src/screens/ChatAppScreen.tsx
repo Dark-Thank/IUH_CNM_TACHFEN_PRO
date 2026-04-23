@@ -7,12 +7,15 @@ import PinnedSection from "@/components/chat/PinnedSection";
 import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
 import ProfileModal from "@/components/chat/ProfileModal";
 import UserAvatar from "@/components/chat/UserAvatar";
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
 import { toast } from "@/lib/toast";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
 import { chatService } from "@/services/chatServiec";
 import { friendService } from "@/services/friendService";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -21,7 +24,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, UserPlus, Users, X } from "lucide-react-native";
+import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, Phone, UserPlus, Users, Video, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -36,6 +39,7 @@ import {
   ActivityIndicator,
   Animated,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -57,6 +61,151 @@ const SCROLL_TO_LATEST_DISTANCE = 180;
 type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
 type SearchStatus = "idle" | "loading" | "not_found" | "found";
 type FriendRelationship = "self" | "friend" | "sent" | "received" | "available";
+type GroupAvatarFile = {
+  uri: string;
+  name: string;
+  type: string;
+};
+type GroupAvatarSlot =
+  | { type: "friend"; friend: Friend }
+  | { type: "count"; count: number };
+
+const resolveAvatarPreviewUri = (avatarUrl?: string) => {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (
+    avatarUrl.startsWith("http://") ||
+    avatarUrl.startsWith("https://") ||
+    avatarUrl.startsWith("file://") ||
+    avatarUrl.startsWith("data:")
+  ) {
+    return avatarUrl;
+  }
+
+  return `${getApiBaseUrl()}${avatarUrl.startsWith("/") ? "" : "/"}${avatarUrl}`;
+};
+
+const getGroupAvatarSlots = (friends: Friend[]): GroupAvatarSlot[] => {
+  if (friends.length <= 4) {
+    return friends
+      .slice(0, 4)
+      .map((friend) => ({ type: "friend" as const, friend }));
+  }
+
+  return [
+    ...friends
+      .slice(0, 3)
+      .map((friend) => ({ type: "friend" as const, friend })),
+    { type: "count" as const, count: friends.length - 3 },
+  ];
+};
+
+const getGroupTileLayout = (slotCount: number, index: number) => {
+  if (slotCount === 1) {
+    return styles.groupAvatarTileSingle;
+  }
+
+  if (slotCount === 2) {
+    return styles.groupAvatarTileDouble;
+  }
+
+  if (slotCount === 3 && index === 0) {
+    return styles.groupAvatarTileTripleLead;
+  }
+
+  return null;
+};
+
+function GroupAvatarPreview({
+  groupName,
+  members,
+  avatarUri,
+  isDark,
+}: {
+  groupName: string;
+  members: Friend[];
+  avatarUri: string | null;
+  isDark: boolean;
+}) {
+  const slots = getGroupAvatarSlots(members);
+  const fallbackLabel = groupName.trim().charAt(0).toUpperCase() || "G";
+
+  if (avatarUri) {
+    return <Image source={{ uri: avatarUri }} style={styles.groupAvatarPreview} />;
+  }
+
+  if (slots.length === 0) {
+    return (
+      <View
+        style={[
+          styles.groupAvatarPreview,
+          styles.groupAvatarFallback,
+          { backgroundColor: isDark ? "#7c3aed" : "#8b5cf6" },
+        ]}
+      >
+        <Text style={styles.groupAvatarFallbackText}>{fallbackLabel}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        styles.groupAvatarPreview,
+        styles.groupAvatarPreviewFrame,
+        { backgroundColor: isDark ? "#020617" : "#ffffff", borderColor: isDark ? "#1f2937" : "#e2e8f0" },
+      ]}
+    >
+      <View style={styles.groupAvatarGrid}>
+        {slots.map((slot, index) => {
+          const layoutStyle = getGroupTileLayout(slots.length, index);
+
+          return (
+            <View
+              key={slot.type === "count" ? `count-${slot.count}` : slot.friend._id}
+              style={[
+                styles.groupAvatarTile,
+                layoutStyle,
+                {
+                  backgroundColor: isDark ? "#1e293b" : "#e2e8f0",
+                },
+              ]}
+            >
+              {slot.type === "count" ? (
+                <View
+                  style={[
+                    styles.groupAvatarCountTile,
+                    { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+                  ]}
+                >
+                  <Text style={[styles.groupAvatarCountText, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>+{slot.count}</Text>
+                </View>
+              ) : resolveAvatarPreviewUri(slot.friend.avatarUrl) ? (
+                <Image
+                  source={{ uri: resolveAvatarPreviewUri(slot.friend.avatarUrl)! }}
+                  style={styles.groupAvatarTileImage}
+                />
+              ) : (
+                <View
+                  style={[
+                    styles.groupAvatarFallback,
+                    { backgroundColor: isDark ? "#334155" : "#cbd5e1" },
+                  ]}
+                >
+                  <Text style={[styles.groupAvatarTileInitial, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                    {slot.friend.displayName.trim().charAt(0).toUpperCase() || "U"}
+                  </Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 const uniqueById = <T extends { _id: string }>(items: T[]) => {
   const seen = new Set<string>();
@@ -235,6 +384,8 @@ export default function ChatAppScreen() {
   const { user } = useAuthStore();
   const onlineUsers = useSocketStore((state) => state.onlineUsers);
   const socket = useSocketStore((state) => state.socket);
+  const currentCall = useCallStore((state) => state.currentCall);
+  const startOutgoingCall = useCallStore((state) => state.startOutgoingCall);
   const flatListRef = useRef<FlatList<Message>>(null);
   const isCreatingGroupRef = useRef(false);
   const pendingScrollToLatestRef = useRef(false);
@@ -260,6 +411,7 @@ export default function ChatAppScreen() {
   const [joinGroupToken, setJoinGroupToken] = useState("");
   const [joinGroupLoading, setJoinGroupLoading] = useState(false);
   const [selectedGroupMembers, setSelectedGroupMembers] = useState<Friend[]>([]);
+  const [selectedGroupAvatar, setSelectedGroupAvatar] = useState<GroupAvatarFile | null>(null);
   const [groupManageQuery, setGroupManageQuery] = useState("");
   const [selectedMembersToAdd, setSelectedMembersToAdd] = useState<Friend[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
@@ -594,6 +746,22 @@ export default function ChatAppScreen() {
     [armScrollToLatest, setActiveConversation]
   );
 
+  const handleStartAudioCall = useCallback(() => {
+    if (!selectedConvo || selectedConvo.type !== "direct") {
+      return;
+    }
+
+    void startOutgoingCall(selectedConvo, "audio");
+  }, [selectedConvo, startOutgoingCall]);
+
+  const handleStartVideoCall = useCallback(() => {
+    if (!selectedConvo) {
+      return;
+    }
+
+    void startOutgoingCall(selectedConvo, "video");
+  }, [selectedConvo, startOutgoingCall]);
+
   const handleBack = useCallback(() => {
     pendingScrollToLatestRef.current = false;
     setActiveConversation(null);
@@ -614,6 +782,7 @@ export default function ChatAppScreen() {
     setGroupName("");
     setGroupQuery("");
     setSelectedGroupMembers([]);
+    setSelectedGroupAvatar(null);
   }, []);
 
   const resetGroupManagementState = useCallback(() => {
@@ -771,6 +940,34 @@ export default function ChatAppScreen() {
     });
   }, []);
 
+  const handlePickGroupAvatar = useCallback(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      toast.info("Cần cấp quyền thư viện ảnh để chọn avatar nhóm.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets.length) {
+      return;
+    }
+
+    const asset = result.assets[0];
+
+    setSelectedGroupAvatar({
+      uri: asset.uri,
+      name: asset.fileName || `group-avatar-${Date.now()}.jpg`,
+      type: asset.mimeType || "image/jpeg",
+    });
+  }, []);
+
   const handleCreateGroup = useCallback(async () => {
     if (isCreatingGroupRef.current || isCreatingGroup || chatLoading) {
       return;
@@ -790,11 +987,36 @@ export default function ChatAppScreen() {
     setIsCreatingGroup(true);
 
     try {
-      await createConversation(
+      const createdConversation = await createConversation(
         "group",
         groupName.trim(),
         selectedGroupMembers.map((friend) => friend._id)
       );
+
+      if (!createdConversation) {
+        toast.error("Không thể tạo nhóm lúc này.");
+        return;
+      }
+
+      if (selectedGroupAvatar) {
+        try {
+          const updated = await chatService.updateGroupAvatar(
+            createdConversation._id,
+            selectedGroupAvatar
+          );
+
+          useChatStore.getState().updateConversation({
+            _id: createdConversation._id,
+            group: {
+              ...createdConversation.group,
+              avatar: updated.conversation.group.avatar,
+            },
+          });
+        } catch (error) {
+          console.error("Lỗi upload avatar nhóm:", error);
+          toast.info("Nhóm đã được tạo nhưng chưa cập nhật được avatar.");
+        }
+      }
 
       setShowCreateGroup(false);
       resetCreateGroupState();
@@ -802,7 +1024,7 @@ export default function ChatAppScreen() {
       isCreatingGroupRef.current = false;
       setIsCreatingGroup(false);
     }
-  }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupMembers]);
+  }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupAvatar, selectedGroupMembers]);
 
   const resetJoinGroupState = useCallback(() => {
     setJoinGroupMode("link");
@@ -1268,15 +1490,47 @@ export default function ChatAppScreen() {
         : undefined,
       headerRight: selectedConvo
         ? () => (
-          <Pressable
-            onPress={handleOpenConversationAssets}
-            style={[
-              styles.headerIconButton,
-              { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
-            ]}
-          >
-            <Menu size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
-          </Pressable>
+          <View style={styles.headerActionGroup}>
+            {selectedConvo.type === "direct" ? (
+              <Pressable
+                onPress={handleStartAudioCall}
+                disabled={Boolean(currentCall) || isConversationBlocked}
+                style={[
+                  styles.headerIconButton,
+                  {
+                    backgroundColor: isDark ? "#1f2937" : "#eef2ff",
+                    opacity: Boolean(currentCall) || isConversationBlocked ? 0.45 : 1,
+                  },
+                ]}
+              >
+                <Phone size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              onPress={handleStartVideoCall}
+              disabled={Boolean(currentCall) || isConversationBlocked}
+              style={[
+                styles.headerIconButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#eef2ff",
+                  opacity: Boolean(currentCall) || isConversationBlocked ? 0.45 : 1,
+                },
+              ]}
+            >
+              <Video size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+            </Pressable>
+
+            <Pressable
+              onPress={handleOpenConversationAssets}
+              style={[
+                styles.headerIconButton,
+                { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+              ]}
+            >
+              <Menu size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+            </Pressable>
+          </View>
         )
         : () => (
           <Pressable
@@ -1298,6 +1552,10 @@ export default function ChatAppScreen() {
         ),
     });
   }, [
+    currentCall,
+    handleStartAudioCall,
+    handleStartVideoCall,
+    isConversationBlocked,
     handleBack,
     handleOpenGroupManagement,
     handleOpenConversationAssets,
@@ -1438,14 +1696,17 @@ export default function ChatAppScreen() {
             </Pressable>
           ) : null}
 
-          {selectedConvo.type === "group" ? (
-            <GroupFeatureBar
-              conversationId={selectedConvo._id}
-              disabled={isConversationBlocked}
-            />
-          ) : null}
-
-          <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
+          <MessageInput
+            selectedConvo={selectedConvo}
+            disabled={isConversationBlocked}
+            extraActions={selectedConvo.type === "group" ? (
+              <GroupFeatureBar
+                conversationId={selectedConvo._id}
+                disabled={isConversationBlocked}
+                mode="inline"
+              />
+            ) : null}
+          />
         </KeyboardAvoidingView>
 
         <ProfileModal
@@ -2220,6 +2481,51 @@ export default function ChatAppScreen() {
             ]}
           />
 
+          <View
+            style={[
+              styles.groupAvatarCard,
+              {
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <GroupAvatarPreview
+              groupName={groupName}
+              members={selectedGroupMembers}
+              avatarUri={selectedGroupAvatar?.uri || null}
+              isDark={isDark}
+            />
+
+            <View style={styles.groupAvatarMeta}>
+              <View style={styles.groupAvatarTextBlock}>
+                <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Avatar nhóm</Text>
+                <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Chọn ảnh riêng hoặc để hệ thống ghép avatar từ các thành viên đã chọn.
+                </Text>
+              </View>
+
+              <View style={styles.requestActionsRow}>
+                <Pressable onPress={() => void handlePickGroupAvatar()} style={[styles.secondaryButton, styles.groupFooterButton]}>
+                  <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Chọn ảnh</Text>
+                </Pressable>
+
+                {selectedGroupAvatar ? (
+                  <Pressable
+                    onPress={() => setSelectedGroupAvatar(null)}
+                    style={[
+                      styles.secondaryButton,
+                      styles.groupFooterButton,
+                      { borderColor: isDark ? "#312e81" : "#c4b5fd" },
+                    ]}
+                  >
+                    <Text style={[styles.secondaryButtonText, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>Xóa ảnh</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
           <TextInput
             value={groupQuery}
             onChangeText={setGroupQuery}
@@ -2236,24 +2542,31 @@ export default function ChatAppScreen() {
           />
 
           {selectedGroupMembers.length > 0 && (
-            <View style={styles.selectedMembersWrap}>
+            <View style={styles.groupActionColumn}>
+              <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>Đã chọn {selectedGroupMembers.length} thành viên</Text>
               {selectedGroupMembers.map((friend) => (
                 <Pressable
                   key={friend._id}
                   onPress={() => handleToggleGroupMember(friend)}
                   style={[
-                    styles.selectedMemberChip,
-                    { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
+                    styles.friendRow,
+                    {
+                      backgroundColor: isDark ? "#111827" : "#f5f3ff",
+                      borderColor: isDark ? "#312e81" : "#c4b5fd",
+                    },
                   ]}
                 >
-                  <Text
-                    style={[
-                      styles.selectedMemberText,
-                      { color: isDark ? "#ddd6fe" : "#6d28d9" },
-                    ]}
-                  >
-                    {friend.displayName}
-                  </Text>
+                  <View style={styles.requestInfo}>
+                    <UserAvatar name={friend.displayName} avatarUrl={friend.avatarUrl} size={42} />
+                    <View style={styles.requestTextBlock}>
+                      <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                        {friend.displayName}
+                      </Text>
+                      <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>@{friend.username}</Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.linkText, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>Bỏ chọn</Text>
                 </Pressable>
               ))}
             </View>
@@ -2375,6 +2688,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "700" },
+  headerActionGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginRight: 12,
+  },
   pinnedContainer: {
     position: "absolute",
     top: 10,
@@ -2594,6 +2913,86 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
     gap: 8,
     width: "100%",
+  },
+  groupAvatarCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  groupAvatarPreview: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+  },
+  groupAvatarPreviewFrame: {
+    overflow: "hidden",
+    borderWidth: 1,
+    padding: 4,
+  },
+  groupAvatarGrid: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+    overflow: "hidden",
+    borderRadius: 999,
+  },
+  groupAvatarTile: {
+    width: "49%",
+    height: "49%",
+    overflow: "hidden",
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupAvatarTileSingle: {
+    width: "100%",
+    height: "100%",
+  },
+  groupAvatarTileDouble: {
+    width: "49%",
+    height: "100%",
+  },
+  groupAvatarTileTripleLead: {
+    width: "49%",
+    height: "100%",
+  },
+  groupAvatarTileImage: {
+    width: "100%",
+    height: "100%",
+  },
+  groupAvatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupAvatarFallbackText: {
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: "800",
+  },
+  groupAvatarTileInitial: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  groupAvatarCountTile: {
+    width: "100%",
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupAvatarCountText: {
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  groupAvatarMeta: {
+    flex: 1,
+    gap: 10,
+  },
+  groupAvatarTextBlock: {
+    gap: 4,
   },
   groupActionButton: {
     width: "100%",

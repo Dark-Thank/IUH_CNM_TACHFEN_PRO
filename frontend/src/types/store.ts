@@ -93,7 +93,7 @@ export interface ChatState {
     type: "group" | "direct",
     name: string,
     memberIds: string[]
-  ) => Promise<void>;
+  ) => Promise<Conversation | undefined>;
   addGroupMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
   removeGroupMember: (conversationId: string, memberId: string) => Promise<void>;
   updateGroupMemberRole: (

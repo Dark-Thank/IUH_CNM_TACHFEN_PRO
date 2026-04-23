@@ -6,7 +6,7 @@ import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
 import { Audio } from "expo-av";
 import { FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Image,
   Pressable,
@@ -62,6 +62,7 @@ interface FileItem {
 interface Props {
   selectedConvo: Conversation;
   disabled?: boolean;
+  extraActions?: ReactNode;
 }
 
 
@@ -69,7 +70,7 @@ interface Props {
 //   selectedConvo,
 // }: MessageInputProps) {
 
-export default function MessageInput({ selectedConvo, disabled }: Props) {
+export default function MessageInput({ selectedConvo, disabled, extraActions }: Props) {
 
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } =
@@ -702,6 +703,8 @@ export default function MessageInput({ selectedConvo, disabled }: Props) {
           />
         )}
       </Pressable>
+
+      {extraActions}
 
       {/* SEND BUTTON */}
       <Pressable

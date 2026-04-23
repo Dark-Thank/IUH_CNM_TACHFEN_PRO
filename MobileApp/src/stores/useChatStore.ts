@@ -605,8 +605,11 @@ export const useChatStore = create<ChatState>()(
           get().addConvo(conversation);
 
           socketEmitter.emit("join-conversation", conversation._id);
+
+          return conversation;
         } catch (error) {
           console.error("Loi xay ra khi goi createConversation trong store", error);
+          return undefined;
         } finally {
           set({ loading: false });
         }

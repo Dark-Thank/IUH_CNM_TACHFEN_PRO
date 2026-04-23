@@ -22,6 +22,9 @@ export interface CallSession {
   peer: CallPeer;
   callerId: string;
   recipientId: string;
+  isGroup: boolean;
+  participantIds: string[];
+  conversationName?: string | null;
   createdAt: string;
 }
 
@@ -31,7 +34,29 @@ export interface CallInvitePayload {
   callerId: string;
   recipientId: string;
   callType: CallType;
+  isGroup?: boolean;
+  participantIds?: string[];
+  conversationName?: string | null;
   createdAt: string;
+}
+
+export interface CallRejoinPayload {
+  callId: string;
+  conversationId: string;
+  callerId: string;
+  recipientId: string;
+  callType: CallType;
+  isGroup?: boolean;
+  participantIds?: string[];
+  conversationName?: string | null;
+  createdAt: string;
+}
+
+export interface CallParticipantPayload {
+  callId: string;
+  conversationId: string;
+  participantId: string;
+  reason?: string;
 }
 
 export interface CallAcceptPayload {
@@ -79,4 +104,12 @@ export interface CallStatePayload {
   conversationId: string;
   state: "connected" | "reconnecting";
   affectedUserId?: string;
+}
+
+export interface CallMediaStatePayload {
+  callId: string;
+  conversationId: string;
+  senderId: string;
+  mediaType: "camera";
+  enabled: boolean;
 }

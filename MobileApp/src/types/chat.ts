@@ -1,3 +1,5 @@
+import type { CallMeta } from "./call";
+
 export interface Participant {
   _id: string;
   displayName: string;
@@ -15,7 +17,7 @@ export interface SeenUser {
 export interface Group {
   name: string;
   createdBy: string;
-   avatar?: string | null; 
+  avatar?: string | null;
 }
 
 export interface LastMessage {
@@ -53,16 +55,6 @@ export interface ReactionUser {
   _id: string;
   displayName: string;
   avatarUrl?: string | null;
-}
-
-export interface CallMeta {
-  callType: "audio" | "video";
-  outcome: "completed" | "busy" | "declined" | "missed" | "cancelled" | "disconnected" | "reconnect-timeout";
-  callerId: string;
-  recipientId: string;
-  durationSeconds: number;
-  startedAt?: string | null;
-  endedAt?: string | null;
 }
 
 export interface PollOption {

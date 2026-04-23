@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RingtoneGen")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+64242f6aec3e79bddd994cc7fff3698db14aa6d3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c8a58cfe354818e6c67e845188d415dd5c5dcc76")]
 [assembly: System.Reflection.AssemblyProductAttribute("RingtoneGen")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RingtoneGen")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

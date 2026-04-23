@@ -1,10 +1,11 @@
 import { formatMessageTime } from "@/lib/utils";
 import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation, Message, Participant, ReactionUser } from "@/types/chat";
-import { Pin } from "lucide-react-native";
+import { Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pin, Video } from "lucide-react-native";
 import { memo, useState } from "react";
 import {
   Alert,
@@ -57,6 +58,68 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
   }
 
   return "Tin nhắn";
+};
+
+const getCallTypeLabel = (callType?: "audio" | "video") =>
+  callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai";
+
+const formatCallDuration = (seconds = 0) => {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return [hours, minutes, remainingSeconds].map((value) => value.toString().padStart(2, "0")).join(":");
+  }
+
+  return [minutes, remainingSeconds].map((value) => value.toString().padStart(2, "0")).join(":");
+};
+
+const getCallSummaryTitle = (message: Message, viewerId?: string) => {
+  const callMeta = message.callMeta;
+
+  if (!callMeta) {
+    return message.content ?? "Cuoc goi";
+  }
+
+  const typeLabel = getCallTypeLabel(callMeta.callType);
+  const isCaller = callMeta.callerId === viewerId;
+
+  switch (callMeta.outcome) {
+    case "busy":
+      return isCaller ? "Nguoi nhan dang ban" : "Ban dang ban";
+    case "declined":
+      return isCaller ? `${typeLabel} bi tu choi` : `Da tu choi ${typeLabel.toLowerCase()}`;
+    case "missed":
+      return isCaller ? `${typeLabel} khong duoc tra loi` : `${typeLabel} nho`;
+    case "cancelled":
+      return `${typeLabel} da huy`;
+    case "disconnected":
+      return `${typeLabel} bi gian doan`;
+    case "reconnect-timeout":
+      return `${typeLabel} mat ket noi`;
+    case "completed":
+      return isCaller ? `${typeLabel} di` : `${typeLabel} den`;
+    default:
+      return typeLabel;
+  }
+};
+
+const getCallDetailText = (message: Message) => {
+  const callMeta = message.callMeta;
+
+  if (!callMeta) {
+    return message.content ?? "";
+  }
+
+  const baseLabel = getCallTypeLabel(callMeta.callType);
+
+  if (callMeta.outcome === "completed") {
+    return `${baseLabel} • ${formatCallDuration(callMeta.durationSeconds)}`;
+  }
+
+  return baseLabel;
 };
 
 interface MessageItemProps {
@@ -120,6 +183,8 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
     setReplyingMessage,
     updateMessage,
   } = useChatStore();
+  const currentCall = useCallStore((state) => state.currentCall);
+  const startOutgoingCall = useCallStore((state) => state.startOutgoingCall);
   const currentUserId = user?._id;
 
 
@@ -143,6 +208,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
   const participant = selectedConvo.participants.find(
     (item: Participant) => item._id === message.senderId
   );
+  const isCallMessage = message.messageType === "call" && Boolean(message.callMeta);
 
   const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
   const isPollMessage = message.messageType === "poll" && Boolean(message.pollMeta);
@@ -394,6 +460,44 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
     </View>
   );
 
+  const handleRecallCall = () => {
+    if (selectedConvo.type !== "direct" || !message.callMeta || currentCall) {
+      return;
+    }
+
+    void startOutgoingCall(selectedConvo, message.callMeta.callType);
+  };
+
+  const renderCallIcon = () => {
+    const callMeta = message.callMeta;
+
+    if (!callMeta) {
+      return <Phone size={18} color={isDark ? "#cbd5e1" : "#475569"} />;
+    }
+
+    const isCaller = callMeta.callerId === currentUserId;
+
+    if (callMeta.outcome === "busy") {
+      return <PhoneOff size={18} color="#f59e0b" />;
+    }
+
+    if (callMeta.outcome === "missed") {
+      return <PhoneMissed size={18} color="#ef4444" />;
+    }
+
+    if (callMeta.callType === "video") {
+      return <Video size={18} color="#0ea5e9" />;
+    }
+
+    if (callMeta.outcome === "completed") {
+      return isCaller
+        ? <PhoneOutgoing size={18} color="#10b981" />
+        : <PhoneIncoming size={18} color="#10b981" />;
+    }
+
+    return <Phone size={18} color={isDark ? "#cbd5e1" : "#475569"} />;
+  };
+
   const renderContent = () => {
     if (message.isRecalled) {
       return (
@@ -406,6 +510,70 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
           >
             Tin nhắn đã thu hồi
           </Text>
+        </View>
+      );
+    }
+
+    if (isDeletedForMe) {
+      return (
+        <View style={styles.recalledBubble}>
+          <Text
+            style={[
+              styles.recalledText,
+              { color: isDark ? "#94a3b8" : "#64748b" },
+            ]}
+          >
+            Bạn đã xóa tin nhắn này
+          </Text>
+        </View>
+      );
+    }
+
+    if (isCallMessage && message.callMeta) {
+      const canRecallCall = selectedConvo.type === "direct";
+
+      return (
+        <View style={styles.callCard}>
+          <View
+            style={[
+              styles.callIconWrap,
+              { backgroundColor: isDark ? "#0f172a" : "#eef2ff" },
+            ]}
+          >
+            {renderCallIcon()}
+          </View>
+
+          <View style={styles.callContentWrap}>
+            <Text style={[styles.callTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              {getCallSummaryTitle(message, currentUserId)}
+            </Text>
+            <Text style={[styles.callDetail, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              {getCallDetailText(message)}
+            </Text>
+          </View>
+
+          {canRecallCall ? (
+            <Pressable
+              onPress={handleRecallCall}
+              disabled={Boolean(currentCall)}
+              style={[
+                styles.callActionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#ede9fe",
+                  opacity: currentCall ? 0.5 : 1,
+                },
+              ]}
+            >
+              {message.callMeta.callType === "video" ? (
+                <Video size={15} color={isDark ? "#ddd6fe" : "#6d28d9"} />
+              ) : (
+                <Phone size={15} color={isDark ? "#ddd6fe" : "#6d28d9"} />
+              )}
+              <Text style={[styles.callActionLabel, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>
+                Goi lai
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       );
     }
@@ -595,13 +763,19 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
             delayLongPress={260}
             style={[
               styles.bubble,
-              useOwnAccentBubble
-                ? { backgroundColor: isDark ? "#a855f7" : "#8b5cf6" }
-                : {
-                  backgroundColor: isDark ? "#1f2937" : "#ffffff",
+              isCallMessage
+                ? {
+                  backgroundColor: isDark ? "#111827" : "#ffffff",
                   borderColor: isDark ? "#334155" : "#e2e8f0",
                   borderWidth: 1,
-                },
+                }
+                : useOwnAccentBubble
+                  ? { backgroundColor: isDark ? "#a855f7" : "#8b5cf6" }
+                  : {
+                    backgroundColor: isDark ? "#1f2937" : "#ffffff",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                    borderWidth: 1,
+                  },
             ]}
           >
             {renderContent()}
@@ -1209,6 +1383,43 @@ const styles = StyleSheet.create({
   messageImage: { width: 200, height: 200, borderRadius: 12 },
   voiceBlock: { gap: 8 },
   voiceCaption: { fontSize: 14, lineHeight: 20 },
+  callCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    minWidth: 240,
+  },
+  callIconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callContentWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  callTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  callDetail: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  callActionButton: {
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  callActionLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
   pinIconContainer: { position: "absolute", top: 4, right: 4 },
   statusPill: {
     borderRadius: 999,

@@ -268,6 +268,10 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.getState().receiveIncomingCall(payload);
     });
 
+    socket.on("call:rejoin", (payload) => {
+      useCallStore.getState().handleCallRejoin(payload);
+    });
+
     socket.on("call:accept", (payload) => {
       void useCallStore.getState().handleCallAccepted(payload);
     });
@@ -282,6 +286,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
     socket.on("call:state", (payload) => {
       useCallStore.getState().handleCallState(payload);
+    });
+
+    socket.on("call:participant-joined", (payload) => {
+      void useCallStore.getState().handleParticipantJoined(payload);
+    });
+
+    socket.on("call:participant-left", (payload) => {
+      useCallStore.getState().handleParticipantLeft(payload);
+    });
+
+    socket.on("call:media-state", (payload) => {
+      useCallStore.getState().handleRemoteMediaState(payload);
     });
 
     socket.on("call:offer", (payload) => {

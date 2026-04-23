@@ -1,8 +1,10 @@
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
+import { useChatStore } from "@/stores/useChatStore";
 import type { CallSession } from "@/types/call";
 import { ChevronDown, ChevronUp, Mic, MicOff, Phone, PhoneOff, Video, VideoOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const statusLabelMap = {
   incoming: "Cuoc goi den",
@@ -41,6 +43,21 @@ const attachStream = (element: HTMLMediaElement | null, stream: MediaStream | nu
 };
 
 const getInitial = (displayName: string) => displayName.trim().charAt(0).toUpperCase() || "U";
+
+const getParticipantFallbackName = (participantId: string) =>
+  `User ${participantId.slice(Math.max(0, participantId.length - 4))}`;
+
+const getVideoGridClassName = (count: number) => {
+  if (count <= 1) {
+    return "grid-cols-1";
+  }
+
+  if (count === 2) {
+    return "grid-cols-1 md:grid-cols-2";
+  }
+
+  return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+};
 
 const getRemoteVideoStatusMessage = (status: keyof typeof statusLabelMap) => {
   switch (status) {
@@ -93,6 +110,74 @@ const getHangupReason = (call: CallSession) => {
   }
 
   return "ended";
+};
+
+const RemoteVideoTile = ({
+  displayName,
+  stream,
+  isCameraEnabled,
+  className,
+}: {
+  displayName: string;
+  stream: MediaStream | null;
+  isCameraEnabled: boolean;
+  className?: string;
+}) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const isVideoVisible = isCameraEnabled && hasActiveVideoTrack(stream);
+
+  useEffect(() => {
+    attachStream(videoRef.current, stream);
+
+    if (!stream || !isVideoVisible) {
+      setIsPortrait(false);
+    }
+  }, [stream, isVideoVisible]);
+
+  const syncAspectRatio = () => {
+    const videoElement = videoRef.current;
+
+    if (!videoElement?.videoWidth || !videoElement.videoHeight) {
+      return;
+    }
+
+    setIsPortrait(videoElement.videoHeight > videoElement.videoWidth);
+  };
+
+  return (
+    <div className={`relative min-h-[220px] overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 ${className ?? ""}`}>
+      {isVideoVisible ? (
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            onLoadedMetadata={syncAspectRatio}
+            onResize={syncAspectRatio}
+            className={`absolute inset-0 h-full w-full ${isPortrait ? "object-contain" : "object-cover"}`}
+          />
+          <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" />
+        </>
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.22),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(236,72,153,0.18),_transparent_40%)] px-6 text-center">
+          <div className="flex size-24 items-center justify-center rounded-full bg-white/10 text-3xl font-semibold uppercase text-white">
+            {getInitial(displayName)}
+          </div>
+          <div>
+            <h3 className="text-2xl font-semibold text-white">{displayName}</h3>
+            <p className="mt-2 text-sm text-slate-300">
+              {isCameraEnabled ? "Dang cho video tu participant nay..." : "Participant nay dang tat camera."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-4 pt-10 text-sm font-medium text-white">
+        {displayName}
+      </div>
+    </div>
+  );
 };
 
 const ControlButton = ({
@@ -210,6 +295,8 @@ const CallOverlay = () => {
     currentCall,
     localStream,
     remoteStream,
+    remoteStreams,
+    remoteCameraStates,
     isCameraEnabled,
     isMicrophoneEnabled,
     acceptIncomingCall,
@@ -218,12 +305,18 @@ const CallOverlay = () => {
     toggleCamera,
     toggleMicrophone,
   } = useCallStore();
+  const currentUserId = useAuthStore((state) => state.user?._id);
+  const conversations = useChatStore((state) => state.conversations);
 
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
+
+  const conversation = useMemo(
+    () => conversations.find((item) => item._id === currentCall?.conversationId),
+    [conversations, currentCall?.conversationId]
+  );
 
   useEffect(() => {
     const ringtoneElement = ringtoneAudioRef.current;
@@ -256,16 +349,12 @@ const CallOverlay = () => {
   }, [currentCall?.callId, currentCall?.status]);
 
   useEffect(() => {
-    attachStream(remoteAudioRef.current, remoteStream);
-  }, [remoteStream]);
-
-  useEffect(() => {
-    attachStream(remoteVideoRef.current, remoteStream);
-  }, [remoteStream]);
+    attachStream(remoteAudioRef.current, currentCall?.callType === "audio" ? remoteStream : null);
+  }, [currentCall?.callType, remoteStream]);
 
   useEffect(() => {
     attachStream(localVideoRef.current, localStream);
-  }, [localStream]);
+  }, [localStream, isCameraEnabled, currentCall?.callId]);
 
   if (!currentCall) {
     return null;
@@ -276,13 +365,36 @@ const CallOverlay = () => {
   const showVideoLayout = isVideoCall;
   const showLocalPreview = isVideoCall;
   const isLocalVideoVisible = hasActiveVideoTrack(localStream);
-  const isRemoteVideoVisible = hasActiveVideoTrack(remoteStream);
+  const directRemoteCameraEnabled = remoteCameraStates[currentCall.peer._id] ?? true;
+  const isDirectRemoteUnavailable = currentCall.status === "reconnecting" || !directRemoteCameraEnabled;
+  const isRemoteVideoVisible = !isDirectRemoteUnavailable && hasActiveVideoTrack(remoteStream);
+  const remoteVideoEntries = currentCall.isGroup
+    ? currentCall.participantIds
+        .filter((participantId) => participantId !== currentUserId)
+        .map((participantId) => {
+          const participant = conversation?.participants.find((item) => item._id === participantId);
+
+          return {
+            participantId,
+            displayName: participant?.displayName || getParticipantFallbackName(participantId),
+            stream: remoteStreams[participantId] ?? null,
+            isCameraEnabled: remoteCameraStates[participantId] ?? true,
+          };
+        })
+    : [
+        {
+          participantId: currentCall.peer._id,
+          displayName: currentCall.peer.displayName,
+          stream: remoteStream,
+          isCameraEnabled: directRemoteCameraEnabled,
+        },
+      ];
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
       <audio ref={ringtoneAudioRef} src="/universfield-ringtone-035-480585.mp3" preload="auto" loop />
       <audio ref={remoteAudioRef} autoPlay playsInline />
-      <div className="relative flex h-full w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950 text-slate-50 shadow-2xl md:h-[88vh]">
+      <div className="relative flex h-full w-full max-w-7xl flex-col overflow-hidden rounded-3xl border border-white/10 bg-slate-950 text-slate-50 shadow-2xl md:h-[92vh]">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(168,85,247,0.25),_transparent_55%),radial-gradient(circle_at_bottom,_rgba(59,130,246,0.18),_transparent_45%)]" />
 
         <div className="relative z-20 flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
@@ -292,6 +404,11 @@ const CallOverlay = () => {
             <p className="mt-1 text-sm text-slate-300">
               {currentCall.callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai"}
             </p>
+            {currentCall.isGroup && (
+              <p className="mt-1 text-sm text-slate-400">
+                {Object.keys(remoteStreams).length} participant dang ket noi
+              </p>
+            )}
           </div>
 
           <Button
@@ -304,23 +421,33 @@ const CallOverlay = () => {
           </Button>
         </div>
 
-        <div className="relative z-10 flex flex-1 flex-col p-5">
+        <div className={`relative z-10 flex flex-1 flex-col ${currentCall.isGroup ? "p-5" : "p-3 md:p-4"}`}>
           {showVideoLayout ? (
             <div
               className={`relative flex-1 overflow-hidden rounded-3xl border border-white/10 bg-slate-900/80 ${
                 isControlsCollapsed ? "pb-16 md:pb-20" : "pb-28 md:pb-32"
               }`}
             >
-              {isRemoteVideoVisible ? (
-                <>
-                  <video
-                    ref={remoteVideoRef}
-                    autoPlay
-                    playsInline
-                    className="absolute inset-0 h-full w-full object-cover"
+              {currentCall.isGroup ? (
+                <div className={`grid h-full gap-4 p-4 ${getVideoGridClassName(remoteVideoEntries.length)}`}>
+                  {remoteVideoEntries.map((entry) => (
+                    <RemoteVideoTile
+                      key={entry.participantId}
+                      displayName={entry.displayName}
+                      stream={entry.stream}
+                      isCameraEnabled={entry.isCameraEnabled}
+                    />
+                  ))}
+                </div>
+              ) : isRemoteVideoVisible ? (
+                <div className="h-full p-2 md:p-3">
+                  <RemoteVideoTile
+                    displayName={currentCall.peer.displayName}
+                    stream={remoteStream}
+                    isCameraEnabled={directRemoteCameraEnabled}
+                    className="h-full min-h-0 rounded-[2rem]"
                   />
-                  <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-slate-950 via-slate-950/35 to-transparent" />
-                </>
+                </div>
               ) : (
                 <div className="absolute inset-0 flex h-full flex-col items-center justify-center gap-4 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.22),_transparent_45%),radial-gradient(circle_at_bottom,_rgba(236,72,153,0.18),_transparent_40%)] px-6 text-center">
                   <div className="flex size-28 items-center justify-center rounded-full bg-white/10 text-4xl font-semibold uppercase text-white">
@@ -329,7 +456,9 @@ const CallOverlay = () => {
                   <div>
                     <h3 className="text-3xl font-semibold">{currentCall.peer.displayName}</h3>
                     <p className="mt-2 text-sm text-slate-300">
-                      {getRemoteVideoStatusMessage(currentCall.status)}
+                      {directRemoteCameraEnabled
+                        ? getRemoteVideoStatusMessage(currentCall.status)
+                        : "Doi phuong dang tat camera."}
                     </p>
                   </div>
                 </div>

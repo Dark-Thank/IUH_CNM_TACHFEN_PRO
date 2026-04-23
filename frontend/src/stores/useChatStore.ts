@@ -390,21 +390,21 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy khi ra add message:", error);
         }
       },
-updateConversation: (updated: Partial<Conversation> & { _id: string }) =>
-  set((state) => ({
-    conversations: state.conversations.map((c) =>
-      c._id !== updated._id
-        ? c
-        : {
-            ...c,
-            group: {
-              ...c.group,
-              ...updated.group,
-            },
-          }
-    ),
-  })),
-  
+      updateConversation: (updated: Partial<Conversation> & { _id: string }) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c._id !== updated._id
+              ? c
+              : {
+                ...c,
+                group: {
+                  ...c.group,
+                  ...updated.group,
+                },
+              }
+          ),
+        })),
+
 
       upsertConversation: (conversation) => {
         set((state) => ({
@@ -482,8 +482,11 @@ updateConversation: (updated: Partial<Conversation> & { _id: string }) =>
           useSocketStore
             .getState()
             .socket?.emit("join-conversation", conversation._id);
+
+          return conversation;
         } catch (error) {
           console.error("Lỗi xảy ra khi gọi createConversation trong store", error);
+          return undefined;
         } finally {
           set({ loading: false });
         }

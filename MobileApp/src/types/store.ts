@@ -1,5 +1,20 @@
+import type { MediaStream } from "react-native-webrtc";
 import type { Socket } from "socket.io-client";
 import type { AppointmentResponseStatus, Conversation, Message } from "./chat";
+import type {
+  CallAcceptPayload,
+  CallDeclinePayload,
+  CallEndPayload,
+  CallInvitePayload,
+  CallMediaStatePayload,
+  CallParticipantPayload,
+  CallRejoinPayload,
+  CallSession,
+  CallSignalCandidatePayload,
+  CallSignalDescriptionPayload,
+  CallStatePayload,
+  CallType,
+} from "./call";
 import type { Friend, FriendRequest, User } from "./user";
 
 export interface AuthState {
@@ -20,7 +35,7 @@ export interface AuthState {
     lastName: string
   ) => Promise<{ ok: true } | { ok: false; message: string }>;
   signIn: (username: string, password: string) => Promise<{ message: string; userId: string; email: string } | null>;
-  forgotPassword?: (email: string) => Promise<void>;
+  forgotPassword: (email: string) => Promise<void>;
   verifyOtp: (email: string, otp: string) => Promise<void>;
   resetPassword?: (email: string, otp: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -120,7 +135,7 @@ export interface ChatState {
     type: "group" | "direct",
     name: string,
     memberIds: string[]
-  ) => Promise<void>;
+  ) => Promise<Conversation | undefined>;
   addGroupMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
   removeGroupMember: (conversationId: string, memberId: string) => Promise<void>;
   updateGroupMemberRole: (
@@ -151,6 +166,35 @@ export interface SocketState {
   stopTyping: (conversationId: string) => void;
   registerAppStateListener: () => void;
   unregisterAppStateListener: () => void;
+}
+
+export interface CallState {
+  currentCall: CallSession | null;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  remoteStreams: Record<string, MediaStream>;
+  remoteCameraStates: Record<string, boolean>;
+  isMicrophoneEnabled: boolean;
+  isCameraEnabled: boolean;
+  startOutgoingCall: (conversation: Conversation, callType: CallType) => Promise<void>;
+  receiveIncomingCall: (payload: CallInvitePayload) => void;
+  handleCallRejoin: (payload: CallRejoinPayload) => void;
+  acceptIncomingCall: () => Promise<void>;
+  declineIncomingCall: (reason?: string) => void;
+  endCall: (reason?: string) => void;
+  toggleMicrophone: () => void;
+  toggleCamera: () => void;
+  handleCallAccepted: (payload: CallAcceptPayload) => Promise<void>;
+  handleCallDeclined: (payload: CallDeclinePayload) => void;
+  handleCallEnded: (payload: CallEndPayload) => void;
+  handleCallState: (payload: CallStatePayload) => void;
+  handleParticipantJoined: (payload: CallParticipantPayload) => Promise<void>;
+  handleParticipantLeft: (payload: CallParticipantPayload) => void;
+  handleRemoteMediaState: (payload: CallMediaStatePayload) => void;
+  handleRemoteOffer: (payload: CallSignalDescriptionPayload) => Promise<void>;
+  handleRemoteAnswer: (payload: CallSignalDescriptionPayload) => Promise<void>;
+  handleRemoteIceCandidate: (payload: CallSignalCandidatePayload) => Promise<void>;
+  resetCall: () => void;
 }
 
 export interface UserState {
