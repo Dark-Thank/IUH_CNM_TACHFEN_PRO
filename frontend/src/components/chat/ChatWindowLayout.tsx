@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import ConversationAssetsPanel from "./ConversationAssetsPanel";
+import CreateGroupAppointmentDialog from "./CreateGroupAppointmentDialog";
+import CreateGroupPollDialog from "./CreateGroupPollDialog";
 import ChatWindowBody from "./ChatWindowBody";
 import ChatWindowHeader from "./ChatWindowHeader";
 import ChatWindowSkeleton from "./ChatWindowSkeleton";
@@ -166,6 +168,15 @@ const ChatWindowLayout = () => {
                 avatarUrl={typingLeadUser.avatarUrl}
                 summary={typingLabel}
               />
+            )}
+
+            {selectedConvo.type === "group" && (
+              <div className="border-t bg-background px-3 py-2">
+                <div className="flex items-center justify-end gap-1">
+                  <CreateGroupPollDialog conversationId={selectedConvo._id} />
+                  <CreateGroupAppointmentDialog conversationId={selectedConvo._id} />
+                </div>
+              </div>
             )}
 
             <MessageInput selectedConvo={selectedConvo} isBlocked={isBlocked} />

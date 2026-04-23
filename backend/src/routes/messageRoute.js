@@ -1,13 +1,19 @@
 import express from 'express';
 import {
+  closeGroupPoll,
+  createGroupAppointment,
+  createGroupPoll,
+  deleteGroupAppointment,
   deleteMessageForMe,
   downloadMessageFile,
   markMessageDelivered,
   recallMessage,
+  respondToGroupAppointment,
   sendDirectMessage,
   sendGroupMessage,
   toggleReaction,
   togglePinMessage,
+  voteOnGroupPoll,
 } from '../controllers/messageController.js';
 
 import { protectedRoute } from '../middlewares/authMiddleware.js';
@@ -29,6 +35,18 @@ router.post('/:messageId/delivered', protectedRoute, markMessageDelivered);
 router.get('/:messageId/files/:fileIndex', protectedRoute, downloadMessageFile);
 router.post("/:messageId/reaction", protectedRoute, toggleReaction);
 router.post(
+  "/group/poll",
+  protectedRoute,
+  checkGroupMembership,
+  createGroupPoll
+);
+router.post(
+  "/group/appointment",
+  protectedRoute,
+  checkGroupMembership,
+  createGroupAppointment
+);
+router.post(
   "/direct",
   protectedRoute,
   messageUpload,
@@ -42,6 +60,26 @@ router.post(
   messageUpload,
   checkGroupMembership,
   sendGroupMessage
+);
+router.post(
+  "/:messageId/poll-vote",
+  protectedRoute,
+  voteOnGroupPoll
+);
+router.post(
+  "/:messageId/poll-close",
+  protectedRoute,
+  closeGroupPoll
+);
+router.post(
+  "/:messageId/appointment-response",
+  protectedRoute,
+  respondToGroupAppointment
+);
+router.delete(
+  "/:messageId/appointment",
+  protectedRoute,
+  deleteGroupAppointment
 );
 
 

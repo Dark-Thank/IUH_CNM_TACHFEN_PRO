@@ -1,5 +1,6 @@
 import ChatCard from "@/components/chat/ChatCard";
 import FriendListModal from "@/components/chat/FriendListModal";
+import GroupFeatureBar from "@/components/chat/GroupFeatureBar";
 import MessageInput from "@/components/chat/MessageInput";
 import MessageItem from "@/components/chat/MessageItem";
 import PinnedSection from "@/components/chat/PinnedSection";
@@ -1348,6 +1349,13 @@ export default function ChatAppScreen() {
               <ChevronDown size={18} color={isDark ? "#f8fafc" : "#0f172a"} />
               <Text style={[styles.scrollToLatestText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tin mới nhất</Text>
             </Pressable>
+          ) : null}
+
+          {selectedConvo.type === "group" ? (
+            <GroupFeatureBar
+              conversationId={selectedConvo._id}
+              disabled={isConversationBlocked}
+            />
           ) : null}
 
           <MessageInput selectedConvo={selectedConvo} disabled={isConversationBlocked} />
