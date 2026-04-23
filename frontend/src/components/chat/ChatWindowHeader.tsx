@@ -11,7 +11,6 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import { SidebarTrigger } from "../ui/sidebar";
 import GroupChatManagementDialog from "./GroupChatManagementDialog";
-import GroupChatAvatar from "./GroupChatAvatar";
 import StatusBadge from "./StatusBadge";
 import UserAvatar from "./UserAvatar";
 import { ShareGroupLinkModal } from "./ShareGroupLinkModal";
@@ -105,7 +104,11 @@ const ChatWindowHeader = ({
                   />
                 </>
               ) : (
-                <GroupChatAvatar participants={chat.participants} type="sidebar" />
+                <UserAvatar
+                  type="sidebar"
+                  name={chat.group?.name || "Nhóm chat"}
+                  avatarUrl={chat.group?.avatar || undefined}
+                />
               )}
             </div>
 
