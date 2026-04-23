@@ -12,11 +12,13 @@ import { X } from "lucide-react-native";
 import { chatService } from "@/services/chatServiec";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Message } from "@/types/chat";
-
+import ConversationSettingsMobile from "@/components/chat/ConversationSettingsMobile";
+import type { Conversation } from "@/types/chat";
 type Props = {
   visible: boolean;
   messages: Message[];
   onClose: () => void;
+  conversation: Conversation;
 };
 
 type FileEntry = {
@@ -62,6 +64,7 @@ const formatFileSize = (size?: number) => {
 export default function ConversationAssetsModal({
   visible,
   messages,
+  conversation,
   onClose,
 }: Props) {
   const { isDark } = useThemeStore();
@@ -160,9 +163,11 @@ export default function ConversationAssetsModal({
             </View>
 
             <ScrollView
+            
               contentContainerStyle={styles.content}
               showsVerticalScrollIndicator={false}
             >
+              <ConversationSettingsMobile conversation={conversation} />
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
                   Hình ảnh gần đây ({images.length})

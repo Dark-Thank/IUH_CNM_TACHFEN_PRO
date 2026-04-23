@@ -26,7 +26,15 @@ export const chatService = {
   async fetchConversations(): Promise<ConversationResponse> {
     const res = await api.get("/conversations");
     return res.data;
+    
   },
+  async renameGroup(conversationId: string, name: string) {
+  const res = await api.patch(`/conversations/${conversationId}/rename`, {
+    name,
+  });
+
+  return res.data;
+},
 
   async fetchMessages(id: string, cursor?: string): Promise<FetchMessageProps> {
     const res = await api.get(
@@ -35,7 +43,22 @@ export const chatService = {
 
     return { messages: res.data.messages, cursor: res.data.nextCursor };
   },
+  async updateGroupAvatar(conversationId: string, file: File) {
+  const formData = new FormData();
+  formData.append("avatar", file);
 
+  const res = await api.put(
+    `/conversations/${conversationId}/avatar`,
+    formData,
+    {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    }
+  );
+
+  return res.data;
+},
   async sendDirectMessage(formData: FormData) {
     try {
       const res = await api.post("/messages/direct", formData);

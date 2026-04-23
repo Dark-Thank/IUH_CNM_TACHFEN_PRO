@@ -5,9 +5,19 @@ import { Ellipsis } from "lucide-react";
 interface GroupChatAvatarProps {
   participants: Participant[];
   type: "chat" | "sidebar";
+   groupAvatar?: string | null;
 }
 
-const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
+const GroupChatAvatar = ({ participants, type, groupAvatar }: GroupChatAvatarProps) => {
+  if (groupAvatar) {
+    return (
+      <img
+        src={groupAvatar + `?t=${Date.now()}`}
+        className="size-10 rounded-full object-cover"
+      />
+    );
+  }
+
   const avatars = [];
   const limit = Math.min(participants.length, 4);
 
@@ -27,7 +37,6 @@ const GroupChatAvatar = ({ participants, type }: GroupChatAvatarProps) => {
     <div className="relative flex -space-x-2 *:data-[slot=avatar]:ring-background *:data-[slot=avatar]:ring-2">
       {avatars}
 
-      {/* nếu nhiều hơn 4 avatar thì render dấu ... */}
       {participants.length > limit && (
         <div className="flex items-center z-10 justify-center size-8 rounded-full bg-muted ring-2 ring-background text-muted-foreground">
           <Ellipsis className="size-4" />

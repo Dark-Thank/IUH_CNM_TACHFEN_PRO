@@ -2,7 +2,7 @@ import { useChatStore } from "@/stores/useChatStore";
 import GroupChatCard from "./GroupChatCard";
 
 const GroupChatList = () => {
-  const { conversations } = useChatStore();
+ const conversations = useChatStore((state) => state.conversations);
 
   if (!conversations) return;
 

@@ -1562,6 +1562,7 @@ export default function ChatAppScreen() {
         <ConversationAssetsModal
           visible={showConversationAssets}
           messages={messageItems}
+          conversation={selectedConvo} 
           onClose={() => setShowConversationAssets(false)}
         />
       </SafeAreaView>

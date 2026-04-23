@@ -71,6 +71,7 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           <GroupChatAvatar
             participants={convo.participants}
             type="chat"
+            groupAvatar={convo.group?.avatar}
           />
           {unreadCount > 0 && (
             <div className="absolute -top-1 -right-1 z-10">

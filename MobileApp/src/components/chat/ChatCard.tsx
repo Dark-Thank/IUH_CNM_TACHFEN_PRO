@@ -81,18 +81,12 @@ export default function ChatCard({
     >
       <View style={styles.leading}>
         {conversation.type === "group" ? (
-          <View
-            style={[
-              styles.groupBadge,
-              { backgroundColor: isDark ? "#312e81" : "#ede9fe" },
-            ]}
-          >
-            <UsersRound
-              size={20}
-              color={isDark ? "#c4b5fd" : "#6d28d9"}
-            />
-          </View>
-        ) : (
+  <UserAvatar
+    name={conversation.group?.name || "Group"}
+    avatarUrl={conversation.group?.avatar} // ✅ avatar group
+    size={46}
+  />
+) : (
           <UserAvatar
             name={otherUser?.displayName || "Tachfen"}
             avatarUrl={otherUser?.avatarUrl}

@@ -172,7 +172,12 @@ const ChatWindowLayout = () => {
           </div>
         </div>
 
-        {showAssetsPanel && <ConversationAssetsPanel messages={messageItems} />}
+        {showAssetsPanel && (
+  <ConversationAssetsPanel
+    messages={messageItems}
+    conversation={selectedConvo}
+  />
+)}
       </div>
     </SidebarInset>
   );
