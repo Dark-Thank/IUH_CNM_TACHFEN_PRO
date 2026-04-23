@@ -1,0 +1,62 @@
+diff --git a/node_modules/react-native-svg/android/build/generated/source/codegen/jni/CMakeLists.txt b/node_modules/react-native-svg/android/build/generated/source/codegen/jni/CMakeLists.txt
+new file mode 100644
+index 0000000..5f91c33
+--- /dev/null
++++ b/node_modules/react-native-svg/android/build/generated/source/codegen/jni/CMakeLists.txt
+@@ -0,0 +1,29 @@
++# Copyright (c) Meta Platforms, Inc. and affiliates.
++#
++# This source code is licensed under the MIT license found in the
++# LICENSE file in the root directory of this source tree.
++
++cmake_minimum_required(VERSION 3.13)
++set(CMAKE_VERBOSE_MAKEFILE on)
++
++file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/rnsvg/*.cpp)
++
++add_library(
++  react_codegen_rnsvg
++  OBJECT
++  ${react_codegen_SRCS}
++)
++
++target_include_directories(react_codegen_rnsvg PUBLIC . react/renderer/components/rnsvg)
++
++target_link_libraries(
++  react_codegen_rnsvg
++  c++_shared
++  fbjni
++  jsi
++  # We need to link different libraries based on whether we are building rncore or not, that's necessary
++  # because we want to break a circular dependency between react_codegen_rncore and reactnative
++  reactnative
++)
++
++target_compile_reactnative_options(react_codegen_rnsvg PRIVATE)
+diff --git a/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt b/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt
+index 6f45884..cd9f786 100644
+--- a/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt
++++ b/node_modules/react-native-svg/android/src/main/jni/CMakeLists.txt
+@@ -31,12 +31,14 @@ find_package(ReactAndroid REQUIRED CONFIG)
+ if(ReactAndroid_VERSION_MINOR GREATER_EQUAL 76)
+   target_link_libraries(
+     react_codegen_rnsvg
++    c++_shared
+     ReactAndroid::reactnative
+     ReactAndroid::jsi
+   )
+ else()
+   target_link_libraries(
+     react_codegen_rnsvg
++    c++_shared
+     folly_runtime
+     glog
+     jsi
+@@ -59,6 +61,7 @@ endif()
+ 
+ target_link_libraries(
+   react_codegen_rnsvg
++  c++_shared
+   fbjni
+ )
+ 

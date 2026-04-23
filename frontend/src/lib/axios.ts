@@ -1,9 +1,11 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios from "axios";
+import { getApiBaseUrl, warnIfLocalOnlyRealtimeConfig } from "./runtimeConfig";
+
+warnIfLocalOnlyRealtimeConfig();
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api",
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
 });
 

@@ -1,13 +1,14 @@
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Label } from "../ui/label";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { z } from "zod";
+import { Label } from "../ui/label";
 
 const signUpSchema = z.object({
   firstname: z.string().min(1, "Tên bắt buộc phải có"),
@@ -30,13 +31,14 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
     resolver: zodResolver(signUpSchema),
   });
 
+  const [showPassword, setShowPassword] = useState(false);
+
   const onSubmit = async (data: SignUpFormValues) => {
     const { firstname, lastname, username, email, password } = data;
 
     // gọi backend để signup
-    await signUp(username, password, email, firstname, lastname);
-
-    navigate("/signin");
+    const ok = await signUp(username, password, email, firstname, lastname);
+    if (ok) navigate("/verify-otp");
   };
 
   return (
@@ -85,7 +87,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                   />
 
                   {errors.lastname && (
-                    <p className="text-destructive text-sm">
+                    <p className="error-message">
                       {errors.lastname.message}
                     </p>
                   )}
@@ -103,7 +105,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                     {...register("firstname")}
                   />
                   {errors.firstname && (
-                    <p className="text-destructive text-sm">
+                    <p className="error-message">
                       {errors.firstname.message}
                     </p>
                   )}
@@ -121,11 +123,11 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 <Input
                   type="text"
                   id="username"
-                  placeholder="moji"
+                  placeholder="tachfen"
                   {...register("username")}
                 />
                 {errors.username && (
-                  <p className="text-destructive text-sm">
+                  <p className="error-message">
                     {errors.username.message}
                   </p>
                 )}
@@ -146,7 +148,7 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                   {...register("email")}
                 />
                 {errors.email && (
-                  <p className="text-destructive text-sm">{errors.email.message}</p>
+                  <p className="error-message">{errors.email.message}</p>
                 )}
               </div>
 
@@ -158,13 +160,27 @@ export function SignupForm({ className, ...props }: React.ComponentProps<"div">)
                 >
                   Mật khẩu
                 </Label>
-                <Input
-                  type="password"
-                  id="password"
-                  {...register("password")}
-                />
+                <div className="relative">
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    id="password"
+                    {...register("password")}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    {showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10 10 0 0 1 12 20c-4.97 0-9.11-3.16-10-8 0 0 3.5-8 10-8 2.3 0 4.4.7 6.06 1.94" /><path d="M1 1l22 22" /></svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                    )}
+                  </button>
+                </div>
                 {errors.password && (
-                  <p className="text-destructive text-sm">
+                  <p className="error-message">
                     {errors.password.message}
                   </p>
                 )}

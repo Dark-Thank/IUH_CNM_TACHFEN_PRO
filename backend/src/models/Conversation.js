@@ -6,18 +6,27 @@ const participantSchema = new mongoose.Schema({
         ref: "User",
         required: true,
     },
+    role: {
+        type: String,
+        enum: ["owner", "deputy", "member"],
+        default: "member",
+    },
     joinedAt: {
         type: Date,
         default: Date.now,
     },
 },
-{ _id: false,}
+    { _id: false, }
 );
 
 const groupSchema = new mongoose.Schema({
     name: {
-        type : String,
+        type: String,
         trim: true,
+    },
+    avatar: {
+        type: String, // URL ảnh
+        default: null,
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -26,7 +35,7 @@ const groupSchema = new mongoose.Schema({
 }, { _id: false, });
 
 const lastMessageSchema = new mongoose.Schema({
-    _id: {type: String},
+    _id: { type: String },
     content: {
         type: String,
         default: null,
@@ -38,8 +47,8 @@ const lastMessageSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: null,
-    }, 
-},{ _id: false, });
+    },
+}, { _id: false, });
 
 
 const ConversationSchema = new mongoose.Schema({
@@ -68,10 +77,19 @@ const ConversationSchema = new mongoose.Schema({
         type: lastMessageSchema,
         default: null,
     },
-    unreadCount: {
+    unreadCounts: {
         type: Map,
         of: Number,
         default: {},
+    },
+    invitationToken: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
+    invitationExpiry: {
+        type: Date,
+        default: null,
     },
 
 }, { timestamps: true });
