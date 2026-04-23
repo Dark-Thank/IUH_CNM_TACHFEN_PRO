@@ -20,6 +20,13 @@ type GroupFeatureBarProps = {
   conversationId: string;
   disabled?: boolean;
   mode?: "default" | "inline";
+  extraMenuActions?: Array<{
+    key: string;
+    title: string;
+    description: string;
+    icon: ReactNode;
+    onPress: () => void;
+  }>;
 };
 
 const defaultPollOptions = ["", ""];
@@ -79,14 +86,88 @@ const ActionModal = ({
   );
 };
 
+const InlineFeatureMenu = ({
+  visible,
+  onClose,
+  onSelectAppointment,
+  extraActions = [],
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelectAppointment: () => void;
+  extraActions?: GroupFeatureBarProps["extraMenuActions"];
+}) => {
+  const { isDark } = useThemeStore();
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={styles.menuRoot}>
+        <Pressable style={styles.modalBackdrop} onPress={onClose} />
+
+        <View
+          style={[
+            styles.menuCard,
+            {
+              backgroundColor: isDark ? "#111827" : "#ffffff",
+              borderColor: isDark ? "#1f2937" : "#e2e8f0",
+            },
+          ]}
+        >
+          <Text style={[styles.menuTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Tính năng nhóm</Text>
+
+          <Pressable
+            onPress={onSelectAppointment}
+            style={[
+              styles.menuAction,
+              { backgroundColor: isDark ? "#0f172a" : "#f8fafc" },
+            ]}
+          >
+            <View style={[styles.menuActionIcon, { backgroundColor: isDark ? "rgba(59, 130, 246, 0.18)" : "#dbeafe" }]}>
+              <CalendarPlus size={18} color={isDark ? "#93c5fd" : "#2563eb"} />
+            </View>
+            <View style={styles.menuActionContent}>
+              <Text style={[styles.menuActionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Đặt lịch hẹn</Text>
+              <Text style={[styles.menuActionDescription, { color: isDark ? "#94a3b8" : "#64748b" }]}>Tạo lịch hẹn và gửi vào cuộc trò chuyện.</Text>
+            </View>
+          </Pressable>
+
+          {extraActions.map((action) => (
+            <Pressable
+              key={action.key}
+              onPress={() => {
+                onClose();
+                action.onPress();
+              }}
+              style={[
+                styles.menuAction,
+                { backgroundColor: isDark ? "#0f172a" : "#f8fafc" },
+              ]}
+            >
+              <View style={[styles.menuActionIcon, { backgroundColor: isDark ? "rgba(148, 163, 184, 0.18)" : "#e2e8f0" }]}>
+                {action.icon}
+              </View>
+              <View style={styles.menuActionContent}>
+                <Text style={[styles.menuActionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>{action.title}</Text>
+                <Text style={[styles.menuActionDescription, { color: isDark ? "#94a3b8" : "#64748b" }]}>{action.description}</Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function GroupFeatureBar({
   conversationId,
   disabled = false,
   mode = "default",
+  extraMenuActions,
 }: GroupFeatureBarProps) {
   const { isDark } = useThemeStore();
   const { createGroupPoll, createGroupAppointment } = useChatStore();
 
+  const [showFeatureMenu, setShowFeatureMenu] = useState(false);
   const [showPollModal, setShowPollModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -99,6 +180,16 @@ export default function GroupFeatureBar({
   const [appointmentDescription, setAppointmentDescription] = useState("");
   const [appointmentLocation, setAppointmentLocation] = useState("");
   const [appointmentScheduledAt, setAppointmentScheduledAt] = useState<string | null>(null);
+
+  const openPollModal = () => {
+    setShowFeatureMenu(false);
+    setShowPollModal(true);
+  };
+
+  const openAppointmentModal = () => {
+    setShowFeatureMenu(false);
+    setShowAppointmentModal(true);
+  };
 
   const resetPollState = () => {
     setPollQuestion("");
@@ -210,24 +301,24 @@ export default function GroupFeatureBar({
       {mode === "inline" ? (
         <>
           <Pressable
-            accessibilityLabel="Tạo vote"
+            accessibilityLabel="Tạo vote nhóm"
             disabled={disabled}
-            onPress={() => setShowPollModal(true)}
+            onPress={openPollModal}
             style={[
               styles.inlineActionButton,
               {
-                backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                backgroundColor: isDark ? "#2e1065" : "#ede9fe",
                 opacity: disabled ? 0.5 : 1,
               },
             ]}
           >
-            <ListChecks size={18} color={isDark ? "#e9d5ff" : "#7c3aed"} />
+            <ListChecks size={18} color={isDark ? "#e9d5ff" : "#6d28d9"} />
           </Pressable>
 
           <Pressable
-            accessibilityLabel="Tạo lịch hẹn"
+            accessibilityLabel="Mở menu tính năng chat nhóm"
             disabled={disabled}
-            onPress={() => setShowAppointmentModal(true)}
+            onPress={() => setShowFeatureMenu(true)}
             style={[
               styles.inlineActionButton,
               {
@@ -236,14 +327,21 @@ export default function GroupFeatureBar({
               },
             ]}
           >
-            <CalendarPlus size={18} color={isDark ? "#bfdbfe" : "#2563eb"} />
+            <Plus size={18} color={isDark ? "#f8fafc" : "#0f172a"} />
           </Pressable>
+
+          <InlineFeatureMenu
+            visible={showFeatureMenu}
+            onClose={() => setShowFeatureMenu(false)}
+            onSelectAppointment={openAppointmentModal}
+            extraActions={extraMenuActions}
+          />
         </>
       ) : (
         <View style={styles.row}>
           <Pressable
             disabled={disabled}
-            onPress={() => setShowPollModal(true)}
+            onPress={openPollModal}
             style={[
               styles.actionButton,
               {
@@ -261,7 +359,7 @@ export default function GroupFeatureBar({
 
           <Pressable
             disabled={disabled}
-            onPress={() => setShowAppointmentModal(true)}
+            onPress={openAppointmentModal}
             style={[
               styles.actionButton,
               {
@@ -450,6 +548,52 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 14,
     paddingTop: 10,
+  },
+  menuRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingHorizontal: 16,
+    paddingBottom: 96,
+  },
+  menuCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    gap: 10,
+  },
+  menuTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    paddingHorizontal: 6,
+  },
+  menuAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  menuActionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  menuActionContent: {
+    flex: 1,
+    gap: 2,
+  },
+  menuActionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  menuActionDescription: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   inlineActionButton: {
     width: 42,

@@ -1,6 +1,5 @@
 import ChatCard from "@/components/chat/ChatCard";
 import FriendListModal from "@/components/chat/FriendListModal";
-import GroupFeatureBar from "@/components/chat/GroupFeatureBar";
 import MessageInput from "@/components/chat/MessageInput";
 import MessageItem from "@/components/chat/MessageItem";
 import PinnedSection from "@/components/chat/PinnedSection";
@@ -1398,23 +1397,36 @@ export default function ChatAppScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       title: selectedConvo ? getConversationTitle(selectedConvo, user?._id) : "Đoạn chat",
+      headerTitleAlign: "left",
+      headerTitleContainerStyle: {
+        left: 56,
+        right: selectedConvo?.type === "direct" ? 134 : 96,
+      },
+      headerLeftContainerStyle: {
+        paddingLeft: 12,
+      },
+      headerRightContainerStyle: {
+        paddingRight: 12,
+      },
       headerTitle: selectedConvo
         ? () =>
           selectedConversationFriend ? (
             <Pressable
               onPress={handleOpenConversationProfile}
               style={({ pressed }) => [
-                styles.headerProfileButton,
+                styles.headerConversationButton,
                 { opacity: pressed ? 0.9 : 1 },
               ]}
             >
-              <UserAvatar
-                name={selectedConversationFriend.displayName}
-                avatarUrl={selectedConversationFriend.avatarUrl}
-                size={40}
-                isOnline={isSelectedConversationFriendOnline}
-                showPresence
-              />
+              <View style={[styles.headerAvatarWrap, { borderColor: isDark ? "rgba(148, 163, 184, 0.22)" : "#dbe4f3" }]}>
+                <UserAvatar
+                  name={selectedConversationFriend.displayName}
+                  avatarUrl={selectedConversationFriend.avatarUrl}
+                  size={40}
+                  isOnline={isSelectedConversationFriendOnline}
+                  showPresence
+                />
+              </View>
 
               <View style={styles.headerProfileTextWrap}>
                 <Text
@@ -1437,24 +1449,26 @@ export default function ChatAppScreen() {
             <Pressable
               onPress={handleOpenGroupManagement}
               style={({ pressed }) => [
-                styles.headerTitleWrap,
+                styles.headerConversationButton,
                 { opacity: pressed ? 0.9 : 1 },
               ]}
             >
-              <Text
-                numberOfLines={1}
-                style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
-              >
-                {getConversationTitle(selectedConvo, user?._id)}
-              </Text>
-              {!!selectedConversationStatus && (
+              <View style={[styles.headerAvatarWrap, { borderColor: isDark ? "rgba(148, 163, 184, 0.22)" : "#dbe4f3" }]}>
+                <UserAvatar
+                  name={selectedConvo.group?.name || "Nhóm chat"}
+                  avatarUrl={selectedConvo.group?.avatar}
+                  size={40}
+                />
+              </View>
+
+              <View style={styles.headerProfileTextWrap}>
                 <Text
                   numberOfLines={1}
-                  style={[styles.headerSubtitle, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                  style={[styles.headerTitleText, { color: isDark ? "#f8fafc" : "#0f172a" }]}
                 >
-                  {selectedConversationStatus}
+                  {getConversationTitle(selectedConvo, user?._id)}
                 </Text>
-              )}
+              </View>
             </Pressable>
           ) : (
             <View style={styles.headerTitleWrap}>
@@ -1699,13 +1713,6 @@ export default function ChatAppScreen() {
           <MessageInput
             selectedConvo={selectedConvo}
             disabled={isConversationBlocked}
-            extraActions={selectedConvo.type === "group" ? (
-              <GroupFeatureBar
-                conversationId={selectedConvo._id}
-                disabled={isConversationBlocked}
-                mode="inline"
-              />
-            ) : null}
           />
         </KeyboardAvoidingView>
 
@@ -2636,29 +2643,45 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   keyboardAvoiding: { flex: 1 },
   headerTitleWrap: {
-    alignItems: "center",
+    flex: 1,
+    alignItems: "flex-start",
     justifyContent: "center",
-    maxWidth: 220,
   },
-  headerProfileButton: {
+  headerConversationButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    maxWidth: 240,
+    gap: 12,
+    flex: 1,
+    width: "100%",
+    minHeight: 52,
+    borderRadius: 20,
+    paddingLeft: 4,
+    paddingRight: 10,
+    paddingVertical: 4,
+  },
+  headerAvatarWrap: {
+    flexShrink: 0,
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: 2,
   },
   headerProfileTextWrap: {
+    flex: 1,
+    minWidth: 0,
     flexShrink: 1,
     justifyContent: "center",
     alignItems: "flex-start",
+    gap: 2,
   },
   headerTitleText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
+    lineHeight: 18,
   },
   headerSubtitle: {
     fontSize: 11,
+    lineHeight: 14,
     fontWeight: "600",
-    marginTop: 2,
   },
   headerBackButton: {
     width: 36,
@@ -2669,12 +2692,11 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
   headerIconButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
   },
   headerBadge: {
     position: "absolute",
@@ -2692,7 +2714,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginRight: 12,
   },
   pinnedContainer: {
     position: "absolute",

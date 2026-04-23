@@ -18,6 +18,7 @@ import {
 } from "react-native";
 
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
+import GroupFeatureBar from "./GroupFeatureBar";
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -94,6 +95,8 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
   const placeholderColor = isDark
     ? "#94a3b8"
     : "#64748b";
+  const isGroupConversation = selectedConvo.type === "group";
+  const hasComposerContent = value.trim().length > 0 || files.length > 0 || !!voiceDraft;
 
   useEffect(() => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -651,114 +654,130 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
         />
       </View>
 
-      {/* FILE BUTTON */}
-      <Pressable
-        onPress={pickFile}
-        disabled={disabled || isRecording || !!voiceDraft}
-        style={[
-          styles.iconButton,
-          {
-            backgroundColor: isDark
-              ? "#1f2937"
-              : "#f1f5f9",
-            opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
-          },
-        ]}
-      >
-        <Paperclip
-          size={18}
-          color={
-            isDark
-              ? "#cbd5e1"
-              : "#475569"
-          }
+      {isGroupConversation ? (
+        <GroupFeatureBar
+          conversationId={selectedConvo._id}
+          disabled={disabled}
+          mode="inline"
+          extraMenuActions={[
+            {
+              key: "file",
+              title: "Gửi tệp",
+              description: "Chọn tài liệu hoặc tệp để gửi vào nhóm.",
+              icon: <Paperclip size={18} color={isDark ? "#cbd5e1" : "#475569"} />,
+              onPress: () => {
+                void pickFile();
+              },
+            },
+            {
+              key: isRecording ? "stop-recording" : "record-voice",
+              title: isRecording ? "Dừng ghi âm" : "Ghi âm",
+              description: isRecording ? "Kết thúc bản ghi âm hiện tại." : "Tạo tin nhắn thoại cho nhóm.",
+              icon: isRecording
+                ? <Square size={18} color="#ffffff" fill="#ffffff" />
+                : <Mic size={18} color={isDark ? "#cbd5e1" : "#475569"} />,
+              onPress: () => {
+                if (isRecording) {
+                  void stopRecording();
+                  return;
+                }
+
+                void startRecording();
+              },
+            },
+          ]}
         />
-      </Pressable>
+      ) : (
+        <>
+          <Pressable
+            onPress={pickFile}
+            disabled={disabled || isRecording || !!voiceDraft}
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: isDark
+                  ? "#1f2937"
+                  : "#f1f5f9",
+                opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
+              },
+            ]}
+          >
+            <Paperclip
+              size={18}
+              color={
+                isDark
+                  ? "#cbd5e1"
+                  : "#475569"
+              }
+            />
+          </Pressable>
 
-      <Pressable
-        onPress={isRecording ? () => void stopRecording() : () => void startRecording()}
-        disabled={disabled || !!voiceDraft}
-        style={[
-          styles.iconButton,
-          {
-            backgroundColor: isRecording
-              ? "#ef4444"
-              : isDark
-                ? "#1f2937"
-                : "#f1f5f9",
-            opacity: disabled || !!voiceDraft ? 0.5 : 1,
-          },
-        ]}
-      >
-        {isRecording ? (
-          <Square size={18} color="#ffffff" fill="#ffffff" />
-        ) : (
-          <Mic
-            size={18}
-            color={
-              isDark
-                ? "#cbd5e1"
-                : "#475569"
-            }
-          />
-        )}
-      </Pressable>
+          <Pressable
+            onPress={isRecording ? () => void stopRecording() : () => void startRecording()}
+            disabled={disabled || !!voiceDraft}
+            style={[
+              styles.iconButton,
+              {
+                backgroundColor: isRecording
+                  ? "#ef4444"
+                  : isDark
+                    ? "#1f2937"
+                    : "#f1f5f9",
+                opacity: disabled || !!voiceDraft ? 0.5 : 1,
+              },
+            ]}
+          >
+            {isRecording ? (
+              <Square size={18} color="#ffffff" fill="#ffffff" />
+            ) : (
+              <Mic
+                size={18}
+                color={
+                  isDark
+                    ? "#cbd5e1"
+                    : "#475569"
+                }
+              />
+            )}
+          </Pressable>
 
-      {extraActions}
+          {extraActions}
+        </>
+      )}
 
       {/* SEND BUTTON */}
-      <Pressable
-        onPress={handleSend}
-        disabled={
-          disabled ||
-          sending ||
-          isRecording ||
-          (value.trim().length === 0 && files.length === 0 && !voiceDraft)
-        }
-        style={[
-          styles.sendButton,
-          {
-            backgroundColor:
-              !disabled &&
-                !sending &&
-                !isRecording &&
-                (value.trim().length > 0 || files.length > 0 || !!voiceDraft)
-                ? isDark
-                  ? "#a855f7"
-                  : "#8b5cf6"
-                : isDark
-                  ? "#374151"
-                  : "#cbd5e1",
-          },
-        ]}
-      >
-        {/* <TextInput
-  value={value}
-  onChangeText={setValue}
-  placeholder={
-    disabled
-      ? "Bạn không thể trả lời cuộc trò chuyện này"
-      : "Soạn tin nhắn..."
-  }
-  editable={!disabled}
-  placeholderTextColor={placeholderColor}
-  multiline
-  style={[
-    styles.input,
-    {
-      color: disabled
-        ? "#9ca3af"
-        : isDark
-        ? "#f8fafc"
-        : "#0f172a",
-    },
-  ]}
-/> */}
-        <Send
-          size={18}
-          color="#ffffff"
-        />
-      </Pressable>
+      {hasComposerContent ? (
+        <Pressable
+          onPress={handleSend}
+          disabled={
+            disabled ||
+            sending ||
+            isRecording ||
+            !hasComposerContent
+          }
+          style={[
+            styles.sendButton,
+            {
+              backgroundColor:
+                !disabled &&
+                  !sending &&
+                  !isRecording &&
+                  hasComposerContent
+                  ? isDark
+                    ? "#a855f7"
+                    : "#8b5cf6"
+                  : isDark
+                    ? "#374151"
+                    : "#cbd5e1",
+            },
+          ]}
+        >
+          <Send
+            size={18}
+            color="#ffffff"
+          />
+        </Pressable>
+      ) : null}
 
     </View>
   );
