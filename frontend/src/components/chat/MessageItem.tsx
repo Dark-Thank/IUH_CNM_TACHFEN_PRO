@@ -450,11 +450,11 @@ const MessageItem = ({
                   ? "w-[min(22rem,70vw)] border bg-card text-card-foreground shadow-sm"
                   : isPollMessage || isAppointmentMessage
                     ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
-                  : isVoice
-                    ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
-                    : isOwn
-                      ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
-                      : "chat-bubble-received"
+                    : isVoice
+                      ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
+                      : isOwn
+                        ? "chat-bubble-sent border-0 bg-primary text-primary-foreground"
+                        : "chat-bubble-received"
             )}
           >
             {reactionEntries.length > 0 && (
