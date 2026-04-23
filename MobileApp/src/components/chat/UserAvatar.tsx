@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import { useThemeStore } from "@/stores/useThemeStore";
 
 interface UserAvatarProps {
@@ -25,6 +27,23 @@ const getInitials = (name: string) => {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 };
 
+const resolveAvatarUri = (avatarUrl?: string | null) => {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  if (
+    avatarUrl.startsWith("http://") ||
+    avatarUrl.startsWith("https://") ||
+    avatarUrl.startsWith("file://") ||
+    avatarUrl.startsWith("data:")
+  ) {
+    return avatarUrl;
+  }
+
+  return `${getApiBaseUrl()}${avatarUrl.startsWith("/") ? "" : "/"}${avatarUrl}`;
+};
+
 export default function UserAvatar({
   name,
   avatarUrl,
@@ -33,6 +52,8 @@ export default function UserAvatar({
   showPresence = false,
 }: UserAvatarProps) {
   const { isDark } = useThemeStore();
+  const [imageFailed, setImageFailed] = useState(false);
+  const resolvedAvatarUrl = resolveAvatarUri(avatarUrl);
 
   const avatarStyle = {
     width: size,
@@ -42,10 +63,18 @@ export default function UserAvatar({
 
   const presenceSize = Math.max(10, Math.round(size * 0.28));
 
+  useEffect(() => {
+    setImageFailed(false);
+  }, [resolvedAvatarUrl]);
+
   return (
     <View style={[styles.container, avatarStyle]}>
-      {avatarUrl ? (
-        <Image source={{ uri: avatarUrl }} style={avatarStyle} />
+      {resolvedAvatarUrl && !imageFailed ? (
+        <Image
+          source={{ uri: resolvedAvatarUrl }}
+          style={avatarStyle}
+          onError={() => setImageFailed(true)}
+        />
       ) : (
         <View
           style={[

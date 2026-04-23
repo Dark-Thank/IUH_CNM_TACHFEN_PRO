@@ -2,6 +2,8 @@ import { useRef, useState } from "react";
 import type { Conversation } from "@/types/chat";
 import { chatService } from "@/services/chatServiec";
 import { useChatStore } from "@/stores/useChatStore";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 type Props = {
   conversation: Conversation;
 };
@@ -111,14 +113,14 @@ const ConversationSettings = ({ conversation }: Props) => {
 
           <button
             onClick={() => setOpenMembers(true)}
-            className="text-xs text-blue-500 hover:underline"
+            className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
           >
             Xem thành viên
           </button>
 
           <button
             onClick={() => setOpenRename(true)}
-            className="text-xs text-blue-500 hover:underline"
+            className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
           >
             Đổi tên nhóm
           </button>
@@ -143,29 +145,34 @@ const ConversationSettings = ({ conversation }: Props) => {
 
       {/* ✅ MODAL ĐỔI TÊN ĐẶT ĐÚNG CHỖ */}
       {openRename && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white p-4 rounded-md w-[300px] space-y-3">
-            <h3 className="font-semibold">Đổi tên nhóm</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+          <div className="w-full max-w-sm space-y-4 rounded-3xl border border-border/70 bg-background/95 p-5 shadow-[var(--shadow-soft)] backdrop-blur-sm">
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold text-foreground">Đổi tên nhóm</h3>
+              <p className="text-sm text-muted-foreground">
+                Cập nhật tên hiển thị để các thành viên dễ nhận biết cuộc trò chuyện hơn.
+              </p>
+            </div>
 
-            <input
+            <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="w-full border px-2 py-1 rounded"
+              className="h-10 rounded-2xl border-border/70 bg-muted/30 px-3"
               placeholder="Tên nhóm mới"
             />
 
             <div className="flex justify-end gap-2">
-              <button onClick={() => setOpenRename(false)}>
+              <Button variant="secondary" onClick={() => setOpenRename(false)}>
                 Huỷ
-              </button>
+              </Button>
 
-              <button
+              <Button
                 onClick={handleRenameGroup}
                 disabled={loadingRename}
-                className="text-blue-500"
+                className="min-w-24 rounded-2xl"
               >
                 {loadingRename ? "Đang lưu..." : "Lưu"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

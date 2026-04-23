@@ -12,8 +12,10 @@ import * as ImagePicker from "expo-image-picker";
 
 import { chatService } from "@/services/chatServiec";
 import { useChatStore } from "@/stores/useChatStore";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { getApiBaseUrl } from "@/lib/backendUrl";
 import type { Conversation } from "@/types/chat";
+import UserAvatar from "./UserAvatar";
 
 type Props = {
     conversation: Conversation;
@@ -25,12 +27,23 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     const [newName, setNewName] = useState(conversation.group?.name || "");
     const [loadingRename, setLoadingRename] = useState(false);
     const [openMembers, setOpenMembers] = useState(false);
+    const { isDark } = useThemeStore();
 
     if (!conversation) return null;
 
     // =====================
     // 🎯 ĐỔI AVATAR
     // =====================
+
+    const cardBackground = isDark ? "#111827" : "#ffffff";
+    const cardBorder = isDark ? "#312e81" : "#ddd6fe";
+    const inputBackground = isDark ? "#1f2937" : "#f8fafc";
+    const inputBorder = isDark ? "#4338ca" : "#c4b5fd";
+    const primaryText = isDark ? "#f8fafc" : "#0f172a";
+    const secondaryText = isDark ? "#cbd5e1" : "#64748b";
+    const accentColor = isDark ? "#c4b5fd" : "#7c3aed";
+    const accentSurface = isDark ? "#312e81" : "#ede9fe";
+
     const handleChangeAvatar = async () => {
         try {
             const res = await ImagePicker.launchImageLibraryAsync({
@@ -111,7 +124,7 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     console.log("PARTICIPANTS:", conversation.participants);
     return (
         <View style={{ gap: 12 }}>
-            <Text style={{ fontWeight: "700", fontSize: 15 }}>
+            <Text style={{ fontWeight: "700", fontSize: 15, color: primaryText }}>
                 Cài đặt nhóm
             </Text>
 
@@ -152,23 +165,23 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
 
                 {/* ================= INFO ================= */}
                 <View style={{ flex: 1 }}>
-                    <Text style={{ fontWeight: "600" }}>
+                    <Text style={{ fontWeight: "600", color: primaryText }}>
                         {conversation.group?.name || "Nhóm"}
                     </Text>
 
-                    <Text style={{ fontSize: 12, color: "#94a3b8" }}>
+                    <Text style={{ fontSize: 12, color: secondaryText }}>
                         {conversation.participants.length} thành viên
                     </Text>
 
                     <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
                         <Pressable onPress={() => setOpenMembers(true)}>
-                            <Text style={{ color: "#3b82f6", fontSize: 12 }}>
+                            <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
                                 Thành viên
                             </Text>
                         </Pressable>
 
                         <Pressable onPress={() => setOpenRename(true)}>
-                            <Text style={{ color: "#3b82f6", fontSize: 12 }}>
+                            <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
                                 Đổi tên
                             </Text>
                         </Pressable>
@@ -177,7 +190,7 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
             </View>
 
             {/* ================= MODAL ĐỔI TÊN ================= */}
-            <Modal visible={openRename} transparent animationType="fade">
+            <Modal visible={openRename} transparent animationType="fade" onRequestClose={() => setOpenRename(false)}>
                 <View
                     style={{
                         flex: 1,
@@ -188,26 +201,38 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
                 >
                     <View
                         style={{
-                            backgroundColor: "#fff",
-                            padding: 16,
-                            borderRadius: 12,
+                            backgroundColor: cardBackground,
+                            borderColor: cardBorder,
+                            borderWidth: 1,
+                            padding: 18,
+                            borderRadius: 20,
                             width: "80%",
+                            gap: 14,
                         }}
                     >
-                        <Text style={{ fontWeight: "700", marginBottom: 10 }}>
-                            Đổi tên nhóm
-                        </Text>
+                        <View style={{ gap: 4 }}>
+                            <Text style={{ fontWeight: "700", fontSize: 17, color: primaryText }}>
+                                Đổi tên nhóm
+                            </Text>
+                            <Text style={{ color: secondaryText, fontSize: 13, lineHeight: 18 }}>
+                                Tên mới sẽ hiển thị cho toàn bộ thành viên trong nhóm.
+                            </Text>
+                        </View>
 
                         <TextInput
                             value={newName}
                             onChangeText={setNewName}
                             placeholder="Tên nhóm mới"
+                            placeholderTextColor={secondaryText}
                             style={{
                                 borderWidth: 1,
-                                borderColor: "#ccc",
-                                borderRadius: 8,
-                                padding: 8,
-                                marginBottom: 12,
+                                borderColor: inputBorder,
+                                backgroundColor: inputBackground,
+                                color: primaryText,
+                                borderRadius: 14,
+                                paddingHorizontal: 14,
+                                paddingVertical: 12,
+                                fontSize: 15,
                             }}
                         />
 
@@ -218,12 +243,32 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
                                 gap: 10,
                             }}
                         >
-                            <Pressable onPress={() => setOpenRename(false)}>
-                                <Text>Huỷ</Text>
+                            <Pressable
+                                onPress={() => setOpenRename(false)}
+                                style={{
+                                    paddingHorizontal: 16,
+                                    paddingVertical: 10,
+                                    borderRadius: 999,
+                                    backgroundColor: inputBackground,
+                                    borderWidth: 1,
+                                    borderColor: inputBorder,
+                                }}
+                            >
+                                <Text style={{ color: primaryText, fontWeight: "600" }}>Huỷ</Text>
                             </Pressable>
 
-                            <Pressable onPress={handleRenameGroup}>
-                                <Text style={{ color: "#3b82f6" }}>
+                            <Pressable
+                                onPress={handleRenameGroup}
+                                style={{
+                                    minWidth: 90,
+                                    alignItems: "center",
+                                    paddingHorizontal: 18,
+                                    paddingVertical: 10,
+                                    borderRadius: 999,
+                                    backgroundColor: accentColor,
+                                }}
+                            >
+                                <Text style={{ color: "#ffffff", fontWeight: "700" }}>
                                     {loadingRename ? "Đang lưu..." : "Lưu"}
                                 </Text>
                             </Pressable>
@@ -233,7 +278,7 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
             </Modal>
 
             {/* ================= MEMBERS ================= */}
-            <Modal visible={openMembers} transparent>
+            <Modal visible={openMembers} transparent onRequestClose={() => setOpenMembers(false)}>
                 <View
                     style={{
                         flex: 1,
@@ -244,33 +289,57 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
                 >
                     <ScrollView
                         style={{
-                            backgroundColor: "#fff",
-                            borderRadius: 12,
+                            backgroundColor: cardBackground,
+                            borderColor: cardBorder,
+                            borderWidth: 1,
+                            borderRadius: 18,
                             padding: 16,
                             width: "80%",
                             maxHeight: "70%",
                         }}
                     >
-                        <Text style={{ fontWeight: "700", marginBottom: 10 }}>
+                        <Text style={{ fontWeight: "700", marginBottom: 12, color: primaryText }}>
                             Thành viên
                         </Text>
 
                         {conversation.participants.map((m: any) => (
-                            <View key={m._id} style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                                <Image
-                                    source={{
-                                        uri:
-                                            m.avatarUrl ||
-                                            "https://cdn-icons-png.flaticon.com/512/847/847969.png",
-                                    }}
-                                    style={{ width: 30, height: 30, borderRadius: 15, marginRight: 8 }}
+                            <View
+                                key={m._id}
+                                style={{
+                                    flexDirection: "row",
+                                    alignItems: "center",
+                                    marginBottom: 10,
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 10,
+                                    borderRadius: 16,
+                                    backgroundColor: accentSurface,
+                                }}
+                            >
+                                <UserAvatar
+                                    name={m.displayName || "TACHFEN"}
+                                    avatarUrl={m.avatarUrl}
+                                    size={34}
                                 />
-                                <Text>{m.displayName}</Text>
+                                <Text style={{ color: primaryText, marginLeft: 10, fontWeight: "500" }}>
+                                    {m.displayName}
+                                </Text>
                             </View>
                         ))}
 
-                        <Pressable onPress={() => setOpenMembers(false)}>
-                            <Text style={{ color: "#3b82f6", marginTop: 10 }}>
+                        <Pressable
+                            onPress={() => setOpenMembers(false)}
+                            style={{
+                                marginTop: 10,
+                                alignSelf: "flex-end",
+                                paddingHorizontal: 16,
+                                paddingVertical: 10,
+                                borderRadius: 999,
+                                backgroundColor: inputBackground,
+                                borderWidth: 1,
+                                borderColor: inputBorder,
+                            }}
+                        >
+                            <Text style={{ color: accentColor, fontWeight: "700" }}>
                                 Đóng
                             </Text>
                         </Pressable>
