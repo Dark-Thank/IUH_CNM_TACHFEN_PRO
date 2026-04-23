@@ -1,0 +1,47 @@
+diff --git a/node_modules/react-native-gesture-handler/android/build/generated/source/codegen/jni/CMakeLists.txt b/node_modules/react-native-gesture-handler/android/build/generated/source/codegen/jni/CMakeLists.txt
+new file mode 100644
+index 0000000..11715d0
+--- /dev/null
++++ b/node_modules/react-native-gesture-handler/android/build/generated/source/codegen/jni/CMakeLists.txt
+@@ -0,0 +1,29 @@
++# Copyright (c) Meta Platforms, Inc. and affiliates.
++#
++# This source code is licensed under the MIT license found in the
++# LICENSE file in the root directory of this source tree.
++
++cmake_minimum_required(VERSION 3.13)
++set(CMAKE_VERBOSE_MAKEFILE on)
++
++file(GLOB react_codegen_SRCS CONFIGURE_DEPENDS *.cpp react/renderer/components/rngesturehandler_codegen/*.cpp)
++
++add_library(
++  react_codegen_rngesturehandler_codegen
++  OBJECT
++  ${react_codegen_SRCS}
++)
++
++target_include_directories(react_codegen_rngesturehandler_codegen PUBLIC . react/renderer/components/rngesturehandler_codegen)
++
++target_link_libraries(
++  react_codegen_rngesturehandler_codegen
++  c++_shared
++  fbjni
++  jsi
++  # We need to link different libraries based on whether we are building rncore or not, that's necessary
++  # because we want to break a circular dependency between react_codegen_rncore and reactnative
++  reactnative
++)
++
++target_compile_reactnative_options(react_codegen_rngesturehandler_codegen PRIVATE)
+diff --git a/node_modules/react-native-gesture-handler/android/src/main/jni/CMakeLists.txt b/node_modules/react-native-gesture-handler/android/src/main/jni/CMakeLists.txt
+index 026e7ca..651cc50 100644
+--- a/node_modules/react-native-gesture-handler/android/src/main/jni/CMakeLists.txt
++++ b/node_modules/react-native-gesture-handler/android/src/main/jni/CMakeLists.txt
+@@ -35,6 +35,7 @@ find_package(fbjni REQUIRED CONFIG)
+ 
+ target_link_libraries(
+   ${PACKAGE_NAME}
++  c++_shared
+   ReactAndroid::reactnative
+   ReactAndroid::jsi
+   fbjni::fbjni

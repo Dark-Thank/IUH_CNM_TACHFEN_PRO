@@ -1,24 +1,24 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import {
-  AtSign,
-  Eye,
-  EyeOff,
-  LockKeyhole,
-  Mail,
-  UserRound,
+    AtSign,
+    Eye,
+    EyeOff,
+    LockKeyhole,
+    Mail,
+    UserRound,
 } from "lucide-react-native";
 import { useState } from "react";
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -89,13 +89,13 @@ export default function SignupForm({ onSignInPress }: SignupFormProps) {
     );
 
     // signUp now returns { ok: boolean, message?: string }
-    if (res && (res as any).ok) {
+    if (res.ok) {
       onSignInPress?.();
       return;
     }
 
     // show field-specific errors if backend indicates existing username/email
-    const message = (res as any)?.message;
+    const message = res.message;
     if (typeof message === "string") {
       const lower = message.toLowerCase();
       if (lower.includes("username") || lower.includes("username đã tồn tại") || lower.includes("username đã")) {

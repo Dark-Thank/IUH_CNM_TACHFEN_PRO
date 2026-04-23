@@ -4,6 +4,7 @@ import type {
     CallDeclinePayload,
     CallEndPayload,
     CallInvitePayload,
+    CallParticipantPayload,
     CallSession,
     CallSignalCandidatePayload,
     CallSignalDescriptionPayload,
@@ -22,6 +23,7 @@ type CallStore = {
   currentCall: CallSession | null;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  remoteStreams: Record<string, MediaStream>;
   isMicrophoneEnabled: boolean;
   isCameraEnabled: boolean;
   startOutgoingCall: (conversation: Conversation, callType: CallType) => Promise<void>;
@@ -35,26 +37,51 @@ type CallStore = {
   handleCallDeclined: (payload: CallDeclinePayload) => void;
   handleCallEnded: (payload: CallEndPayload) => void;
   handleCallState: (payload: CallStatePayload) => void;
+  handleParticipantJoined: (payload: CallParticipantPayload) => Promise<void>;
+  handleParticipantLeft: (payload: CallParticipantPayload) => void;
   handleRemoteOffer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteAnswer: (payload: CallSignalDescriptionPayload) => Promise<void>;
   handleRemoteIceCandidate: (payload: CallSignalCandidatePayload) => Promise<void>;
   resetCall: () => void;
 };
 
-let peerConnection: RTCPeerConnection | null = null;
+const peerConnections = new Map<string, RTCPeerConnection>();
 
 const stopStream = (stream: MediaStream | null) => {
   stream?.getTracks().forEach((track) => track.stop());
 };
 
+const pickPrimaryRemoteStream = (remoteStreams: Record<string, MediaStream>) =>
+  Object.values(remoteStreams)[0] ?? null;
+
 const resolvePeerFromConversation = (conversation: Conversation, currentUserId?: string | null) =>
   conversation.participants.find((participant) => participant._id !== currentUserId) ?? null;
 
-const resolvePeerForIncomingCall = (conversationId: string, callerId: string): Participant => {
+const resolveCallLabelPeer = (conversation: Conversation) => ({
+  _id: conversation._id,
+  displayName: conversation.group?.name || "Nhom chat",
+  avatarUrl: null,
+});
+
+const resolvePeerForIncomingCall = (
+  conversationId: string,
+  callerId: string,
+  isGroup: boolean,
+  conversationName?: string | null
+): Participant => {
   const conversation = useChatStore
     .getState()
     .conversations
     .find((item) => item._id === conversationId);
+
+  if (isGroup) {
+    return {
+      _id: callerId,
+      displayName: conversation?.group?.name || conversationName || "Nhom chat",
+      avatarUrl: null,
+      joinedAt: new Date().toISOString(),
+    };
+  }
 
   const peer = conversation?.participants.find((participant) => participant._id === callerId);
 
@@ -83,6 +110,29 @@ const getCallEndMessage = (reason?: string) => {
     default:
       return "Cuoc goi da ket thuc.";
   }
+};
+
+const getConversationParticipant = (conversationId: string, participantId: string) => {
+  const conversation = useChatStore
+    .getState()
+    .conversations
+    .find((item) => item._id === conversationId);
+
+  return conversation?.participants.find((participant) => participant._id === participantId) ?? null;
+};
+
+const closePeerConnection = (remoteUserId: string) => {
+  const peerConnection = peerConnections.get(remoteUserId);
+
+  if (!peerConnection) {
+    return;
+  }
+
+  peerConnection.onicecandidate = null;
+  peerConnection.ontrack = null;
+  peerConnection.onconnectionstatechange = null;
+  peerConnection.close();
+  peerConnections.delete(remoteUserId);
 };
 
 const setCurrentCallStatus = (
@@ -114,22 +164,39 @@ const getHangupReason = (call: CallSession) => {
   return "ended";
 };
 
-const buildPeerConnection = (callId: string, conversationId: string, targetId: string, set: any) => {
-  if (peerConnection) {
-    return peerConnection;
+const buildPeerConnection = (
+  callId: string,
+  conversationId: string,
+  remoteUserId: string,
+  set: (partial: Partial<CallStore> | ((state: CallStore) => Partial<CallStore>)) => void
+) => {
+  const existingConnection = peerConnections.get(remoteUserId);
+
+  if (existingConnection) {
+    return existingConnection;
   }
 
-  peerConnection = createBrowserPeerConnection({
+  const peerConnection = createBrowserPeerConnection({
     onIceCandidate: (candidate) => {
       useSocketStore.getState().socket?.emit("call:ice-candidate", {
         callId,
         conversationId,
-        targetId,
+        targetId: remoteUserId,
         candidate: candidate.toJSON(),
       });
     },
     onRemoteStream: (stream) => {
-      set({ remoteStream: stream });
+      set((state) => {
+        const remoteStreams = {
+          ...state.remoteStreams,
+          [remoteUserId]: stream,
+        };
+
+        return {
+          remoteStreams,
+          remoteStream: pickPrimaryRemoteStream(remoteStreams),
+        };
+      });
     },
     onConnectionStateChange: (connectionState) => {
       if (connectionState === "connected") {
@@ -148,13 +215,57 @@ const buildPeerConnection = (callId: string, conversationId: string, targetId: s
     },
   });
 
+  peerConnections.set(remoteUserId, peerConnection);
+
   return peerConnection;
+};
+
+const ensureLocalTracks = (connection: RTCPeerConnection, localStream: MediaStream) => {
+  if (connection.getSenders().length > 0) {
+    return;
+  }
+
+  localStream.getTracks().forEach((track) => {
+    connection.addTrack(track, localStream);
+  });
+};
+
+const createOfferForParticipant = async (
+  currentCall: CallSession,
+  localStream: MediaStream,
+  remoteUserId: string,
+  set: (partial: Partial<CallStore> | ((state: CallStore) => Partial<CallStore>)) => void
+) => {
+  const connection = buildPeerConnection(
+    currentCall.callId,
+    currentCall.conversationId,
+    remoteUserId,
+    set
+  );
+
+  ensureLocalTracks(connection, localStream);
+  setCurrentCallStatus(set, "negotiating");
+
+  const offer = await connection.createOffer({
+    offerToReceiveAudio: true,
+    offerToReceiveVideo: currentCall.callType === "video",
+  });
+
+  await connection.setLocalDescription(offer);
+
+  useSocketStore.getState().socket?.emit("call:offer", {
+    callId: currentCall.callId,
+    conversationId: currentCall.conversationId,
+    targetId: remoteUserId,
+    description: offer,
+  });
 };
 
 export const useCallStore = create<CallStore>((set, get) => ({
   currentCall: null,
   localStream: null,
   remoteStream: null,
+  remoteStreams: {},
   isMicrophoneEnabled: true,
   isCameraEnabled: true,
 
@@ -166,15 +277,17 @@ export const useCallStore = create<CallStore>((set, get) => ({
       return;
     }
 
-    if (conversation.type !== "direct") {
-      toast.info("Hien tai chi ho tro goi 1-1.");
+    if (conversation.type === "group" && callType !== "video") {
+      toast.info("Group chat hien chi ho tro goi video.");
       return;
     }
 
     const authUserId = useAuthStore.getState().user?._id;
     const peer = resolvePeerFromConversation(conversation, authUserId);
+    const isGroup = conversation.type === "group";
+    const callPeer = isGroup ? resolveCallLabelPeer(conversation) : peer;
 
-    if (!peer) {
+    if (!callPeer || (!isGroup && !peer)) {
       toast.error("Khong tim thay nguoi nhan cuoc goi.");
       return;
     }
@@ -193,6 +306,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       set({
         localStream: null,
         remoteStream: null,
+        remoteStreams: {},
         isMicrophoneEnabled: true,
         isCameraEnabled: callType === "video",
         currentCall: {
@@ -201,9 +315,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
           callType,
           direction: "outgoing",
           status: "acquiring-media",
-          peer,
+          peer: callPeer,
           callerId,
-          recipientId: peer._id,
+          recipientId: peer?._id ?? "",
+          isGroup,
+          participantIds: conversation.participants.map((participant) => participant._id),
+          conversationName: conversation.group?.name ?? null,
           createdAt: new Date().toISOString(),
         },
       });
@@ -213,6 +330,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       set({
         localStream,
         remoteStream: null,
+        remoteStreams: {},
         isMicrophoneEnabled: true,
         isCameraEnabled: callType === "video",
       });
@@ -222,7 +340,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       socket.emit("call:invite", {
         callId,
         conversationId: conversation._id,
-        recipientId: peer._id,
+        recipientId: peer?._id,
         callType,
       });
     } catch (error) {
@@ -237,7 +355,12 @@ export const useCallStore = create<CallStore>((set, get) => ({
       return;
     }
 
-    const peer = resolvePeerForIncomingCall(payload.conversationId, payload.callerId);
+    const peer = resolvePeerForIncomingCall(
+      payload.conversationId,
+      payload.callerId,
+      Boolean(payload.isGroup),
+      payload.conversationName
+    );
 
     set({
       currentCall: {
@@ -245,9 +368,13 @@ export const useCallStore = create<CallStore>((set, get) => ({
         peer,
         direction: "incoming",
         status: "incoming",
+        isGroup: Boolean(payload.isGroup),
+        participantIds: payload.participantIds ?? [payload.callerId, payload.recipientId],
+        conversationName: payload.conversationName ?? null,
       },
       localStream: null,
       remoteStream: null,
+      remoteStreams: {},
       isMicrophoneEnabled: true,
       isCameraEnabled: payload.callType === "video",
     });
@@ -271,27 +398,28 @@ export const useCallStore = create<CallStore>((set, get) => ({
       set({
         localStream,
         remoteStream: null,
+        remoteStreams: {},
         isMicrophoneEnabled: true,
         isCameraEnabled: currentCall.callType === "video",
       });
 
       setCurrentCallStatus(set, "negotiating");
 
-      const connection = buildPeerConnection(
-        currentCall.callId,
-        currentCall.conversationId,
-        currentCall.peer._id,
-        set
-      );
+      if (!currentCall.isGroup) {
+        const connection = buildPeerConnection(
+          currentCall.callId,
+          currentCall.conversationId,
+          currentCall.peer._id,
+          set
+        );
 
-      localStream.getTracks().forEach((track) => {
-        connection.addTrack(track, localStream);
-      });
+        ensureLocalTracks(connection, localStream);
+      }
 
       socket.emit("call:accept", {
         callId: currentCall.callId,
         conversationId: currentCall.conversationId,
-        targetId: currentCall.peer._id,
+        targetId: currentCall.isGroup ? currentCall.callerId : currentCall.peer._id,
       });
     } catch (error) {
       console.error("Khong the chap nhan cuoc goi:", error);
@@ -308,7 +436,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       socket.emit("call:decline", {
         callId: currentCall.callId,
         conversationId: currentCall.conversationId,
-        targetId: currentCall.peer._id,
+        targetId: currentCall.isGroup ? currentCall.callerId : currentCall.peer._id,
         reason,
       });
     }
@@ -324,7 +452,7 @@ export const useCallStore = create<CallStore>((set, get) => ({
       socket.emit("call:end", {
         callId: currentCall.callId,
         conversationId: currentCall.conversationId,
-        targetId: currentCall.peer._id,
+        targetId: currentCall.isGroup ? currentCall.callerId : currentCall.peer._id,
         reason,
       });
     }
@@ -359,38 +487,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
   handleCallAccepted: async (payload) => {
     const { currentCall, localStream } = get();
 
-    if (!currentCall || currentCall.callId !== payload.callId || !localStream) {
+    if (!currentCall || currentCall.callId !== payload.callId || !localStream || currentCall.isGroup) {
       return;
     }
 
-    const connection = buildPeerConnection(
-      currentCall.callId,
-      currentCall.conversationId,
-      currentCall.peer._id,
-      set
-    );
-
-    if (connection.getSenders().length === 0) {
-      localStream.getTracks().forEach((track) => {
-        connection.addTrack(track, localStream);
-      });
-    }
-
-    setCurrentCallStatus(set, "negotiating");
-
-    const offer = await connection.createOffer({
-      offerToReceiveAudio: true,
-      offerToReceiveVideo: currentCall.callType === "video",
-    });
-
-    await connection.setLocalDescription(offer);
-
-    useSocketStore.getState().socket?.emit("call:offer", {
-      callId: currentCall.callId,
-      conversationId: currentCall.conversationId,
-      targetId: currentCall.peer._id,
-      description: offer,
-    });
+    await createOfferForParticipant(currentCall, localStream, currentCall.peer._id, set);
   },
 
   handleCallDeclined: (payload) => {
@@ -428,6 +529,43 @@ export const useCallStore = create<CallStore>((set, get) => ({
     }
   },
 
+  handleParticipantJoined: async (payload) => {
+    const { currentCall, localStream } = get();
+    const currentUserId = useAuthStore.getState().user?._id;
+
+    if (
+      !currentCall ||
+      !currentCall.isGroup ||
+      currentCall.callId !== payload.callId ||
+      !localStream ||
+      payload.participantId === currentUserId
+    ) {
+      return;
+    }
+
+    await createOfferForParticipant(currentCall, localStream, payload.participantId, set);
+  },
+
+  handleParticipantLeft: (payload) => {
+    const { currentCall } = get();
+
+    if (!currentCall || currentCall.callId !== payload.callId) {
+      return;
+    }
+
+    closePeerConnection(payload.participantId);
+
+    set((state) => {
+      const remoteStreams = { ...state.remoteStreams };
+      delete remoteStreams[payload.participantId];
+
+      return {
+        remoteStreams,
+        remoteStream: pickPrimaryRemoteStream(remoteStreams),
+      };
+    });
+  },
+
   handleRemoteOffer: async (payload) => {
     const { currentCall, localStream } = get();
 
@@ -438,15 +576,11 @@ export const useCallStore = create<CallStore>((set, get) => ({
     const connection = buildPeerConnection(
       currentCall.callId,
       currentCall.conversationId,
-      currentCall.peer._id,
+      payload.senderId,
       set
     );
 
-    if (connection.getSenders().length === 0) {
-      localStream.getTracks().forEach((track) => {
-        connection.addTrack(track, localStream);
-      });
-    }
+    ensureLocalTracks(connection, localStream);
 
     setCurrentCallStatus(set, "negotiating");
 
@@ -458,44 +592,48 @@ export const useCallStore = create<CallStore>((set, get) => ({
     useSocketStore.getState().socket?.emit("call:answer", {
       callId: currentCall.callId,
       conversationId: currentCall.conversationId,
-      targetId: currentCall.peer._id,
+      targetId: payload.senderId,
       description: answer,
     });
   },
 
   handleRemoteAnswer: async (payload) => {
-    if (!peerConnection || get().currentCall?.callId !== payload.callId) {
+    const connection = peerConnections.get(payload.senderId);
+
+    if (!connection || get().currentCall?.callId !== payload.callId) {
       return;
     }
 
     setCurrentCallStatus(set, "negotiating");
 
-    await peerConnection.setRemoteDescription(payload.description);
+    await connection.setRemoteDescription(payload.description);
   },
 
   handleRemoteIceCandidate: async (payload) => {
-    if (!peerConnection || get().currentCall?.callId !== payload.callId) {
+    const connection = peerConnections.get(payload.senderId);
+
+    if (!connection || get().currentCall?.callId !== payload.callId) {
       return;
     }
 
-    await peerConnection.addIceCandidate(payload.candidate);
+    await connection.addIceCandidate(payload.candidate);
   },
 
   resetCall: () => {
     stopStream(get().localStream);
-    stopStream(get().remoteStream);
+    Object.values(get().remoteStreams).forEach((stream) => {
+      stopStream(stream);
+    });
 
-    if (peerConnection) {
-      peerConnection.onicecandidate = null;
-      peerConnection.ontrack = null;
-      peerConnection.close();
-      peerConnection = null;
-    }
+    Array.from(peerConnections.keys()).forEach((remoteUserId) => {
+      closePeerConnection(remoteUserId);
+    });
 
     set({
       currentCall: null,
       localStream: null,
       remoteStream: null,
+      remoteStreams: {},
       isMicrophoneEnabled: true,
       isCameraEnabled: true,
     });

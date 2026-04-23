@@ -8,6 +8,7 @@ import { toast } from "@/lib/toast";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
 import { friendService } from "@/services/friendService";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocketStore } from "@/stores/useSocketStore";
@@ -16,7 +17,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronLeft, X } from "lucide-react-native";
+import { Bell, ChevronLeft, Phone, Video, X } from "lucide-react-native";
 import {
     useCallback,
     useEffect,
@@ -191,6 +192,8 @@ export default function ChatAppScreen() {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const onlineUsers = useSocketStore((state) => state.onlineUsers);
+  const currentCall = useCallStore((state) => state.currentCall);
+  const startOutgoingCall = useCallStore((state) => state.startOutgoingCall);
 
   const flatListRef = useRef<FlatList<Message>>(null);
 
@@ -383,6 +386,22 @@ export default function ChatAppScreen() {
     const otherUser = getDirectParticipant(selectedConvo, user._id);
     return !!otherUser && blockedUsers.has(otherUser._id);
   }, [blockedUsers, selectedConvo, user?._id]);
+
+  const handleStartAudioCall = useCallback(() => {
+    if (!selectedConvo || selectedConvo.type !== "direct") {
+      return;
+    }
+
+    void startOutgoingCall(selectedConvo, "audio");
+  }, [selectedConvo, startOutgoingCall]);
+
+  const handleStartVideoCall = useCallback(() => {
+    if (!selectedConvo) {
+      return;
+    }
+
+    void startOutgoingCall(selectedConvo, "video");
+  }, [selectedConvo, startOutgoingCall]);
 
   const handleBack = useCallback(() => {
     setActiveConversation(null);
@@ -666,9 +685,47 @@ export default function ChatAppScreen() {
               )}
             </Pressable>
           )
+        : selectedConvo.type === "direct" || selectedConvo.type === "group"
+          ? () => (
+              <View style={styles.headerActionGroup}>
+                {selectedConvo.type === "direct" && (
+                  <Pressable
+                    onPress={handleStartAudioCall}
+                    disabled={Boolean(currentCall) || isConversationBlocked}
+                    style={[
+                      styles.headerIconButton,
+                      {
+                        backgroundColor: isDark ? "#1f2937" : "#eef2ff",
+                        opacity: Boolean(currentCall) || isConversationBlocked ? 0.45 : 1,
+                      },
+                    ]}
+                  >
+                    <Phone size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={handleStartVideoCall}
+                  disabled={Boolean(currentCall) || isConversationBlocked}
+                  style={[
+                    styles.headerIconButton,
+                    {
+                      backgroundColor: isDark ? "#1f2937" : "#eef2ff",
+                      opacity: Boolean(currentCall) || isConversationBlocked ? 0.45 : 1,
+                    },
+                  ]}
+                >
+                  <Video size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+                </Pressable>
+              </View>
+            )
         : undefined,
     });
   }, [
+    currentCall,
+    handleStartAudioCall,
+    handleStartVideoCall,
+    isConversationBlocked,
     handleBack,
     isDark,
     navigation,
@@ -1304,6 +1361,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerBadgeText: { color: "#ffffff", fontSize: 10, fontWeight: "700" },
+  headerActionGroup: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginRight: 12,
+  },
   pinnedContainer: {
     position: "absolute",
     top: 10,

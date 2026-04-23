@@ -226,6 +226,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useCallStore.getState().handleCallState(payload);
     });
 
+    socket.on("call:participant-joined", (payload) => {
+      void useCallStore.getState().handleParticipantJoined(payload);
+    });
+
+    socket.on("call:participant-left", (payload) => {
+      useCallStore.getState().handleParticipantLeft(payload);
+    });
+
     socket.on("call:offer", (payload) => {
       void useCallStore.getState().handleRemoteOffer(payload);
     });

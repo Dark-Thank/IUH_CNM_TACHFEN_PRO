@@ -1,12 +1,15 @@
+import CallRingtonePlayer from "@/components/chat/CallRingtonePlayer";
+import CallScreenModal from "@/components/chat/CallScreenModal";
+import IncomingCallModal from "@/components/chat/IncomingCallModal";
 import ChatAppScreen from "@/screens/ChatAppScreen";
 import SettingsScreen from "@/screens/SettingsScreen";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import {
-  DarkTheme,
-  DefaultTheme,
-  NavigationContainer,
-  type Theme,
+    DarkTheme,
+    DefaultTheme,
+    NavigationContainer,
+    type Theme,
 } from "@react-navigation/native";
 import { MessageCircleMore, Settings } from "lucide-react-native";
 import { type ViewStyle } from "react-native";
@@ -70,48 +73,54 @@ export default function AppNavigator() {
   return (
     <SafeAreaProvider>
       <NavigationContainer theme={isDark ? darkNavigationTheme : lightNavigationTheme}>
-        <Tab.Navigator
-          initialRouteName="Chat"
-          screenOptions={({ route }) => ({
-            headerTitleAlign: "center",
-            headerStyle: getHeaderStyle(isDark),
-            headerTintColor: isDark ? "#f8fafc" : "#0f172a",
-            headerShadowVisible: false,
-            tabBarActiveTintColor: isDark ? "#d8b4fe" : "#7c3aed",
-            tabBarInactiveTintColor: isDark ? "#94a3b8" : "#64748b",
-            tabBarHideOnKeyboard: true,
-            tabBarStyle: {
-              backgroundColor: isDark ? "#111827" : "#ffffff",
-              borderTopColor: isDark ? "#1f2937" : "#e2e8f0",
-              height: 64,
-              paddingTop: 6,
-              paddingBottom: 8,
-            },
-            tabBarLabelStyle: {
-              fontSize: 12,
-              fontWeight: "700",
-            },
-            tabBarIcon: ({ color, size }) =>
-              getTabBarIcon(route.name, color, size),
-          })}
-        >
-          <Tab.Screen
-            name="Chat"
-            component={ChatAppScreen}
-            options={{
-              title: "Chat",
-              tabBarLabel: "Chat",
-            }}
-          />
-          <Tab.Screen
-            name="Settings"
-            component={SettingsScreen}
-            options={{
-              title: "Settings",
-              tabBarLabel: "Settings",
-            }}
-          />
-        </Tab.Navigator>
+        <>
+          <Tab.Navigator
+            initialRouteName="Chat"
+            screenOptions={({ route }) => ({
+              headerTitleAlign: "center",
+              headerStyle: getHeaderStyle(isDark),
+              headerTintColor: isDark ? "#f8fafc" : "#0f172a",
+              headerShadowVisible: false,
+              tabBarActiveTintColor: isDark ? "#d8b4fe" : "#7c3aed",
+              tabBarInactiveTintColor: isDark ? "#94a3b8" : "#64748b",
+              tabBarHideOnKeyboard: true,
+              tabBarStyle: {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderTopColor: isDark ? "#1f2937" : "#e2e8f0",
+                height: 64,
+                paddingTop: 6,
+                paddingBottom: 8,
+              },
+              tabBarLabelStyle: {
+                fontSize: 12,
+                fontWeight: "700",
+              },
+              tabBarIcon: ({ color, size }) =>
+                getTabBarIcon(route.name, color, size),
+            })}
+          >
+            <Tab.Screen
+              name="Chat"
+              component={ChatAppScreen}
+              options={{
+                title: "Chat",
+                tabBarLabel: "Chat",
+              }}
+            />
+            <Tab.Screen
+              name="Settings"
+              component={SettingsScreen}
+              options={{
+                title: "Settings",
+                tabBarLabel: "Settings",
+              }}
+            />
+          </Tab.Navigator>
+
+          <IncomingCallModal />
+          <CallScreenModal />
+          <CallRingtonePlayer />
+        </>
       </NavigationContainer>
     </SafeAreaProvider>
   );

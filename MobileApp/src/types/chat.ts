@@ -1,3 +1,5 @@
+import type { CallMeta } from "./call";
+
 export interface Participant {
   _id: string;
   displayName: string;
@@ -55,6 +57,7 @@ export interface Message {
   senderId: string;
   content: string | null;
   messageType?: "text" | "call" | "voice";
+  callMeta?: CallMeta | null;
   voiceMeta?: VoiceMeta | null;
   isRecalled?: boolean;
   recalledAt?: string | null;

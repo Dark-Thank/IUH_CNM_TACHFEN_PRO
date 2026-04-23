@@ -12,6 +12,18 @@ const baseURL = process.env.EXPO_PUBLIC_SOCKET_URL?.trim() || getBackendOrigin()
 let appStateSubscription: NativeEventSubscription | null = null;
 let currentAppState: AppStateStatus = "active";
 
+const withCallStore = <T,>(
+  handler: (callStore: import("@/types/store").CallState, payload: T) => void | Promise<void>
+) => {
+  return (payload: T) => {
+    void import("./useCallStore")
+      .then((mod) => handler(mod.useCallStore.getState(), payload))
+      .catch((error) => {
+        console.error("Loi khi tai call store:", error);
+      });
+  };
+};
+
 const joinKnownConversations = (socket: Socket) => {
   useChatStore
     .getState()
@@ -163,6 +175,46 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       useChatStore.getState().addConvo(conversation);
       socket.emit("join-conversation", conversation._id);
     });
+
+    socket.on("call:invite", withCallStore((callStore, payload) => {
+      callStore.receiveIncomingCall(payload as any);
+    }));
+
+    socket.on("call:accept", withCallStore((callStore, payload) => {
+      void callStore.handleCallAccepted(payload as any);
+    }));
+
+    socket.on("call:decline", withCallStore((callStore, payload) => {
+      callStore.handleCallDeclined(payload as any);
+    }));
+
+    socket.on("call:end", withCallStore((callStore, payload) => {
+      callStore.handleCallEnded(payload as any);
+    }));
+
+    socket.on("call:state", withCallStore((callStore, payload) => {
+      callStore.handleCallState(payload as any);
+    }));
+
+    socket.on("call:participant-joined", withCallStore((callStore, payload) => {
+      void callStore.handleParticipantJoined(payload as any);
+    }));
+
+    socket.on("call:participant-left", withCallStore((callStore, payload) => {
+      callStore.handleParticipantLeft(payload as any);
+    }));
+
+    socket.on("call:offer", withCallStore((callStore, payload) => {
+      void callStore.handleRemoteOffer(payload as any);
+    }));
+
+    socket.on("call:answer", withCallStore((callStore, payload) => {
+      void callStore.handleRemoteAnswer(payload as any);
+    }));
+
+    socket.on("call:ice-candidate", withCallStore((callStore, payload) => {
+      void callStore.handleRemoteIceCandidate(payload as any);
+    }));
 
     socket.on("user-blocked", ({ blockerId }) => {
       import('./useBlockStore').then((mod) => {

@@ -125,6 +125,94 @@ const normalizeCallPayload = (payload = {}) => ({
     reason: typeof payload.reason === "string" ? payload.reason.trim() : undefined,
 });
 
+const getConversationCallContext = async (conversationId) => {
+    const conversation = await Conversation.findById(conversationId)
+        .select("type participants group.name")
+        .lean();
+
+    if (!conversation) {
+        return null;
+    }
+
+    return {
+        type: conversation.type,
+        groupName: conversation.group?.name?.trim() || null,
+        participantIds: conversation.participants.map((participant) => participant.userId.toString()),
+    };
+};
+
+const getAcceptedUserIds = (activeCall) => Array.isArray(activeCall?.acceptedUserIds)
+    ? activeCall.acceptedUserIds
+    : [activeCall?.callerId, activeCall?.recipientId].filter(Boolean);
+
+const getInvitedUserIds = (activeCall) => Array.isArray(activeCall?.invitedUserIds)
+    ? activeCall.invitedUserIds
+    : [activeCall?.recipientId].filter(Boolean);
+
+const getTrackedUserIds = (activeCall) => Array.from(
+    new Set([...getAcceptedUserIds(activeCall), ...getInvitedUserIds(activeCall)])
+);
+
+const removeUserFromCall = (activeCall, userId) => {
+    activeCall.acceptedUserIds = getAcceptedUserIds(activeCall).filter((participantId) => participantId !== userId);
+    activeCall.invitedUserIds = getInvitedUserIds(activeCall).filter((participantId) => participantId !== userId);
+    userCallIndex.delete(userId);
+};
+
+const emitParticipantJoined = (activeCall, participantId) => {
+    getAcceptedUserIds(activeCall)
+        .filter((acceptedUserId) => acceptedUserId !== participantId)
+        .forEach((acceptedUserId) => {
+            emitToUser(acceptedUserId, "call:participant-joined", {
+                callId: activeCall.callId,
+                conversationId: activeCall.conversationId,
+                participantId,
+            });
+        });
+};
+
+const emitParticipantLeft = (activeCall, participantId, reason = "ended") => {
+    getAcceptedUserIds(activeCall)
+        .filter((acceptedUserId) => acceptedUserId !== participantId)
+        .forEach((acceptedUserId) => {
+            emitToUser(acceptedUserId, "call:participant-left", {
+                callId: activeCall.callId,
+                conversationId: activeCall.conversationId,
+                participantId,
+                reason,
+            });
+        });
+};
+
+const finalizeGroupCallIfIdle = (activeCall, reason = "ended") => {
+    const acceptedUserIds = getAcceptedUserIds(activeCall);
+    const invitedUserIds = getInvitedUserIds(activeCall);
+
+    if (acceptedUserIds.length > 1 || invitedUserIds.length > 0) {
+        return false;
+    }
+
+    const clearedCall = clearCallState(activeCall.callId);
+
+    if (!clearedCall) {
+        return true;
+    }
+
+    void persistCallSummaryMessage(clearedCall, reason);
+
+    acceptedUserIds.forEach((participantId) => {
+        emitToUser(participantId, "call:end", {
+            callId: clearedCall.callId,
+            conversationId: clearedCall.conversationId,
+            senderId: clearedCall.callerId,
+            targetId: participantId,
+            reason,
+        });
+    });
+
+    return true;
+};
+
 const clearCallTimeout = (callId) => {
     const timeout = callTimeouts.get(callId);
 
@@ -166,7 +254,11 @@ const flushPendingUserEvents = (userId) => {
 };
 
 const persistCallSummaryMessage = async (activeCall, reason) => {
-    if (!activeCall?.conversationId || !activeCall?.callerId || !activeCall?.recipientId || !isValidCallType(activeCall.callType)) {
+    const fallbackRecipientId = activeCall?.recipientId
+        || activeCall?.participantIds?.find((participantId) => participantId !== activeCall?.callerId)
+        || null;
+
+    if (!activeCall?.conversationId || !activeCall?.callerId || !fallbackRecipientId || !isValidCallType(activeCall.callType)) {
         return;
     }
 
@@ -191,7 +283,7 @@ const persistCallSummaryMessage = async (activeCall, reason) => {
             callType: activeCall.callType,
             outcome,
             callerId: activeCall.callerId,
-            recipientId: activeCall.recipientId,
+            recipientId: fallbackRecipientId,
             durationSeconds,
             startedAt: activeCall.startedAt ?? null,
             endedAt,
@@ -212,8 +304,9 @@ const clearCallState = (callId) => {
         return null;
     }
 
-    userCallIndex.delete(activeCall.callerId);
-    userCallIndex.delete(activeCall.recipientId);
+    getTrackedUserIds(activeCall).forEach((participantId) => {
+        userCallIndex.delete(participantId);
+    });
     activeCalls.delete(callId);
 
     return activeCall;
@@ -261,12 +354,14 @@ const scheduleMissedCall = (callId) => {
             reason: "missed",
         });
 
-        emitToUser(activeCall.recipientId, "call:end", {
-            callId,
-            conversationId: activeCall.conversationId,
-            senderId: activeCall.callerId,
-            targetId: activeCall.recipientId,
-            reason: "missed",
+        getInvitedUserIds(activeCall).forEach((participantId) => {
+            emitToUser(participantId, "call:end", {
+                callId,
+                conversationId: activeCall.conversationId,
+                senderId: activeCall.callerId,
+                targetId: participantId,
+                reason: "missed",
+            });
         });
     }, CALL_RING_TIMEOUT_MS);
 
@@ -308,18 +403,6 @@ const scheduleReconnectTimeout = (callId, disconnectedUserId) => {
 const findActiveCallByUserId = (userId) => {
     const callId = userCallIndex.get(userId);
     return callId ? activeCalls.get(callId) ?? null : null;
-};
-
-const getDirectConversationParticipantIds = async (conversationId) => {
-    const conversation = await Conversation.findById(conversationId)
-        .select("type participants")
-        .lean();
-
-    if (!conversation || conversation.type !== "direct") {
-        return null;
-    }
-
-    return conversation.participants.map((participant) => participant.userId.toString());
 };
 
 const broadcastOnlineUsers = async () => {
@@ -401,19 +484,29 @@ io.on("connection", async (socket) => {
     socket.on("call:invite", async (payload) => {
         const { callId, conversationId, recipientId, callType } = normalizeCallPayload(payload);
 
-        if (!callId || !conversationId || !recipientId || !isValidCallType(callType)) {
+        if (!callId || !conversationId || !isValidCallType(callType)) {
             return;
         }
 
         try {
-            const participantIds = await getDirectConversationParticipantIds(conversationId);
+            const conversationContext = await getConversationCallContext(conversationId);
 
-            if (
-                !participantIds ||
-                participantIds.length !== 2 ||
-                !participantIds.includes(userId) ||
-                !participantIds.includes(recipientId)
-            ) {
+            if (!conversationContext?.participantIds.includes(userId)) {
+                return;
+            }
+
+            const isGroupCall = conversationContext.type === "group";
+
+            if (isGroupCall && callType !== "video") {
+                return;
+            }
+
+            const otherParticipantIds = conversationContext.participantIds.filter((participantId) => participantId !== userId);
+            const targetParticipantIds = isGroupCall
+                ? otherParticipantIds
+                : otherParticipantIds.filter((participantId) => participantId === recipientId);
+
+            if (!targetParticipantIds.length) {
                 return;
             }
 
@@ -422,24 +515,27 @@ io.on("connection", async (socket) => {
                     callId,
                     conversationId,
                     senderId: userId,
-                    targetId: recipientId,
+                    targetId: targetParticipantIds[0],
                     reason: "busy",
                 });
                 return;
             }
 
-            if (userCallIndex.has(recipientId)) {
+            const availableRecipientIds = targetParticipantIds.filter((participantId) => !userCallIndex.has(participantId));
+
+            if (!availableRecipientIds.length) {
                 await persistCallSummaryMessage({
                     conversationId,
                     callerId: userId,
-                    recipientId,
+                    recipientId: targetParticipantIds[0],
+                    participantIds: [userId, ...targetParticipantIds],
                     callType,
                 }, "busy");
 
                 emitToUser(userId, "call:decline", {
                     callId,
                     conversationId,
-                    senderId: recipientId,
+                    senderId: targetParticipantIds[0],
                     targetId: userId,
                     reason: "busy",
                 });
@@ -450,20 +546,31 @@ io.on("connection", async (socket) => {
                 callId,
                 conversationId,
                 callerId: userId,
-                recipientId,
+                recipientId: availableRecipientIds[0],
+                participantIds: [userId, ...targetParticipantIds],
+                invitedUserIds: availableRecipientIds,
+                acceptedUserIds: [userId],
                 callType,
                 state: "ringing",
+                isGroup: isGroupCall,
+                conversationName: conversationContext.groupName,
             });
             userCallIndex.set(userId, callId);
-            userCallIndex.set(recipientId, callId);
 
-            emitToUser(recipientId, "call:invite", {
-                callId,
-                conversationId,
-                callerId: userId,
-                recipientId,
-                callType,
-                createdAt: new Date().toISOString(),
+            availableRecipientIds.forEach((participantId) => {
+                userCallIndex.set(participantId, callId);
+
+                emitToUser(participantId, "call:invite", {
+                    callId,
+                    conversationId,
+                    callerId: userId,
+                    recipientId: participantId,
+                    participantIds: [userId, ...targetParticipantIds],
+                    isGroup: isGroupCall,
+                    conversationName: conversationContext.groupName,
+                    callType,
+                    createdAt: new Date().toISOString(),
+                });
             });
 
             scheduleMissedCall(callId);
@@ -476,9 +583,25 @@ io.on("connection", async (socket) => {
         const { callId, conversationId, targetId } = normalizeCallPayload(payload);
         const activeCall = activeCalls.get(callId);
 
+        if (!activeCall || activeCall.conversationId !== conversationId) {
+            return;
+        }
+
+        if (activeCall.isGroup) {
+            if (!getInvitedUserIds(activeCall).includes(userId)) {
+                return;
+            }
+
+            clearCallTimeout(callId);
+            activeCall.state = "connecting";
+            activeCall.startedAt = activeCall.startedAt ?? new Date().toISOString();
+            activeCall.acceptedUserIds = Array.from(new Set([...getAcceptedUserIds(activeCall), userId]));
+            activeCall.invitedUserIds = getInvitedUserIds(activeCall).filter((participantId) => participantId !== userId);
+            emitParticipantJoined(activeCall, userId);
+            return;
+        }
+
         if (
-            !activeCall ||
-            activeCall.conversationId !== conversationId ||
             activeCall.callerId !== targetId ||
             activeCall.recipientId !== userId
         ) {
@@ -500,13 +623,42 @@ io.on("connection", async (socket) => {
 
     socket.on("call:decline", (payload) => {
         const { callId, conversationId, targetId, reason } = normalizeCallPayload(payload);
-        const activeCall = clearCallState(callId);
+
+        const activeCall = activeCalls.get(callId);
 
         if (!activeCall || activeCall.conversationId !== conversationId) {
             return;
         }
 
-        void persistCallSummaryMessage(activeCall, reason || "declined");
+        if (activeCall.isGroup) {
+            const wasAccepted = getAcceptedUserIds(activeCall).includes(userId);
+
+            removeUserFromCall(activeCall, userId);
+
+            if (wasAccepted) {
+                emitParticipantLeft(activeCall, userId, reason || "declined");
+                finalizeGroupCallIfIdle(activeCall, reason || "ended");
+                return;
+            }
+
+            emitToUser(activeCall.callerId, "call:decline", {
+                callId,
+                conversationId,
+                senderId: userId,
+                targetId: activeCall.callerId,
+                reason: reason || "declined",
+            });
+            finalizeGroupCallIfIdle(activeCall, reason || "declined");
+            return;
+        }
+
+        const clearedCall = clearCallState(callId);
+
+        if (!clearedCall || clearedCall.conversationId !== conversationId) {
+            return;
+        }
+
+        void persistCallSummaryMessage(clearedCall, reason || "declined");
 
         emitToUser(targetId, "call:decline", {
             callId,
@@ -519,13 +671,51 @@ io.on("connection", async (socket) => {
 
     socket.on("call:end", (payload) => {
         const { callId, conversationId, targetId, reason } = normalizeCallPayload(payload);
-        const activeCall = clearCallState(callId);
+
+        const activeCall = activeCalls.get(callId);
 
         if (!activeCall || activeCall.conversationId !== conversationId) {
             return;
         }
 
-        void persistCallSummaryMessage(activeCall, reason || "ended");
+        if (activeCall.isGroup) {
+            if (userId === activeCall.callerId) {
+                const clearedCall = clearCallState(callId);
+
+                if (!clearedCall) {
+                    return;
+                }
+
+                void persistCallSummaryMessage(clearedCall, reason || "ended");
+
+                getTrackedUserIds(clearedCall)
+                    .filter((participantId) => participantId !== userId)
+                    .forEach((participantId) => {
+                        emitToUser(participantId, "call:end", {
+                            callId,
+                            conversationId,
+                            senderId: userId,
+                            targetId: participantId,
+                            reason: reason || "ended",
+                        });
+                    });
+
+                return;
+            }
+
+            removeUserFromCall(activeCall, userId);
+            emitParticipantLeft(activeCall, userId, reason || "ended");
+            finalizeGroupCallIfIdle(activeCall, reason || "ended");
+            return;
+        }
+
+        const clearedCall = clearCallState(callId);
+
+        if (!clearedCall || clearedCall.conversationId !== conversationId) {
+            return;
+        }
+
+        void persistCallSummaryMessage(clearedCall, reason || "ended");
 
         emitCallEnd({
             callId,
@@ -540,7 +730,12 @@ io.on("connection", async (socket) => {
         const { callId, conversationId, targetId, description } = normalizeCallPayload(payload);
         const activeCall = activeCalls.get(callId);
 
-        if (!activeCall || !description || activeCall.conversationId !== conversationId) {
+        if (
+            !activeCall ||
+            !description ||
+            activeCall.conversationId !== conversationId ||
+            !getTrackedUserIds(activeCall).includes(targetId)
+        ) {
             return;
         }
 
@@ -557,7 +752,12 @@ io.on("connection", async (socket) => {
         const { callId, conversationId, targetId, description } = normalizeCallPayload(payload);
         const activeCall = activeCalls.get(callId);
 
-        if (!activeCall || !description || activeCall.conversationId !== conversationId) {
+        if (
+            !activeCall ||
+            !description ||
+            activeCall.conversationId !== conversationId ||
+            !getTrackedUserIds(activeCall).includes(targetId)
+        ) {
             return;
         }
 
@@ -574,7 +774,12 @@ io.on("connection", async (socket) => {
         const { callId, conversationId, targetId, candidate } = normalizeCallPayload(payload);
         const activeCall = activeCalls.get(callId);
 
-        if (!activeCall || !candidate || activeCall.conversationId !== conversationId) {
+        if (
+            !activeCall ||
+            !candidate ||
+            activeCall.conversationId !== conversationId ||
+            !getTrackedUserIds(activeCall).includes(targetId)
+        ) {
             return;
         }
 
@@ -592,7 +797,7 @@ io.on("connection", async (socket) => {
 
     const activeCall = findActiveCallByUserId(userId);
 
-    if (activeCall && activeCall.state === "reconnecting" && activeCall.disconnectedUserId === userId) {
+    if (activeCall && !activeCall.isGroup && activeCall.state === "reconnecting" && activeCall.disconnectedUserId === userId) {
         clearCallTimeout(activeCall.callId);
         activeCall.state = "connected";
         delete activeCall.disconnectedUserId;
@@ -613,6 +818,36 @@ io.on("connection", async (socket) => {
         const activeCall = findActiveCallByUserId(userId);
 
         if (activeCall) {
+            if (activeCall.isGroup) {
+                if (userId === activeCall.callerId) {
+                    const clearedCall = clearCallState(activeCall.callId);
+
+                    if (clearedCall) {
+                        void persistCallSummaryMessage(clearedCall, "disconnected");
+                        getTrackedUserIds(clearedCall)
+                            .filter((participantId) => participantId !== userId)
+                            .forEach((participantId) => {
+                                emitToUser(participantId, "call:end", {
+                                    callId: clearedCall.callId,
+                                    conversationId: clearedCall.conversationId,
+                                    senderId: userId,
+                                    targetId: participantId,
+                                    reason: "disconnected",
+                                });
+                            });
+                    }
+                } else {
+                    removeUserFromCall(activeCall, userId);
+                    emitParticipantLeft(activeCall, userId, "disconnected");
+                    finalizeGroupCallIfIdle(activeCall, "disconnected");
+                }
+
+                broadcastOnlineUsers().catch((error) => {
+                    console.error("Khong the cap nhat online-users khi disconnect:", error);
+                });
+                return;
+            }
+
             const targetId = activeCall.callerId === userId ? activeCall.recipientId : activeCall.callerId;
 
             if (activeCall.state === "ringing") {

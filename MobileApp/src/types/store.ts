@@ -1,4 +1,17 @@
+import type { MediaStream } from "react-native-webrtc";
 import type { Socket } from "socket.io-client";
+import type {
+    CallAcceptPayload,
+    CallDeclinePayload,
+    CallEndPayload,
+    CallInvitePayload,
+    CallParticipantPayload,
+    CallSession,
+    CallSignalCandidatePayload,
+    CallSignalDescriptionPayload,
+    CallStatePayload,
+    CallType,
+} from "./call";
 import type { Conversation, Message } from "./chat";
 import type { Friend, FriendRequest, User } from "./user";
 
@@ -18,10 +31,10 @@ export interface AuthState {
     email: string,
     firstName: string,
     lastName: string
-  ) => Promise<void>;
-  signIn: (username: string, password: string) => Promise<void>;
-  forgotPassword?: (email: string) => Promise<void>;
-  verifyOtp?: (email: string, otp: string) => Promise<void>;
+  ) => Promise<{ ok: boolean; message?: string }>;
+  signIn: (username: string, password: string) => Promise<any>;
+  forgotPassword: (email: string) => Promise<void>;
+  verifyOtp: (email: string, otp: string) => Promise<void>;
   resetPassword?: (email: string, otp: string, newPassword: string) => Promise<void>;
   signOut: () => Promise<void>;
   fetchMe: () => Promise<void>;
@@ -96,6 +109,32 @@ export interface SocketState {
   disconnectSocket: () => void;
   registerAppStateListener: () => void;
   unregisterAppStateListener: () => void;
+}
+
+export interface CallState {
+  currentCall: CallSession | null;
+  localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
+  remoteStreams: Record<string, MediaStream>;
+  isMicrophoneEnabled: boolean;
+  isCameraEnabled: boolean;
+  startOutgoingCall: (conversation: Conversation, callType: CallType) => Promise<void>;
+  receiveIncomingCall: (payload: CallInvitePayload) => void;
+  acceptIncomingCall: () => Promise<void>;
+  declineIncomingCall: (reason?: string) => void;
+  endCall: (reason?: string) => void;
+  toggleMicrophone: () => void;
+  toggleCamera: () => void;
+  handleCallAccepted: (payload: CallAcceptPayload) => Promise<void>;
+  handleCallDeclined: (payload: CallDeclinePayload) => void;
+  handleCallEnded: (payload: CallEndPayload) => void;
+  handleCallState: (payload: CallStatePayload) => void;
+  handleParticipantJoined: (payload: CallParticipantPayload) => Promise<void>;
+  handleParticipantLeft: (payload: CallParticipantPayload) => void;
+  handleRemoteOffer: (payload: CallSignalDescriptionPayload) => Promise<void>;
+  handleRemoteAnswer: (payload: CallSignalDescriptionPayload) => Promise<void>;
+  handleRemoteIceCandidate: (payload: CallSignalCandidatePayload) => Promise<void>;
+  resetCall: () => void;
 }
 
 export interface UserState {

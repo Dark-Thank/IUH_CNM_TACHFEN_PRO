@@ -15,19 +15,24 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Ứng dụng cần quyền microphone để ghi âm tin nhắn thoại."
+        "NSMicrophoneUsageDescription": "Ung dung can quyen microphone de goi thoai, goi video va ghi am tin nhan.",
+        "NSCameraUsageDescription": "Ung dung can quyen camera de thuc hien cuoc goi video."
       }
     },
     "android": {
       "permissions": [
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.hoan22729651.MobileApp"
     },
     "web": {
       "favicon": "./assets/favicon.png"

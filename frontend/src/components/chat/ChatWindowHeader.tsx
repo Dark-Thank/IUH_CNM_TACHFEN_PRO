@@ -77,17 +77,19 @@ const ChatWindowHeader = ({ chat }: { chat?: Conversation }) => {
                             </h2>
                         </div>
 
-                        {chat.type === "direct" && otherUser && (
+                        {((chat.type === "direct" && otherUser) || chat.type === "group") && (
                             <div className="flex items-center gap-2">
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="rounded-full"
-                                    onClick={() => void startOutgoingCall(chat, "audio")}
-                                    disabled={Boolean(currentCall)}
-                                >
-                                    <Phone className="size-4" />
-                                </Button>
+                                {chat.type === "direct" && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="rounded-full"
+                                        onClick={() => void startOutgoingCall(chat, "audio")}
+                                        disabled={Boolean(currentCall)}
+                                    >
+                                        <Phone className="size-4" />
+                                    </Button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="icon"
