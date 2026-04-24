@@ -2326,7 +2326,7 @@ export default function ChatAppScreen() {
                   <View style={styles.subSectionHeader}>
                     <Pin size={14} color={isDark ? "#c084fc" : "#7c3aed"} />
                     <Text style={[styles.subSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                      Uu tien ({pinnedConversations.length})
+                      Ưu tiên ({pinnedConversations.length})
                     </Text>
                   </View>
 

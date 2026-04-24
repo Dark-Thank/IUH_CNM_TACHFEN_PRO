@@ -120,16 +120,16 @@ const ConversationList = () => {
       ) : (
         <div className="beautiful-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
           <ConversationSection
-            title="Uu tien"
+            title="Ưu tiên"
             icon={<Pin className="size-4 text-primary" />}
             conversations={pinnedConversations}
-            emptyText="Chua co cuoc hoi thoai nao duoc ghim."
+            emptyText="Chưa có cuộc hội thoại nào được ghim."
           />
 
           <ConversationSection
-            title="Khac"
+            title="Khác"
             conversations={regularConversations}
-            emptyText="Khong con cuoc hoi thoai nao trong muc nay."
+            emptyText="Không còn cuộc hội thoại nào trong mục này."
           />
         </div>
       )}
