@@ -88,6 +88,7 @@ export interface ChatState {
   ) => void;
   removeConversation: (conversationId: string) => void;
   markAsSeen: () => Promise<void>;
+  toggleConversationPin: (conversationId: string) => Promise<void>;
   addConvo: (convo: Conversation) => void;
   createConversation: (
     type: "group" | "direct",

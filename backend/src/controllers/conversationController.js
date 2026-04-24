@@ -7,7 +7,7 @@ import {
     emitConversationRemoved,
     emitConversationUpsert,
     formatMessagesForClient,
-    formatConversationForSocket,
+    formatConversationForUser,
     getConversationParticipantIds,
 } from "../utils/messageHelper.js";
 import crypto from "crypto";
@@ -185,7 +185,9 @@ const removeParticipantState = (conversation, removedUserId) => {
 
 const respondWithConversation = async (res, conversation, statusCode = 200) => {
     const populatedConversation = await populateConversation(conversation);
-    return res.status(statusCode).json({ conversation: formatConversationForSocket(populatedConversation) });
+    return res.status(statusCode).json({
+        conversation: formatConversationForUser(populatedConversation, res.req.user?._id),
+    });
 };
 export const createConversation = async (req, res) => {
     try {
@@ -260,7 +262,7 @@ export const createConversation = async (req, res) => {
         }
 
         await populateConversation(conversation);
-        const formatted = formatConversationForSocket(conversation);
+        const formatted = formatConversationForUser(conversation, userId);
 
 
         if (type === "group") {
@@ -385,7 +387,7 @@ export const getConversations = async (req, res) => {
                 select: 'displayName avatarUrl',
             });
 
-        const formatted = conversations.map((convo) => formatConversationForSocket(convo));
+        const formatted = conversations.map((convo) => formatConversationForUser(convo, userId));
 
         return res.status(200).json({ conversations: formatted });
 
@@ -426,6 +428,56 @@ export const getMessages = async (req, res) => {
     } catch (error) {
         console.error("Lỗi khi lấy messages:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const toggleConversationPin = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user._id.toString();
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Cuoc tro chuyen khong ton tai" });
+        }
+
+        const isParticipant = conversation.participants.some(
+            (participant) => participant.userId.toString() === userId
+        );
+
+        if (!isParticipant) {
+            return res.status(403).json({ message: "Ban khong thuoc cuoc tro chuyen nay" });
+        }
+
+        const existingEntryIndex = (conversation.pinnedBy || []).findIndex(
+            (entry) => entry.userId.toString() === userId
+        );
+
+        let isPinned = false;
+
+        if (existingEntryIndex >= 0) {
+            conversation.pinnedBy.splice(existingEntryIndex, 1);
+        } else {
+            conversation.pinnedBy.push({
+                userId,
+                pinnedAt: new Date(),
+            });
+            isPinned = true;
+        }
+
+        await conversation.save();
+        await populateConversation(conversation);
+
+        const formattedConversation = formatConversationForUser(conversation, userId);
+        io.to(userId).emit("conversation-upsert", formattedConversation);
+
+        return res.status(200).json({
+            conversation: formattedConversation,
+            isPinned,
+        });
+    } catch (error) {
+        console.error("Loi khi toggle pin conversation:", error);
+        return res.status(500).json({ message: "Loi he thong" });
     }
 };
 
@@ -573,10 +625,10 @@ export const addGroupMembers = async (req, res) => {
         emitConversationUpsert(io, conversation);
 
         nextMemberIds.forEach((memberId) => {
-            io.to(memberId).emit("new-group", formatConversationForSocket(conversation));
+            io.to(memberId).emit("new-group", formatConversationForUser(conversation, memberId));
         });
 
-        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+        return res.status(200).json({ conversation: formatConversationForUser(conversation, actorId) });
     } catch (error) {
         console.error("Lỗi khi thêm thành viên nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -655,7 +707,7 @@ export const removeGroupMember = async (req, res) => {
         emitConversationUpsert(io, conversation);
         emitConversationRemoved(io, conversationId, [memberId]);
 
-        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+        return res.status(200).json({ conversation: formatConversationForUser(conversation, actorId) });
     } catch (error) {
         console.error("Lỗi khi xóa thành viên nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -693,7 +745,7 @@ export const updateGroupMemberRole = async (req, res) => {
 
         emitConversationUpsert(io, await populateConversation(conversation));
 
-        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+        return res.status(200).json({ conversation: formatConversationForUser(conversation, actorId) });
     } catch (error) {
         console.error("Lỗi khi cập nhật vai trò thành viên:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -735,7 +787,7 @@ export const transferGroupOwnership = async (req, res) => {
         await conversation.save();
         emitConversationUpsert(io, await populateConversation(conversation));
 
-        return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
+        return res.status(200).json({ conversation: formatConversationForUser(conversation, actorId) });
     } catch (error) {
         console.error("Lỗi khi chuyển quyền chủ nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
@@ -846,7 +898,7 @@ export const joinGroupByToken = async (req, res) => {
         await conversation.save();
 
         await populateConversation(conversation);
-        const formattedConversation = formatConversationForSocket(conversation);
+        const formattedConversation = formatConversationForUser(conversation, userId);
 
         emitConversationUpsert(io, conversation);
         io.to(userId.toString()).emit("new-group", formattedConversation);

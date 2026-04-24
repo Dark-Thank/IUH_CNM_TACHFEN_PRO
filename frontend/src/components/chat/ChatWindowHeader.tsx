@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PanelRightClose, PanelRightOpen, Phone, Video, Link2 } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Phone, Search, Video, Link2 } from "lucide-react";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
@@ -17,14 +17,18 @@ import { ShareGroupLinkModal } from "./ShareGroupLinkModal";
 
 type Props = {
   chat?: Conversation;
-  attachmentsOpen?: boolean;
+  panelMode?: "none" | "attachments" | "search";
+  searchOpen?: boolean;
   onToggleAttachmentsPanel?: () => void;
+  onToggleSearchPanel?: () => void;
 };
 
 const ChatWindowHeader = ({
   chat,
-  attachmentsOpen = false,
+  panelMode = "none",
+  searchOpen = false,
   onToggleAttachmentsPanel,
+  onToggleSearchPanel,
 }: Props) => {
   const [showProfile, setShowProfile] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
@@ -173,12 +177,23 @@ const ChatWindowHeader = ({
 
           <Button
             type="button"
+            variant={searchOpen ? "secondary" : "ghost"}
+            size="icon-sm"
+            onClick={() => onToggleSearchPanel?.()}
+            className="shrink-0 rounded-full"
+          >
+            <Search className="size-4" />
+            <span className="sr-only">Toggle search panel</span>
+          </Button>
+
+          <Button
+            type="button"
             variant="ghost"
             size="icon-sm"
             onClick={() => onToggleAttachmentsPanel?.()}
             className="shrink-0 rounded-full"
           >
-            {attachmentsOpen ? (
+            {panelMode === "attachments" ? (
               <PanelRightClose className="size-4" />
             ) : (
               <PanelRightOpen className="size-4" />

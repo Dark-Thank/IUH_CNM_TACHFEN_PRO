@@ -471,6 +471,15 @@ export const useChatStore = create<ChatState>()(
           console.error("Lỗi xảy ra khi goi markAsSeen trong store:", error);
         }
       },
+      toggleConversationPin: async (conversationId) => {
+        try {
+          const conversation = await chatService.toggleConversationPin(conversationId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi ghim cuoc tro chuyen:", error);
+          throw error;
+        }
+      },
       addConvo: (convo) => {
         set((state) => ({
           conversations: mergeConversationList(state.conversations, convo),

@@ -39,11 +39,12 @@ const isUnauthorizedError = (error: any) => {
 
 const getConversationTimestamp = (conversation: Conversation) => {
   const fallbackValue = "1970-01-01T00:00:00.000Z";
+  const priorityTimestamp = conversation.isPinned
+    ? conversation.pinnedAt
+    : conversation.lastMessageAt ?? conversation.updatedAt ?? conversation.createdAt;
 
   return new Date(
-    conversation.lastMessageAt ??
-    conversation.updatedAt ??
-    conversation.createdAt ??
+    priorityTimestamp ??
     fallbackValue
   ).getTime();
 };
@@ -581,6 +582,16 @@ export const useChatStore = create<ChatState>()(
           if (!isUnauthorizedError(error)) {
             console.error("Loi xay ra khi goi markAsSeen trong store:", error);
           }
+        }
+      },
+
+      toggleConversationPin: async (conversationId) => {
+        try {
+          const conversation = await chatService.toggleConversationPin(conversationId);
+          get().upsertConversation(conversation);
+        } catch (error) {
+          console.error("Loi khi ghim cuoc tro chuyen:", error);
+          throw error;
         }
       },
 

@@ -10,6 +10,7 @@ import {
   leaveGroup,
   markAsSeen,
   removeGroupMember,
+  toggleConversationPin,
   transferGroupOwnership,
   renameGroup,
   updateGroupAvatar,
@@ -43,6 +44,7 @@ router.patch(
 );
 
 router.patch("/:conversationId/seen", markAsSeen);
+router.patch("/:conversationId/pin", toggleConversationPin);
 
 router.post('/:conversationId/members', addGroupMembers);
 router.delete('/:conversationId/members/:memberId', removeGroupMember);

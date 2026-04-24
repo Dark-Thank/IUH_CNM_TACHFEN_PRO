@@ -286,6 +286,10 @@ export const formatConversationForSocket = (conversation) => {
             avatarUrl: user?.avatarUrl ?? null,
         })),
         unreadCounts: toPlainUnreadCounts(rawConversation.unreadCounts),
+        pinnedBy: (rawConversation.pinnedBy || []).map((entry) => ({
+            userId: getEntityId(entry?.userId),
+            pinnedAt: entry?.pinnedAt ?? null,
+        })),
         lastMessage: rawConversation?.lastMessage?._id
             ? {
                 _id: rawConversation.lastMessage._id,
@@ -301,11 +305,26 @@ export const formatConversationForSocket = (conversation) => {
     };
 };
 
-export const emitConversationUpsert = (io, conversation) => {
+export const formatConversationForUser = (conversation, userId) => {
     const formattedConversation = formatConversationForSocket(conversation);
+    const normalizedUserId = userId?.toString?.() || userId;
+    const pinnedEntry = (formattedConversation.pinnedBy || []).find(
+        (entry) => entry.userId === normalizedUserId
+    );
 
+    return {
+        ...formattedConversation,
+        isPinned: Boolean(pinnedEntry),
+        pinnedAt: pinnedEntry?.pinnedAt ?? null,
+    };
+};
+
+export const emitConversationUpsert = (io, conversation) => {
     getConversationParticipantIds(conversation).forEach((participantId) => {
-        io.to(participantId).emit("conversation-upsert", formattedConversation);
+        io.to(participantId).emit(
+            "conversation-upsert",
+            formatConversationForUser(conversation, participantId)
+        );
     });
 };
 

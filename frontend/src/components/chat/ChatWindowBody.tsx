@@ -8,7 +8,21 @@ import PinnedSection from "./PinnedSection";
 
 const SCROLL_TO_LATEST_THRESHOLD = 160;
 
-const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
+type Props = {
+    isBlocked: boolean;
+    focusMessageId?: string | null;
+    focusRequestKey?: number;
+    searchQuery?: string;
+    highlightedMessageId?: string | null;
+};
+
+const ChatWindowBody = ({
+    isBlocked,
+    focusMessageId = null,
+    focusRequestKey = 0,
+    searchQuery = "",
+    highlightedMessageId = null,
+}: Props) => {
     const {
         activeConversationId,
         conversations,
@@ -57,6 +71,14 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
     useEffect(() => {
         setShowScrollToLatest(false);
     }, [messages[messages.length - 1]?._id]);
+
+    useEffect(() => {
+        if (!focusMessageId) {
+            return;
+        }
+
+        scrollToMessage(focusMessageId);
+    }, [focusMessageId, focusRequestKey, scrollToMessage]);
 
     const fetchMoreMessages = async () => {
         if (!activeConversationId) {
@@ -177,6 +199,8 @@ const ChatWindowBody = ({ isBlocked }: { isBlocked: boolean }) => {
                             index={index}
                             messages={reversedMessages}
                             selectedConvo={selectedConvo}
+                            searchQuery={searchQuery}
+                            isSearchFocused={highlightedMessageId === message._id}
                         />
                     ))}
                 </InfiniteScroll>

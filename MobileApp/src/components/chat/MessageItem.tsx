@@ -126,6 +126,7 @@ interface MessageItemProps {
   message: Message;
   previousMessage?: Message;
   selectedConvo: Conversation;
+  isSearchFocused?: boolean;
 }
 
 const MESSAGE_RECEIPT_LABELS = {
@@ -167,7 +168,7 @@ const getReactionUsersLabel = (users: ReactionUser[], currentUserId?: string) =>
     .join(", ");
 };
 
-function MessageItem({ message, previousMessage, selectedConvo }: MessageItemProps) {
+function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused = false }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const {
@@ -724,7 +725,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
   };
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, isSearchFocused && styles.searchFocusedWrapper]}>
       {showTimeSeparator ? (
         <Text
           style={[styles.timeText, { color: isDark ? "#94a3b8" : "#64748b" }]}
@@ -1280,12 +1281,18 @@ export default memo(MessageItem, (prevProps, nextProps) => {
   return (
     prevProps.message === nextProps.message &&
     prevProps.previousMessage === nextProps.previousMessage &&
-    prevProps.selectedConvo === nextProps.selectedConvo
+    prevProps.selectedConvo === nextProps.selectedConvo &&
+    prevProps.isSearchFocused === nextProps.isSearchFocused
   );
 });
 
 const styles = StyleSheet.create({
-  wrapper: { marginBottom: 10 },
+  wrapper: { marginBottom: 10, borderRadius: 18 },
+  searchFocusedWrapper: {
+    borderWidth: 2,
+    borderColor: "#fbbf24",
+    padding: 4,
+  },
   timeText: { fontSize: 12, textAlign: "center", marginBottom: 10 },
   row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   avatarSlot: { width: 34, alignItems: "center" },

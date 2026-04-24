@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { normalizeSearchText } from "@/lib/messageSearch";
 import { cn, formatMessageTime } from "@/lib/utils";
 import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
@@ -94,6 +95,8 @@ interface MessageItemProps {
   index: number;
   messages: Message[];
   selectedConvo: Conversation;
+  searchQuery?: string;
+  isSearchFocused?: boolean;
 }
 
 const getCallTypeLabel = (callType?: "audio" | "video") =>
@@ -232,11 +235,67 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
   return "Tin nhắn";
 };
 
+const renderHighlightedContent = (text: string, query: string, isFocused: boolean) => {
+  if (!query.trim()) {
+    return text;
+  }
+
+  const normalizedQuery = normalizeSearchText(query);
+  const normalizedText = normalizeSearchText(text);
+
+  if (!normalizedQuery || !normalizedText.includes(normalizedQuery)) {
+    return text;
+  }
+
+  const lowerText = text.toLowerCase();
+  const plainQuery = query.trim().toLowerCase();
+  const segments: { value: string; matched: boolean }[] = [];
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const matchIndex = lowerText.indexOf(plainQuery, cursor);
+
+    if (matchIndex < 0) {
+      segments.push({ value: text.slice(cursor), matched: false });
+      break;
+    }
+
+    if (matchIndex > cursor) {
+      segments.push({ value: text.slice(cursor, matchIndex), matched: false });
+    }
+
+    segments.push({
+      value: text.slice(matchIndex, matchIndex + plainQuery.length),
+      matched: true,
+    });
+
+    cursor = matchIndex + plainQuery.length;
+  }
+
+  return segments.map((segment, index) =>
+    segment.matched ? (
+      <mark
+        key={`${segment.value}-${index}`}
+        className={cn(
+          "rounded px-0.5 text-inherit",
+          isFocused ? "bg-amber-300/80 text-foreground" : "bg-amber-200/60 text-inherit"
+        )}
+      >
+        {segment.value}
+      </mark>
+    ) : (
+      <span key={`${segment.value}-${index}`}>{segment.value}</span>
+    )
+  );
+};
+
 const MessageItem = ({
   message,
   index,
   messages,
   selectedConvo,
+  searchQuery = "",
+  isSearchFocused = false,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
   const {
@@ -416,7 +475,8 @@ const MessageItem = ({
       <div
         data-message-id={message._id}
         className={cn(
-          "flex gap-1 message-bounce mt-1 relative group w-full",
+          "flex gap-1 message-bounce mt-1 relative group w-full rounded-2xl transition",
+          isSearchFocused && "ring-2 ring-amber-300/80 ring-offset-2 ring-offset-primary-foreground",
           isOwn ? "justify-end" : "justify-start"
         )}
       >
@@ -516,7 +576,7 @@ const MessageItem = ({
 
                 {message.content && (
                   <p className="text-sm wrap-break-word text-muted-foreground">
-                    {message.content}
+                    {renderHighlightedContent(message.content, searchQuery, isSearchFocused)}
                   </p>
                 )}
               </div>
@@ -579,7 +639,7 @@ const MessageItem = ({
                 {/* TEXT */}
                 {message.content && (
                   <p className="text-sm wrap-break-word">
-                    {message.content}
+                    {renderHighlightedContent(message.content, searchQuery, isSearchFocused)}
                   </p>
                 )}
 
