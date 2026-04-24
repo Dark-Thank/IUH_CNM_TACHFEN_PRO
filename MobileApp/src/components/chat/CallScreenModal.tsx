@@ -9,13 +9,13 @@ import { RTCView, type MediaStream } from "react-native-webrtc";
 import UserAvatar from "./UserAvatar";
 
 const statusLabelMap = {
-	incoming: "Cuoc goi den",
-	"acquiring-media": "Dang mo thiet bi...",
-	"outgoing-ringing": "Dang do chuong...",
-	negotiating: "Dang ket noi...",
-	connected: "Da ket noi",
-	reconnecting: "Dang khoi phuc ket noi...",
-	idle: "San sang",
+	incoming: "Cuộc gọi đến",
+	"acquiring-media": "Đang mở thiết bị...",
+	"outgoing-ringing": "Đang đổ chuông...",
+	negotiating: "Đang kết nối...",
+	connected: "Đã kết nối",
+	reconnecting: "Đang khôi phục kết nối...",
+	idle: "Sẵn sàng",
 } as const;
 
 const hasActiveVideoTrack = (stream: MediaStream | null) =>
@@ -87,7 +87,7 @@ function RemoteParticipantTile({
 				>
 					<UserAvatar name={displayName} avatarUrl={avatarUrl} size={68} />
 					<Text style={styles.groupTileName}>{displayName}</Text>
-					<Text style={styles.groupTileStatus}>Dang cho video...</Text>
+					<Text style={styles.groupTileStatus}>Đang chờ video...</Text>
 				</View>
 			)}
 
@@ -130,7 +130,7 @@ export default function CallScreenModal() {
 
 					return {
 						participantId,
-						displayName: participant?.displayName || `User ${participantId.slice(Math.max(0, participantId.length - 4))}`,
+						displayName: participant?.displayName || `Người dùng ${participantId.slice(Math.max(0, participantId.length - 4))}`,
 						avatarUrl: participant?.avatarUrl,
 						stream: remoteStreams[participantId] ?? null,
 					};
@@ -189,12 +189,12 @@ export default function CallScreenModal() {
 
 				<View style={styles.topOverlay}>
 					<Text style={styles.callTypeLabel}>
-						{currentCall.callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai"}
+						{currentCall.callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại"}
 					</Text>
 					<Text style={styles.statusBadge}>{statusLabelMap[currentCall.status]}</Text>
 					{currentCall.isGroup ? (
 						<Text style={styles.participantCountLabel}>
-							{Object.keys(remoteStreams).length} participant dang ket noi
+							{Object.keys(remoteStreams).length} thành viên đang kết nối
 						</Text>
 					) : null}
 				</View>
@@ -212,22 +212,22 @@ export default function CallScreenModal() {
 							/>
 						) : (
 							<View style={styles.localPreviewPlaceholder}>
-								<UserAvatar name="Ban" size={42} />
+								<UserAvatar name="Bạn" size={42} />
 								<Text style={styles.localPreviewLabel}>
-									{isCameraEnabled ? "Dang khoi dong camera..." : "Camera dang tat"}
+									{isCameraEnabled ? "Đang khởi động camera..." : "Camera đang tắt"}
 								</Text>
 							</View>
 						)}
 
 						<View style={styles.localPreviewFooter}>
-							<Text style={styles.localPreviewFooterText}>Ban</Text>
+							<Text style={styles.localPreviewFooterText}>Bạn</Text>
 						</View>
 					</View>
 				) : null}
 
 				<View style={styles.controlsBar}>
 					<ControlButton
-						label={isMicrophoneEnabled ? "Tat mic" : "Mo mic"}
+						label={isMicrophoneEnabled ? "Tắt mic" : "Mở mic"}
 						icon={isMicrophoneEnabled ? <Mic size={20} color="#ffffff" /> : <MicOff size={20} color="#ffffff" />}
 						onPress={toggleMicrophone}
 						backgroundColor={isMicrophoneEnabled ? "#334155" : "#b91c1c"}
@@ -235,7 +235,7 @@ export default function CallScreenModal() {
 
 					{currentCall.callType === "video" ? (
 						<ControlButton
-							label={isCameraEnabled ? "Tat video" : "Mo video"}
+							label={isCameraEnabled ? "Tắt video" : "Mở video"}
 							icon={isCameraEnabled ? <Video size={20} color="#ffffff" /> : <VideoOff size={20} color="#ffffff" />}
 							onPress={toggleCamera}
 							backgroundColor={isCameraEnabled ? "#334155" : "#b91c1c"}
@@ -243,7 +243,7 @@ export default function CallScreenModal() {
 					) : null}
 
 					<ControlButton
-						label="Ket thuc"
+						label="Kết thúc"
 						icon={<PhoneOff size={20} color="#ffffff" />}
 						onPress={() => endCall(getHangupReason(currentCall))}
 						backgroundColor="#ef4444"

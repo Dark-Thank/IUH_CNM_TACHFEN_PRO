@@ -50,7 +50,7 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
         bio: trimmedBio,
       });
     } catch (error) {
-      console.error("Khong the cap nhat profile", error);
+      console.error("Không thể cập nhật hồ sơ", error);
     } finally {
       setSaving(false);
     }
@@ -61,17 +61,17 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Heart className="size-5 text-primary" />
-          Thong tin ca nhan
+          Thông tin cá nhân
         </CardTitle>
         <CardDescription>
-          Ban co the doi ten hien thi va gioi thieu. Email va username duoc giu co dinh.
+          Bạn có thể đổi tên hiển thị và giới thiệu. Email và username được giữ cố định.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="displayName">Ten hien thi</Label>
+            <Label htmlFor="displayName">Tên hiển thị</Label>
             <Input
               id="displayName"
               value={displayName}
@@ -81,7 +81,7 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="username">Ten nguoi dung</Label>
+            <Label htmlFor="username">Tên người dùng</Label>
             <Input
               id="username"
               value={userInfo.username ?? ""}
@@ -103,7 +103,7 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="bio">Gioi thieu</Label>
+          <Label htmlFor="bio">Giới thiệu</Label>
           <Textarea
             id="bio"
             rows={4}
@@ -119,7 +119,7 @@ const PersonalInfoForm = ({ userInfo }: Props) => {
           disabled={saving || !trimmedDisplayName || !hasChanges}
           className="w-full md:w-auto bg-gradient-primary hover:opacity-90 transition-opacity"
         >
-          {saving ? "Dang luu..." : "Luu thay doi"}
+          {saving ? "Đang lưu..." : "Lưu thay đổi"}
         </Button>
       </CardContent>
     </Card>

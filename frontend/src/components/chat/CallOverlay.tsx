@@ -7,13 +7,13 @@ import { ChevronDown, ChevronUp, Mic, MicOff, Phone, PhoneOff, Video, VideoOff }
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const statusLabelMap = {
-  incoming: "Cuoc goi den",
-  "acquiring-media": "Dang mo thiet bi...",
-  "outgoing-ringing": "Dang do chuong...",
-  negotiating: "Dang thuong luong ket noi...",
-  connected: "Da ket noi",
-  reconnecting: "Dang khoi phuc ket noi...",
-  idle: "San sang",
+  incoming: "Cuộc gọi đến",
+  "acquiring-media": "Đang mở thiết bị...",
+  "outgoing-ringing": "Đang đổ chuông...",
+  negotiating: "Đang thương lượng kết nối...",
+  connected: "Đã kết nối",
+  reconnecting: "Đang khôi phục kết nối...",
+  idle: "Sẵn sàng",
 } as const;
 
 const hasActiveVideoTrack = (stream: MediaStream | null) =>
@@ -62,38 +62,38 @@ const getVideoGridClassName = (count: number) => {
 const getRemoteVideoStatusMessage = (status: keyof typeof statusLabelMap) => {
   switch (status) {
     case "incoming":
-      return "Cuoc goi video den. San sang de tra loi.";
+      return "Cuộc gọi video đến. Sẵn sàng để trả lời.";
     case "acquiring-media":
-      return "Dang mo microphone va camera...";
+      return "Đang mở microphone và camera...";
     case "outgoing-ringing":
-      return "Dang goi video. Cho doi phuong tra loi...";
+      return "Đang gọi video. Chờ đối phương trả lời...";
     case "negotiating":
-      return "Dang thiet lap ket noi video...";
+      return "Đang thiết lập kết nối video...";
     case "connected":
-      return "Doi phuong dang tat camera hoac video chua san sang.";
+      return "Đối phương đang tắt camera hoặc video chưa sẵn sàng.";
     case "reconnecting":
-      return "Ket noi video bi gian doan. Dang thu ket noi lai...";
+      return "Kết nối video bị gián đoạn. Đang thử kết nối lại...";
     default:
-      return "Cuoc goi video san sang.";
+      return "Cuộc gọi video sẵn sàng.";
   }
 };
 
 const getAudioStatusMessage = (status: keyof typeof statusLabelMap) => {
   switch (status) {
     case "incoming":
-      return "Cuoc goi thoai den. San sang de tra loi.";
+      return "Cuộc gọi thoại đến. Sẵn sàng để trả lời.";
     case "acquiring-media":
-      return "Dang mo microphone...";
+      return "Đang mở microphone...";
     case "outgoing-ringing":
-      return "Dang goi thoai. Cho doi phuong tra loi...";
+      return "Đang gọi thoại. Chờ đối phương trả lời...";
     case "negotiating":
-      return "Dang ket noi am thanh...";
+      return "Đang kết nối âm thanh...";
     case "connected":
-      return "Microphone da duoc ket noi.";
+      return "Microphone đã được kết nối.";
     case "reconnecting":
-      return "Ket noi am thanh bi gian doan. Dang thu ket noi lai...";
+      return "Kết nối âm thanh bị gián đoạn. Đang thử kết nối lại...";
     default:
-      return "Cuoc goi san sang.";
+      return "Cuộc gọi sẵn sàng.";
   }
 };
 
@@ -167,7 +167,7 @@ const RemoteVideoTile = ({
           <div>
             <h3 className="text-2xl font-semibold text-white">{displayName}</h3>
             <p className="mt-2 text-sm text-slate-300">
-              {isCameraEnabled ? "Dang cho video tu participant nay..." : "Participant nay dang tat camera."}
+              {isCameraEnabled ? "Đang chờ video từ thành viên này..." : "Thành viên này đang tắt camera."}
             </p>
           </div>
         </div>
@@ -239,8 +239,8 @@ const CallControls = ({
       isActive={isMicrophoneEnabled}
       activeIcon={<Mic className="size-5" />}
       inactiveIcon={<MicOff className="size-5" />}
-      activeLabel="Tat mic"
-      inactiveLabel="Mo mic"
+      activeLabel="Tắt mic"
+      inactiveLabel="Mở mic"
       onClick={toggleMicrophone}
     />
 
@@ -249,8 +249,8 @@ const CallControls = ({
         isActive={isCameraEnabled}
         activeIcon={<Video className="size-5" />}
         inactiveIcon={<VideoOff className="size-5" />}
-        activeLabel="Tat video"
-        inactiveLabel="Mo video"
+        activeLabel="Tắt video"
+        inactiveLabel="Mở video"
         onClick={toggleCamera}
       />
     )}
@@ -264,7 +264,7 @@ const CallControls = ({
           <span className="flex size-11 items-center justify-center rounded-full bg-white/15">
             <Phone className="size-5" />
           </span>
-          <span className="text-xs font-medium">Nhan</span>
+          <span className="text-xs font-medium">Nhận</span>
         </span>
       </Button>
     )}
@@ -284,7 +284,7 @@ const CallControls = ({
         <span className="flex size-11 items-center justify-center rounded-full bg-white/15">
           <PhoneOff className="size-5" />
         </span>
-        <span className="text-xs font-medium">Ket thuc</span>
+        <span className="text-xs font-medium">Kết thúc</span>
       </span>
     </Button>
   </div>
@@ -402,11 +402,11 @@ const CallOverlay = () => {
             <p className="text-xs uppercase tracking-[0.28em] text-slate-400">{statusLabelMap[currentCall.status]}</p>
             <h2 className="mt-2 text-2xl font-semibold">{currentCall.peer.displayName}</h2>
             <p className="mt-1 text-sm text-slate-300">
-              {currentCall.callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai"}
+              {currentCall.callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại"}
             </p>
             {currentCall.isGroup && (
               <p className="mt-1 text-sm text-slate-400">
-                {Object.keys(remoteStreams).length} participant dang ket noi
+                {Object.keys(remoteStreams).length} thành viên đang kết nối
               </p>
             )}
           </div>
@@ -458,7 +458,7 @@ const CallOverlay = () => {
                     <p className="mt-2 text-sm text-slate-300">
                       {directRemoteCameraEnabled
                         ? getRemoteVideoStatusMessage(currentCall.status)
-                        : "Doi phuong dang tat camera."}
+                        : "Đối phương đang tắt camera."}
                     </p>
                   </div>
                 </div>
@@ -480,13 +480,13 @@ const CallOverlay = () => {
                         {getInitial("Ban")}
                       </div>
                       <p className="text-xs font-medium text-slate-200">
-                        {isCameraEnabled ? "Dang chuan bi camera" : "Camera dang tat"}
+                        {isCameraEnabled ? "Đang chuẩn bị camera" : "Camera đang tắt"}
                       </p>
                     </div>
                   )}
 
                   <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 to-transparent px-3 py-2">
-                    <p className="text-xs font-medium text-white">Ban</p>
+                    <p className="text-xs font-medium text-white">Bạn</p>
                   </div>
                 </div>
               )}

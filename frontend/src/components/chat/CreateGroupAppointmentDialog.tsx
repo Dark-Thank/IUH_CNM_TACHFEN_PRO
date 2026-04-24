@@ -58,19 +58,19 @@ const CreateGroupAppointmentDialog = ({
     const normalizedTitle = title.trim();
 
     if (!normalizedTitle) {
-      toast.error("Nhap tieu de lich hen");
+      toast.error("Nhập tiêu đề lịch hẹn");
       return;
     }
 
     if (!scheduledAt) {
-      toast.error("Chon thoi gian hen");
+      toast.error("Chọn thời gian hẹn");
       return;
     }
 
     const parsedScheduledAt = new Date(scheduledAt);
 
     if (Number.isNaN(parsedScheduledAt.getTime()) || parsedScheduledAt.getTime() <= Date.now()) {
-      toast.error("Thoi gian lich hen phai lon hon thoi diem hien tai");
+      toast.error("Thời gian lịch hẹn phải lớn hơn thời điểm hiện tại");
       return;
     }
 
@@ -85,7 +85,7 @@ const CreateGroupAppointmentDialog = ({
       setOpen(false);
       resetState();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Khong the tao lich hen");
+      toast.error(error?.response?.data?.message || "Không thể tạo lịch hẹn");
     } finally {
       setSubmitting(false);
     }
@@ -96,35 +96,35 @@ const CreateGroupAppointmentDialog = ({
       <DialogTrigger asChild>
         <Button type="button" variant="ghost" size="icon" disabled={disabled}>
           <CalendarPlus className="size-4" />
-          <span className="sr-only">Tao lich hen</span>
+          <span className="sr-only">Tạo lịch hẹn</span>
         </Button>
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Tao lich hen cho nhom</DialogTitle>
+          <DialogTitle>Tạo lịch hẹn cho nhóm</DialogTitle>
           <DialogDescription>
-            Gui thong tin hen gap de moi nguoi xac nhan tham gia ngay trong chat.
+            Gửi thông tin hẹn gặp để mọi người xác nhận tham gia ngay trong chat.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="appointment-title" className="text-sm font-medium">
-              Tieu de
+              Tiêu đề
             </label>
             <Input
               id="appointment-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder="Vi du: Hop nhom sprint 12"
+              placeholder="Ví dụ: Họp nhóm sprint 12"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="appointment-scheduled-at" className="text-sm font-medium">
-              Thoi gian
+              Thời gian
             </label>
             <Input
               id="appointment-scheduled-at"
@@ -138,26 +138,26 @@ const CreateGroupAppointmentDialog = ({
 
           <div className="space-y-2">
             <label htmlFor="appointment-location" className="text-sm font-medium">
-              Dia diem
+              Địa điểm
             </label>
             <Input
               id="appointment-location"
               value={location}
               onChange={(event) => setLocation(event.target.value)}
-              placeholder="Phong hop A / Google Meet"
+              placeholder="Phòng họp A / Google Meet"
               disabled={submitting}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="appointment-description" className="text-sm font-medium">
-              Ghi chu
+              Ghi chú
             </label>
             <Textarea
               id="appointment-description"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              placeholder="Noi dung can chuan bi..."
+              placeholder="Nội dung cần chuẩn bị..."
               disabled={submitting}
             />
           </div>
@@ -165,10 +165,10 @@ const CreateGroupAppointmentDialog = ({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={submitting}>
-            Huy
+            Hủy
           </Button>
           <Button type="button" onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? "Dang tao..." : "Gui lich hen"}
+            {submitting ? "Đang tạo..." : "Gửi lịch hẹn"}
           </Button>
         </DialogFooter>
       </DialogContent>

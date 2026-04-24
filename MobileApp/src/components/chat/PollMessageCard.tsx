@@ -1,12 +1,14 @@
 import { toast } from "@/lib/toast";
 import { useThemeStore } from "@/stores/useThemeStore";
-import type { Message } from "@/types/chat";
+import type { Message, Participant } from "@/types/chat";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import UserAvatar from "./UserAvatar";
 
 type PollMessageCardProps = {
   message: Message;
   viewerId?: string;
+  participants: Participant[];
   onVote: (optionId: string) => Promise<void>;
   onAddOption?: (text: string) => Promise<void>;
   onClose?: () => Promise<void>;
@@ -35,6 +37,7 @@ const formatPollDeadline = (value?: string | null) => {
 export default function PollMessageCard({
   message,
   viewerId,
+  participants,
   onVote,
   onAddOption,
   onClose,
@@ -71,7 +74,12 @@ export default function PollMessageCard({
   );
   const hasVoted = selectedOptionIds.size > 0;
   const canRevealResults = !hideResultsUntilVote || hasVoted || isClosed;
+  const canShowVoters = pollMeta.hideVoters !== true && canRevealResults;
   const canAddOptions = Boolean(onAddOption) && allowUserAddedOptions && !isClosed && pollMeta.options.length < 10;
+  const participantMap = useMemo(
+    () => new Map(participants.map((participant) => [participant._id, participant])),
+    [participants]
+  );
   const pollSettings = [
     pollMeta.hideVoters ? "Ẩn người bình chọn" : null,
     hideResultsUntilVote ? "Ẩn kết quả trước khi bình chọn" : null,
@@ -147,7 +155,7 @@ export default function PollMessageCard({
 
         <View style={[styles.badge, { backgroundColor: isDark ? "#312e81" : "#ede9fe" }]}>
           <Text style={[styles.badgeText, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}>
-            {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "votes"}` : "Kết quả ẩn"}
+            {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "phiếu"}` : "Kết quả ẩn"}
           </Text>
         </View>
       </View>
@@ -208,6 +216,17 @@ export default function PollMessageCard({
           const voteCount = option.voterIds.length;
           const votePercent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
           const isSelected = selectedOptionIds.has(option._id);
+          const optionVoters = option.voterIds.map((voterId) => {
+            const participant = participantMap.get(voterId);
+
+            return {
+              _id: voterId,
+              displayName: voterId === viewerId ? "Bạn" : participant?.displayName || "Thành viên",
+              avatarUrl: participant?.avatarUrl ?? null,
+            };
+          });
+          const visibleVoters = optionVoters.slice(0, 5);
+          const remainingVoterCount = optionVoters.length - visibleVoters.length;
 
           return (
             <Pressable
@@ -246,6 +265,52 @@ export default function PollMessageCard({
                       { width: `${votePercent}%`, backgroundColor: isSelected ? "#8b5cf6" : "#a78bfa" },
                     ]}
                   />
+                </View>
+              ) : null}
+
+              {canShowVoters && optionVoters.length > 0 ? (
+                <View style={styles.voterRow}>
+                  <View style={styles.voterAvatarStack}>
+                    {visibleVoters.map((voter, index) => (
+                      <View
+                        key={`${option._id}-${voter._id}`}
+                        style={[
+                          styles.voterAvatarWrap,
+                          {
+                            marginLeft: index === 0 ? 0 : -8,
+                            borderColor: isDark ? "#0f172a" : "#ffffff",
+                          },
+                        ]}
+                      >
+                        <UserAvatar
+                          name={voter.displayName}
+                          avatarUrl={voter.avatarUrl}
+                          size={22}
+                        />
+                      </View>
+                    ))}
+
+                    {remainingVoterCount > 0 ? (
+                      <View
+                        style={[
+                          styles.voterOverflowBadge,
+                          {
+                            marginLeft: visibleVoters.length > 0 ? -8 : 0,
+                            backgroundColor: isDark ? "#1f2937" : "#e2e8f0",
+                            borderColor: isDark ? "#0f172a" : "#ffffff",
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.voterOverflowText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                          +{remainingVoterCount}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  <Text style={[styles.voterCountText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                    {optionVoters.length === 1 ? "1 người đã chọn" : `${optionVoters.length} người đã chọn`}
+                  </Text>
                 </View>
               ) : null}
 
@@ -473,6 +538,35 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  voterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  voterAvatarStack: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  voterAvatarWrap: {
+    borderWidth: 2,
+    borderRadius: 999,
+  },
+  voterOverflowBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  voterOverflowText: {
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  voterCountText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   optionMeta: {
     fontSize: 11,

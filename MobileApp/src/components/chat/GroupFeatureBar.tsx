@@ -240,17 +240,17 @@ export default function GroupFeatureBar({
     const normalizedOptions = pollOptions.map((option) => option.trim()).filter(Boolean);
 
     if (!normalizedQuestion) {
-      toast.error("Nhap cau hoi binh chon");
+      toast.error("Nhập câu hỏi bình chọn");
       return;
     }
 
     if (normalizedOptions.length < 2) {
-      toast.error("Can it nhat 2 lua chon");
+      toast.error("Cần ít nhất 2 lựa chọn");
       return;
     }
 
     if (pollExpiresAt && new Date(pollExpiresAt).getTime() <= Date.now()) {
-      toast.error("Han vote phai lon hon thoi diem hien tai");
+      toast.error("Hạn bình chọn phải lớn hơn thời điểm hiện tại");
       return;
     }
 
@@ -268,7 +268,7 @@ export default function GroupFeatureBar({
       setShowPollModal(false);
       resetPollState();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Khong the tao vote");
+      toast.error(error?.response?.data?.message || "Không thể tạo bình chọn");
     } finally {
       setSubmitting(false);
     }
@@ -278,17 +278,17 @@ export default function GroupFeatureBar({
     const normalizedTitle = appointmentTitle.trim();
 
     if (!normalizedTitle) {
-      toast.error("Nhap tieu de lich hen");
+      toast.error("Nhập tiêu đề lịch hẹn");
       return;
     }
 
     if (!appointmentScheduledAt) {
-      toast.error("Ngay gio lich hen khong hop le");
+      toast.error("Ngày giờ lịch hẹn không hợp lệ");
       return;
     }
 
     if (new Date(appointmentScheduledAt).getTime() <= Date.now()) {
-      toast.error("Thoi gian lich hen phai lon hon thoi diem hien tai");
+      toast.error("Thời gian lịch hẹn phải lớn hơn thời điểm hiện tại");
       return;
     }
 
@@ -303,7 +303,7 @@ export default function GroupFeatureBar({
       setShowAppointmentModal(false);
       resetAppointmentState();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Khong the tao lich hen");
+      toast.error(error?.response?.data?.message || "Không thể tạo lịch hẹn");
     } finally {
       setSubmitting(false);
     }
@@ -314,7 +314,7 @@ export default function GroupFeatureBar({
       {mode === "inline" ? (
         <>
           <Pressable
-            accessibilityLabel="Tạo vote nhóm"
+            accessibilityLabel="Tạo bình chọn nhóm"
             disabled={disabled}
             onPress={openPollModal}
             style={[
@@ -366,7 +366,7 @@ export default function GroupFeatureBar({
           >
             <ListChecks size={16} color={isDark ? "#e9d5ff" : "#7c3aed"} />
             <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Tao vote
+              Tạo bình chọn
             </Text>
           </Pressable>
 
@@ -384,7 +384,7 @@ export default function GroupFeatureBar({
           >
             <CalendarPlus size={16} color={isDark ? "#bfdbfe" : "#2563eb"} />
             <Text style={[styles.actionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Tao lich hen
+              Tạo lịch hẹn
             </Text>
           </Pressable>
         </View>
@@ -392,7 +392,7 @@ export default function GroupFeatureBar({
 
       <ActionModal
         visible={showPollModal}
-        title="Tao vote cho nhom"
+        title="Tạo bình chọn cho nhóm"
         onClose={() => {
           setShowPollModal(false);
           resetPollState();
@@ -402,7 +402,7 @@ export default function GroupFeatureBar({
           <TextInput
             value={pollQuestion}
             onChangeText={setPollQuestion}
-            placeholder="Cau hoi binh chon"
+            placeholder="Câu hỏi bình chọn"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -419,7 +419,7 @@ export default function GroupFeatureBar({
               <TextInput
                 value={option}
                 onChangeText={(value) => handlePollOptionChange(index, value)}
-                placeholder={`Lua chon ${index + 1}`}
+                placeholder={`Lựa chọn ${index + 1}`}
                 placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                 style={[
                   styles.textInput,
@@ -455,12 +455,12 @@ export default function GroupFeatureBar({
             style={[styles.secondaryButton, { opacity: pollOptions.length >= 10 ? 0.5 : 1 }]}
           >
             <Plus size={16} color="#ffffff" />
-            <Text style={styles.secondaryButtonText}>Them lua chon</Text>
+            <Text style={styles.secondaryButtonText}>Thêm lựa chọn</Text>
           </Pressable>
 
           <DateTimePickerField
-            label="Han vote"
-            placeholder="Chon han vote"
+            label="Hạn bình chọn"
+            placeholder="Chọn hạn bình chọn"
             value={pollExpiresAt}
             onChange={setPollExpiresAt}
             clearable
@@ -478,35 +478,35 @@ export default function GroupFeatureBar({
             ]}
           >
             <Text style={[styles.settingsTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Tuy chon nang cao
+              Tùy chọn nâng cao
             </Text>
 
             {[
               {
                 key: "hide-voters",
-                label: "An nguoi binh chon",
-                description: "Khong hien thi danh tinh nguoi da bo phieu.",
+                label: "Ẩn người bình chọn",
+                description: "Không hiển thị danh tính người đã bỏ phiếu.",
                 value: pollHideVoters,
                 onChange: setPollHideVoters,
               },
               {
                 key: "hide-results",
-                label: "An ket qua khi chua binh chon",
-                description: "Ket qua chi hien sau khi thanh vien da bo phieu hoac poll da dong.",
+                label: "Ẩn kết quả khi chưa bình chọn",
+                description: "Kết quả chỉ hiện sau khi thành viên đã bỏ phiếu hoặc poll đã đóng.",
                 value: pollHideResultsUntilVote,
                 onChange: setPollHideResultsUntilVote,
               },
               {
                 key: "multi-choice",
-                label: "Chon nhieu phuong an",
-                description: "Moi thanh vien co the chon nhieu lua chon trong cung poll.",
+                label: "Chọn nhiều phương án",
+                description: "Mỗi thành viên có thể chọn nhiều lựa chọn trong cùng poll.",
                 value: pollAllowMultipleChoices,
                 onChange: setPollAllowMultipleChoices,
               },
               {
                 key: "user-added-options",
-                label: "Co the them phuong an",
-                description: "Thanh vien trong nhom co the tu them lua chon moi.",
+                label: "Có thể thêm phương án",
+                description: "Thành viên trong nhóm có thể tự thêm lựa chọn mới.",
                 value: pollAllowUserAddedOptions,
                 onChange: setPollAllowUserAddedOptions,
               },
@@ -537,14 +537,14 @@ export default function GroupFeatureBar({
             disabled={submitting}
             style={[styles.primaryButton, { opacity: submitting ? 0.7 : 1 }]}
           >
-            <Text style={styles.primaryButtonText}>{submitting ? "Dang tao..." : "Gui vote"}</Text>
+            <Text style={styles.primaryButtonText}>{submitting ? "Đang tạo..." : "Gửi bình chọn"}</Text>
           </Pressable>
         </ScrollView>
       </ActionModal>
 
       <ActionModal
         visible={showAppointmentModal}
-        title="Tao lich hen cho nhom"
+        title="Tạo lịch hẹn cho nhóm"
         onClose={() => {
           setShowAppointmentModal(false);
           resetAppointmentState();
@@ -554,7 +554,7 @@ export default function GroupFeatureBar({
           <TextInput
             value={appointmentTitle}
             onChangeText={setAppointmentTitle}
-            placeholder="Tieu de lich hen"
+            placeholder="Tiêu đề lịch hẹn"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -567,8 +567,8 @@ export default function GroupFeatureBar({
           />
 
           <DateTimePickerField
-            label="Thoi gian"
-            placeholder="Chon ngay gio"
+            label="Thời gian"
+            placeholder="Chọn ngày giờ"
             value={appointmentScheduledAt}
             onChange={setAppointmentScheduledAt}
             minimumDate={new Date()}
@@ -578,7 +578,7 @@ export default function GroupFeatureBar({
           <TextInput
             value={appointmentLocation}
             onChangeText={setAppointmentLocation}
-            placeholder="Dia diem"
+            placeholder="Địa điểm"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textInput,
@@ -594,7 +594,7 @@ export default function GroupFeatureBar({
             value={appointmentDescription}
             onChangeText={setAppointmentDescription}
             multiline
-            placeholder="Mo ta / ghi chu"
+            placeholder="Mô tả / ghi chú"
             placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
             style={[
               styles.textArea,
@@ -611,7 +611,7 @@ export default function GroupFeatureBar({
             disabled={submitting}
             style={[styles.primaryButton, { opacity: submitting ? 0.7 : 1 }]}
           >
-            <Text style={styles.primaryButtonText}>{submitting ? "Dang tao..." : "Gui lich hen"}</Text>
+            <Text style={styles.primaryButtonText}>{submitting ? "Đang tạo..." : "Gửi lịch hẹn"}</Text>
           </Pressable>
         </ScrollView>
       </ActionModal>

@@ -84,12 +84,12 @@ export default function AppointmentMessageCard({
     }
 
     Alert.alert(
-      "Xoa lich hen",
-      "Lich hen nay se bi xoa khoi cuoc tro chuyen. Tiep tuc?",
+      "Xóa lịch hẹn",
+      "Lịch hẹn này sẽ bị xóa khỏi cuộc trò chuyện. Tiếp tục?",
       [
-        { text: "Huy", style: "cancel" },
+        { text: "Hủy", style: "cancel" },
         {
-          text: "Xoa",
+          text: "Xóa",
           style: "destructive",
           onPress: () => {
             void (async () => {
@@ -97,7 +97,7 @@ export default function AppointmentMessageCard({
                 setDeleting(true);
                 await onDelete();
               } catch (error: any) {
-                toast.error(error?.response?.data?.message || "Khong the xoa lich hen");
+                toast.error(error?.response?.data?.message || "Không thể xóa lịch hẹn");
               } finally {
                 setDeleting(false);
               }
@@ -150,7 +150,7 @@ export default function AppointmentMessageCard({
             ]}
           >
             <Text style={styles.deleteButtonText}>
-              {deleting ? "Dang xoa..." : "Xoa lich hen"}
+              {deleting ? "Đang xóa..." : "Xóa lịch hẹn"}
             </Text>
           </Pressable>
         </View>

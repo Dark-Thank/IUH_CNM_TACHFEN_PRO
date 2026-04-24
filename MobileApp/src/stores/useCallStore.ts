@@ -54,7 +54,7 @@ const resolvePeerFromConversation = (conversation: Conversation, currentUserId?:
 
 const resolveCallLabelPeer = (conversation: Conversation): Participant => ({
 	_id: conversation._id,
-	displayName: conversation.group?.name || "Nhom chat",
+	displayName: conversation.group?.name || "Nhóm chat",
 	avatarUrl: null,
 	role: "member",
 	joinedAt: new Date().toISOString(),
@@ -74,7 +74,7 @@ const resolvePeerForIncomingCall = (
 	if (isGroup) {
 		return {
 			_id: callerId,
-			displayName: conversation?.group?.name || conversationName || "Nhom chat",
+			displayName: conversation?.group?.name || conversationName || "Nhóm chat",
 			avatarUrl: null,
 			role: "member",
 			joinedAt: new Date().toISOString(),
@@ -85,7 +85,7 @@ const resolvePeerForIncomingCall = (
 
 	return {
 		_id: callerId,
-		displayName: peer?.displayName ?? "Nguoi dung",
+		displayName: peer?.displayName ?? "Người dùng",
 		avatarUrl: peer?.avatarUrl ?? null,
 		role: peer?.role ?? "member",
 		joinedAt: peer?.joinedAt ?? new Date().toISOString(),
@@ -100,19 +100,19 @@ const toNativeSessionDescription = (description: RTCSessionDescriptionInit) => (
 const getCallEndMessage = (reason?: string) => {
 	switch (reason) {
 		case "busy":
-			return "Nguoi dung dang trong mot cuoc goi khac.";
+			return "Người dùng đang trong một cuộc gọi khác.";
 		case "declined":
-			return "Cuoc goi da bi tu choi.";
+			return "Cuộc gọi đã bị từ chối.";
 		case "missed":
-			return "Khong co phan hoi cho cuoc goi.";
+			return "Không có phản hồi cho cuộc gọi.";
 		case "disconnected":
-			return "Doi phuong da mat ket noi.";
+			return "Đối phương đã mất kết nối.";
 		case "cancelled":
-			return "Cuoc goi da bi huy.";
+			return "Cuộc gọi đã bị hủy.";
 		case "reconnect-timeout":
-			return "Cuoc goi da ket thuc do khong the khoi phuc ket noi.";
+			return "Cuộc gọi đã kết thúc do không thể khôi phục kết nối.";
 		default:
-			return "Cuoc goi da ket thuc.";
+			return "Cuộc gọi đã kết thúc.";
 	}
 };
 
@@ -257,12 +257,12 @@ export const useCallStore = create<CallState>((set, get) => ({
 		const { currentCall } = get();
 
 		if (currentCall) {
-			toast.info("Hay ket thuc cuoc goi hien tai truoc.");
+			toast.info("Hãy kết thúc cuộc gọi hiện tại trước.");
 			return;
 		}
 
 		if (conversation.type === "group" && callType !== "video") {
-			toast.info("Group chat hien chi ho tro goi video.");
+			toast.info("Group chat hiện chỉ hỗ trợ gọi video.");
 			return;
 		}
 
@@ -272,14 +272,14 @@ export const useCallStore = create<CallState>((set, get) => ({
 		const callPeer = isGroup ? resolveCallLabelPeer(conversation) : peer;
 
 		if (!callPeer || (!isGroup && !peer)) {
-			toast.error("Khong tim thay nguoi nhan cuoc goi.");
+			toast.error("Không tìm thấy người nhận cuộc gọi.");
 			return;
 		}
 
 		const socket = useSocketStore.getState().socket;
 
 		if (!socket) {
-			toast.error("Socket chua san sang.");
+			toast.error("Socket chưa sẵn sàng.");
 			return;
 		}
 
@@ -333,8 +333,8 @@ export const useCallStore = create<CallState>((set, get) => ({
 				callType,
 			});
 		} catch (error) {
-			console.error("Khong the bat dau cuoc goi:", error);
-			toast.error(error instanceof Error ? error.message : "Khong the truy cap microphone/camera.");
+			console.error("Không thể bắt đầu cuộc gọi:", error);
+			toast.error(error instanceof Error ? error.message : "Không thể truy cập microphone/camera.");
 			get().resetCall();
 		}
 	},
@@ -373,7 +373,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 			isCameraEnabled: payload.callType === "video",
 		});
 
-		toast.info(`${peer.displayName} dang goi ${payload.callType === "video" ? "video" : "thoai"}.`);
+		toast.info(`${peer.displayName} đang gọi ${payload.callType === "video" ? "video" : "thoại"}.`);
 	},
 
 	handleCallRejoin: (payload: CallRejoinPayload) => {
@@ -407,7 +407,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 				: state.remoteCameraStates,
 		}));
 
-		toast.info("Dang vao lai cuoc goi nhom dang dien ra.");
+		toast.info("Đang vào lại cuộc gọi nhóm đang diễn ra.");
 	},
 
 	acceptIncomingCall: async () => {
@@ -450,8 +450,8 @@ export const useCallStore = create<CallState>((set, get) => ({
 				targetId: currentCall.isGroup ? currentCall.callerId : currentCall.peer._id,
 			});
 		} catch (error) {
-			console.error("Khong the chap nhan cuoc goi:", error);
-			toast.error(error instanceof Error ? error.message : "Khong the truy cap microphone/camera.");
+			console.error("Không thể chấp nhận cuộc gọi:", error);
+			toast.error(error instanceof Error ? error.message : "Không thể truy cập microphone/camera.");
 			get().declineIncomingCall("failed");
 		}
 	},
@@ -533,7 +533,7 @@ export const useCallStore = create<CallState>((set, get) => ({
 		}
 
 		if (currentCall.isGroup) {
-			toast.info("Mot thanh vien da tu choi cuoc goi.");
+			toast.info("Một thành viên đã từ chối cuộc gọi.");
 			return;
 		}
 

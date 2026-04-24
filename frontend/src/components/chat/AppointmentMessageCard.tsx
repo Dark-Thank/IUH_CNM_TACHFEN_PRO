@@ -75,7 +75,7 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
       return;
     }
 
-    if (!window.confirm("Xoa lich hen nay khoi cuoc tro chuyen?")) {
+    if (!window.confirm("Xóa lịch hẹn này khỏi cuộc trò chuyện?")) {
       return;
     }
 
@@ -83,7 +83,7 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
       setDeleting(true);
       await onDelete();
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Khong the xoa lich hen");
+      toast.error(error?.response?.data?.message || "Không thể xóa lịch hẹn");
     } finally {
       setDeleting(false);
     }
@@ -116,7 +116,7 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
             disabled={deleting}
             className="inline-flex items-center rounded-md border border-destructive/25 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {deleting ? "Dang xoa..." : "Xoa lich hen"}
+            {deleting ? "Đang xóa..." : "Xóa lịch hẹn"}
           </button>
         </div>
       )}

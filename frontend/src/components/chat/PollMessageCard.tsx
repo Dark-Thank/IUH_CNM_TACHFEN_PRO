@@ -1,10 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import type { Message } from "@/types/chat";
+import type { Message, Participant } from "@/types/chat";
+import UserAvatar from "./UserAvatar";
 
 type PollMessageCardProps = {
   message: Message;
   viewerId?: string;
+  participants: Participant[];
   onVote: (optionId: string) => Promise<void>;
   onAddOption?: (text: string) => Promise<void>;
   onClose?: () => Promise<void>;
@@ -30,7 +32,14 @@ const formatPollDeadline = (value?: string | null) => {
   }).format(parsed);
 };
 
-const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: PollMessageCardProps) => {
+const PollMessageCard = ({
+  message,
+  viewerId,
+  participants,
+  onVote,
+  onAddOption,
+  onClose,
+}: PollMessageCardProps) => {
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null);
   const [newOptionText, setNewOptionText] = useState("");
   const [addingOption, setAddingOption] = useState(false);
@@ -62,7 +71,12 @@ const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: Po
   );
   const hasVoted = selectedOptionIds.size > 0;
   const canRevealResults = !hideResultsUntilVote || hasVoted || isClosed;
+  const canShowVoters = pollMeta.hideVoters !== true && canRevealResults;
   const canAddOptions = Boolean(onAddOption) && allowUserAddedOptions && !isClosed && pollMeta.options.length < 10;
+  const participantMap = useMemo(
+    () => new Map(participants.map((participant) => [participant._id, participant])),
+    [participants]
+  );
   const pollSettings = [
     pollMeta.hideVoters ? "Ẩn người bình chọn" : null,
     hideResultsUntilVote ? "Ẩn kết quả trước khi bình chọn" : null,
@@ -135,7 +149,7 @@ const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: Po
         </div>
 
         <div className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-          {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "vote"}` : "Kết quả ẩn"}
+          {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "phiếu"}` : "Kết quả ẩn"}
         </div>
       </div>
 
@@ -179,6 +193,18 @@ const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: Po
           const voteCount = option.voterIds.length;
           const votePercent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
           const isSelected = selectedOptionIds.has(option._id);
+          const optionVoters = option.voterIds.map((voterId) => {
+            const participant = participantMap.get(voterId);
+
+            return {
+              _id: voterId,
+              displayName: voterId === viewerId ? "Bạn" : participant?.displayName || "Thành viên",
+              avatarUrl: participant?.avatarUrl ?? undefined,
+            };
+          });
+          const visibleVoters = optionVoters.slice(0, 5);
+          const remainingVoterCount = optionVoters.length - visibleVoters.length;
+          const voterNames = optionVoters.map((voter) => voter.displayName).join(", ");
 
           return (
             <button
@@ -205,6 +231,33 @@ const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: Po
                     className={`h-full rounded-full transition-all ${isSelected ? "bg-primary" : "bg-primary/50"}`}
                     style={{ width: `${votePercent}%` }}
                   />
+                </div>
+              )}
+
+              {canShowVoters && optionVoters.length > 0 && (
+                <div className="mt-2 flex items-center gap-2" title={voterNames}>
+                  <div className="flex items-center">
+                    {visibleVoters.map((voter, index) => (
+                      <div key={`${option._id}-${voter._id}`} className={index === 0 ? "" : "-ml-2"}>
+                        <UserAvatar
+                          type="chat"
+                          name={voter.displayName}
+                          avatarUrl={voter.avatarUrl}
+                          className="!size-6 border-2 border-background"
+                        />
+                      </div>
+                    ))}
+
+                    {remainingVoterCount > 0 && (
+                      <span className="-ml-2 inline-flex size-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
+                        +{remainingVoterCount}
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-xs text-muted-foreground">
+                    {optionVoters.length === 1 ? "1 người đã chọn" : `${optionVoters.length} người đã chọn`}
+                  </span>
                 </div>
               )}
 

@@ -27,7 +27,7 @@ export default function IncomingCallModal() {
 						},
 					]}
 				>
-					<Text style={[styles.eyebrow, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}>Cuoc goi den</Text>
+					<Text style={[styles.eyebrow, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}>Cuộc gọi đến</Text>
 
 					<UserAvatar
 						name={currentCall.peer.displayName}
@@ -46,7 +46,7 @@ export default function IncomingCallModal() {
 							<Phone size={16} color={isDark ? "#cbd5e1" : "#475569"} />
 						)}
 						<Text style={[styles.typeText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-							{currentCall.callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai"}
+							{currentCall.callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại"}
 						</Text>
 					</View>
 
@@ -56,7 +56,7 @@ export default function IncomingCallModal() {
 							style={[styles.actionButton, styles.declineButton]}
 						>
 							<PhoneOff size={22} color="#ffffff" />
-							<Text style={styles.actionLabel}>Tu choi</Text>
+							<Text style={styles.actionLabel}>Từ chối</Text>
 						</Pressable>
 
 						<Pressable
@@ -64,7 +64,7 @@ export default function IncomingCallModal() {
 							style={[styles.actionButton, styles.acceptButton]}
 						>
 							<Phone size={22} color="#ffffff" />
-							<Text style={styles.actionLabel}>Nhan</Text>
+							<Text style={styles.actionLabel}>Nhận</Text>
 						</Pressable>
 					</View>
 				</View>

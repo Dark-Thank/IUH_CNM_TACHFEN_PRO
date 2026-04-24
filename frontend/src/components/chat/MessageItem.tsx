@@ -591,6 +591,7 @@ const MessageItem = ({
               <PollMessageCard
                 message={message}
                 viewerId={user?._id}
+                participants={selectedConvo.participants}
                 onVote={handleVotePoll}
                 onAddOption={handleAddPollOption}
                 onClose={handleClosePoll}

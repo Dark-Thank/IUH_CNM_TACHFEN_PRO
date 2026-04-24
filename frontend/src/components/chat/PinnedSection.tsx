@@ -13,29 +13,29 @@ interface PinnedSectionProps {
 
 const getPinnedPreview = (message: Message) => {
   if (message.isRecalled) {
-    return { type: "text" as const, label: "Tin nhan da thu hoi" };
+    return { type: "text" as const, label: "Tin nhắn đã thu hồi" };
   }
 
   if (message.messageType === "voice") {
-    return { type: "voice" as const, label: "Tin nhan thoai" };
+    return { type: "voice" as const, label: "Tin nhắn thoại" };
   }
 
   if (message.messageType === "call") {
-    return { type: "call" as const, label: message.content ?? "Cuoc goi" };
+    return { type: "call" as const, label: message.content ?? "Cuộc gọi" };
   }
 
   if (message.messageType === "poll") {
-    return { type: "poll" as const, label: message.pollMeta?.question || "Binh chon" };
+    return { type: "poll" as const, label: message.pollMeta?.question || "Bình chọn" };
   }
 
   if (message.messageType === "appointment") {
-    return { type: "appointment" as const, label: message.appointmentMeta?.title || "Lich hen" };
+    return { type: "appointment" as const, label: message.appointmentMeta?.title || "Lịch hẹn" };
   }
 
   if (message.imgUrls?.length) {
     return {
       type: "image" as const,
-      label: message.imgUrls.length > 1 ? `${message.imgUrls.length} hinh anh` : "Hinh anh",
+      label: message.imgUrls.length > 1 ? `${message.imgUrls.length} hình ảnh` : "Hình ảnh",
       src: message.imgUrls[0],
     };
   }
@@ -43,7 +43,7 @@ const getPinnedPreview = (message: Message) => {
   if (message.fileUrls?.length) {
     return {
       type: "file" as const,
-      label: message.fileUrls[0].name || "Tep dinh kem",
+      label: message.fileUrls[0].name || "Tệp đính kèm",
     };
   }
 
@@ -56,7 +56,7 @@ const getPinnedPreview = (message: Message) => {
 
   return {
     type: "text" as const,
-    label: (message.content ?? "Tin nhan khong co noi dung").trim() || "Tin nhan khong co noi dung",
+    label: (message.content ?? "Tin nhắn không có nội dung").trim() || "Tin nhắn không có nội dung",
   };
 };
 
@@ -77,7 +77,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
         onClick={() => setIsOpen(!isOpen)}
       >
         <Pin className="w-4 h-4" />
-        <span>Tin nhan da ghim ({pinnedMessages.length})</span>
+        <span>Tin nhắn đã ghim ({pinnedMessages.length})</span>
         <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 data-[state=open]:rotate-180" />
       </Button>
       <CollapsibleContent className="space-y-1 p-3 bg-muted/30 rounded-b-lg border border-t-0 -mt-px">
@@ -112,7 +112,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
                 {preview.type === "file" ? (
                   <p className="text-xs text-muted-foreground mt-1 inline-flex items-center gap-1">
                     <FileText className="h-3.5 w-3.5" />
-                    Tep dinh kem
+                    Tệp đính kèm
                   </p>
                 ) : null}
                 <p className="text-xs text-muted-foreground mt-1">
@@ -135,7 +135,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
                     }}
                     className="cursor-pointer"
                   >
-                    Bỏ ghim tin nhan
+                    Bỏ ghim tin nhắn
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -144,7 +144,7 @@ export default function PinnedSection({ pinnedMessages, onJump }: PinnedSectionP
         })}
         {pinnedMessages.length > 10 ? (
           <div className="text-center py-4 text-xs text-muted-foreground border-t mt-2 pt-2 bg-background rounded-lg">
-            + {pinnedMessages.length - 10} tin nhan khac
+            + {pinnedMessages.length - 10} tin nhắn khác
           </div>
         ) : null}
       </CollapsibleContent>
