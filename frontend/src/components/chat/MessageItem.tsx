@@ -232,6 +232,19 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
   return "Tin nhắn";
 };
 
+const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm)/i;
+
+const isGroupNoticeMessage = (message: Message, conversation: Conversation) => (
+  conversation.type === "group"
+  && message.messageType === "text"
+  && typeof message.content === "string"
+  && GROUP_NOTICE_PATTERN.test(message.content.trim())
+  && !message.replyTo
+  && !message.forwardedFrom
+  && (message.imgUrls?.length ?? 0) === 0
+  && (message.fileUrls?.length ?? 0) === 0
+);
+
 const MessageItem = ({
   message,
   index,
@@ -330,6 +343,7 @@ const MessageItem = ({
   const showTimeSeparator = isShowTime && !isLastOwnMessage;
   const messageFooterTime = formatMessageTime(new Date(message.createdAt));
   const receiptTone = MESSAGE_RECEIPT_STYLES[receiptStatus];
+  const isGroupNotice = isGroupNoticeMessage(message, selectedConvo);
 
   const getConversationLabel = (conversation: Conversation) => {
     if (conversation.type === "group") {
@@ -408,6 +422,25 @@ const MessageItem = ({
   };
 
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
+
+  if (isGroupNotice) {
+    return (
+      <>
+        {showTimeSeparator && (
+          <span className="flex justify-center px-1 text-xs text-muted-foreground">
+            {formatMessageTime(new Date(message.createdAt))}
+          </span>
+        )}
+
+        <div className="mt-2 flex justify-center px-4">
+          <div className="max-w-[80%] rounded-full border border-border/70 bg-muted/60 px-4 py-2 text-center text-xs font-medium text-muted-foreground shadow-sm">
+            {message.content}
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       {/* TIME */}

@@ -9,6 +9,19 @@ const api = axios.create({
   withCredentials: true,
 });
 
+const isTokenAuthError = (status?: number, message = "") => {
+  if (status === 401) {
+    return true;
+  }
+
+  if (status !== 403) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("access token") || normalizedMessage.includes("token không hợp lệ") || normalizedMessage.includes("token đã hết hạn");
+};
+
 // gắn access token vào req header
 api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
@@ -25,6 +38,8 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const message = error.response?.data?.message || "";
 
     // những api không cần check
     if (
@@ -37,7 +52,7 @@ api.interceptors.response.use(
 
     originalRequest._retryCount = originalRequest._retryCount || 0;
 
-    if (error.response?.status === 403 && originalRequest._retryCount < 4) {
+    if (isTokenAuthError(status, message) && originalRequest._retryCount < 4) {
       originalRequest._retryCount += 1;
       console.log("refresh", originalRequest._retryCount);
 

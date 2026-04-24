@@ -10,13 +10,26 @@ const api = axios.create({
   timeout: 10000,
 });
 
+const isTokenAuthError = (status?: number, message = "") => {
+  if (status === 401) {
+    return true;
+  }
+
+  if (status !== 403) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("access token") || normalizedMessage.includes("token không hợp lệ") || normalizedMessage.includes("token đã hết hạn");
+};
+
 // Helpful debug: show computed API URL in Metro logs when the app starts
 try {
   // eslint-disable-next-line no-console
   console.log("[MobileApp] API_URL=", API_URL);
 } catch (e) { }
 
-api.interceptors.request.use( async (config) => {
+api.interceptors.request.use(async (config) => {
   const accessToken = authSession.getAccessToken();
 
   console.log("TOKEN TRƯỚC KHI GỬI:", accessToken);
@@ -68,7 +81,7 @@ api.interceptors.response.use(
     const message = data.message || '';
     const type = data.type || '';
     const isBlockError = status === 403 && (message.includes('chặn') || type === 'YOU_ARE_BLOCKED');
-    const shouldRefresh = status === 401 && originalRequest._retryCount < 4 || (!isBlockError && status === 403 && originalRequest._retryCount < 4);
+    const shouldRefresh = !isBlockError && isTokenAuthError(status, message) && originalRequest._retryCount < 4;
 
     if (shouldRefresh) {
       originalRequest._retryCount += 1;

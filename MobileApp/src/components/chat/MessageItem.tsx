@@ -167,6 +167,19 @@ const getReactionUsersLabel = (users: ReactionUser[], currentUserId?: string) =>
     .join(", ");
 };
 
+const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm)/i;
+
+const isGroupNoticeMessage = (message: Message, conversation: Conversation) => (
+  conversation.type === "group"
+  && message.messageType === "text"
+  && typeof message.content === "string"
+  && GROUP_NOTICE_PATTERN.test(message.content.trim())
+  && !message.replyTo
+  && !message.forwardedFrom
+  && (message.imgUrls?.length ?? 0) === 0
+  && (message.fileUrls?.length ?? 0) === 0
+);
+
 function MessageItem({ message, previousMessage, selectedConvo }: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
@@ -262,6 +275,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
   const activeReactionUsers = reactionDetailEmoji ? message.reactions?.[reactionDetailEmoji] || [] : [];
   const showTimeSeparator = isShowTime && !isLastOwnMessage;
   const receiptTone = getReceiptTone(receiptStatus, isDark);
+  const isGroupNotice = isGroupNoticeMessage(message, selectedConvo);
 
   const closeActions = () => setShowActions(false);
 
@@ -727,6 +741,36 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
       </View>
     );
   };
+
+  if (isGroupNotice) {
+    return (
+      <View style={styles.wrapper}>
+        {showTimeSeparator ? (
+          <Text
+            style={[styles.timeText, { color: isDark ? "#94a3b8" : "#64748b" }]}
+          >
+            {formatMessageTime(new Date(message.createdAt))}
+          </Text>
+        ) : null}
+
+        <View style={styles.systemNoticeRow}>
+          <View
+            style={[
+              styles.systemNoticePill,
+              {
+                backgroundColor: isDark ? "rgba(51, 65, 85, 0.72)" : "#e2e8f0",
+                borderColor: isDark ? "#475569" : "#cbd5e1",
+              },
+            ]}
+          >
+            <Text style={[styles.systemNoticeText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+              {message.content}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrapper}>
@@ -1291,6 +1335,25 @@ export default memo(MessageItem, (prevProps, nextProps) => {
 
 const styles = StyleSheet.create({
   wrapper: { marginBottom: 10 },
+  systemNoticeRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    marginTop: 6,
+  },
+  systemNoticePill: {
+    maxWidth: "82%",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  systemNoticeText: {
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
   timeText: { fontSize: 12, textAlign: "center", marginBottom: 10 },
   row: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   avatarSlot: { width: 34, alignItems: "center" },
