@@ -2367,7 +2367,7 @@ export default function ChatAppScreen() {
                 <View style={styles.subSection}>
                   <View style={styles.subSectionHeader}>
                     <Text style={[styles.subSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                      Khac ({regularConversations.length})
+                      Khác ({regularConversations.length})
                     </Text>
                   </View>
 
