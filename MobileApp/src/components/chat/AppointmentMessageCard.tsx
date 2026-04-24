@@ -64,6 +64,8 @@ export default function AppointmentMessageCard({
     return null;
   }
 
+  const scheduledAt = new Date(appointmentMeta.scheduledAt);
+  const hasStarted = !Number.isNaN(scheduledAt.getTime()) && scheduledAt.getTime() <= Date.now();
   const currentResponse = appointmentMeta.responses.find((response) => response.userId === viewerId)?.status;
   const isCreator = appointmentMeta.createdBy === viewerId;
 
@@ -135,6 +137,12 @@ export default function AppointmentMessageCard({
         </View>
       ) : null}
 
+      {hasStarted ? (
+        <Text style={[styles.lockedText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+          Lịch hẹn đã tới giờ, không thể cập nhật phản hồi nữa.
+        </Text>
+      ) : null}
+
       {isCreator && onDelete ? (
         <View style={styles.deleteWrap}>
           <Pressable
@@ -161,10 +169,6 @@ export default function AppointmentMessageCard({
           <Text style={[styles.summaryCount, { color: isDark ? "#86efac" : "#166534" }]}>{summary.going}</Text>
           <Text style={[styles.summaryLabel, { color: isDark ? "#86efac" : "#166534" }]}>Tham gia</Text>
         </View>
-        <View style={[styles.summaryCard, { backgroundColor: isDark ? "#451a03" : "#fef3c7" }]}>
-          <Text style={[styles.summaryCount, { color: isDark ? "#fcd34d" : "#92400e" }]}>{summary.maybe}</Text>
-          <Text style={[styles.summaryLabel, { color: isDark ? "#fcd34d" : "#92400e" }]}>Có thể</Text>
-        </View>
         <View style={[styles.summaryCard, { backgroundColor: isDark ? "#450a0a" : "#fee2e2" }]}>
           <Text style={[styles.summaryCount, { color: isDark ? "#fca5a5" : "#b91c1c" }]}>{summary.declined}</Text>
           <Text style={[styles.summaryLabel, { color: isDark ? "#fca5a5" : "#b91c1c" }]}>Từ chối</Text>
@@ -179,7 +183,7 @@ export default function AppointmentMessageCard({
             <Pressable
               key={status}
               onPress={() => void handleRespond(status)}
-              disabled={Boolean(submittingStatus) || deleting}
+              disabled={Boolean(submittingStatus) || deleting || hasStarted}
               style={[
                 styles.responseButton,
                 {
@@ -243,6 +247,10 @@ const styles = StyleSheet.create({
   descriptionText: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  lockedText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   deleteWrap: {
     alignItems: "flex-end",
