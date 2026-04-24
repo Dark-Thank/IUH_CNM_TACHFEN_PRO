@@ -54,8 +54,8 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
       name={groupName}
       // Truyền Date để ChatCard tự hiển thị (16h, 1d...)
       timestamp={
-        convo.lastMessage?.createdAt 
-          ? new Date(convo.lastMessage.createdAt) 
+        convo.lastMessage?.createdAt
+          ? new Date(convo.lastMessage.createdAt)
           : undefined
       }
       isActive={activeConversationId === convo._id}

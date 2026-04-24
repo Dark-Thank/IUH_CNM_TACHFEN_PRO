@@ -1,7 +1,7 @@
 import { formatOnlineTime } from "@/lib/utils";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
-import { ChevronRight, UsersRound } from "lucide-react-native";
+import { ChevronRight } from "lucide-react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import UserAvatar from "./UserAvatar";
 
@@ -29,6 +29,21 @@ const getConversationPreview = (
   conversation: Conversation,
   currentUserId?: string
 ) => {
+  const lastMessage = conversation.lastMessage;
+
+  if (conversation.type === "group" && lastMessage?.content) {
+    const senderRef = lastMessage.sender ?? lastMessage.senderId;
+    const senderId = typeof senderRef === "string" ? senderRef : senderRef?._id;
+    const senderName =
+      senderId === currentUserId
+        ? "Bạn"
+        : (typeof senderRef === "object" ? senderRef?.displayName : "") ||
+          conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
+          "Người gửi";
+
+    return `${senderName}: ${lastMessage.content}`;
+  }
+
   if (conversation.lastMessage?.content) {
     return conversation.lastMessage.content;
   }

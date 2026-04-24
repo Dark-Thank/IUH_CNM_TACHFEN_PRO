@@ -670,6 +670,13 @@ export default function ChatAppScreen() {
     });
   }, [friends, groupQuery, selectedGroupMembers]);
 
+  const friendIds = useMemo(() => new Set(friends.map((friend) => friend._id)), [friends]);
+
+  const pendingFriendInviteIds = useMemo(
+    () => new Set(sentList.map((request) => request.to?._id).filter(Boolean)),
+    [sentList]
+  );
+
   const selectedGroupRole = useMemo(() => {
     if (!selectedConvo || selectedConvo.type !== "group" || !user?._id) {
       return null;
@@ -1121,6 +1128,23 @@ export default function ChatAppScreen() {
       toast.error(error?.response?.data?.message || "Thêm thành viên thất bại.");
     }
   }, [addGroupMembers, resetGroupManagementState, selectedConvo, selectedMembersToAdd]);
+
+  const handleSendFriendRequestToGroupMember = useCallback(async (participant: Conversation["participants"][number]) => {
+    const resultMessage = await addFriend(participant._id);
+
+    if (!resultMessage) {
+      toast.error("Không thể gửi lời mời kết bạn.");
+      return;
+    }
+
+    if (/lỗi|that bai|thất bại/i.test(resultMessage)) {
+      toast.error(resultMessage);
+      return;
+    }
+
+    toast.success(resultMessage);
+    await getAllFriendRequests();
+  }, [addFriend, getAllFriendRequests]);
 
   const canRemoveGroupParticipant = useCallback((participant: Conversation["participants"][number]) => {
     if (!selectedGroupRole || participant._id === selectedGroupRole._id) {
@@ -1768,6 +1792,36 @@ export default function ChatAppScreen() {
                     </View>
 
                     <View style={styles.groupActionColumn}>
+                      {participant._id === user?._id ? (
+                        <View style={[styles.relationshipPill, { backgroundColor: isDark ? "#312e81" : "#ede9fe" }]}>
+                          <Text style={[styles.relationshipPillText, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>Bạn</Text>
+                        </View>
+                      ) : friendIds.has(participant._id) ? (
+                        <View style={[styles.relationshipPill, { backgroundColor: isDark ? "#1d4ed8" : "#dbeafe" }]}>
+                          <Text style={[styles.relationshipPillText, { color: isDark ? "#bfdbfe" : "#1d4ed8" }]}>Bạn bè</Text>
+                        </View>
+                      ) : pendingFriendInviteIds.has(participant._id) ? (
+                        <View style={[styles.relationshipPill, { backgroundColor: isDark ? "#334155" : "#e2e8f0" }]}>
+                          <Text style={[styles.relationshipPillText, { color: isDark ? "#e2e8f0" : "#475569" }]}>Đã gửi lời mời</Text>
+                        </View>
+                      ) : (
+                        <Pressable
+                          onPress={() => void handleSendFriendRequestToGroupMember(participant)}
+                          disabled={friendStoreLoading}
+                          style={[
+                            styles.secondaryButton,
+                            styles.groupActionButton,
+                            {
+                              backgroundColor: isDark ? "#1f2937" : "#f8fafc",
+                              borderColor: isDark ? "#334155" : "#d7def0",
+                              opacity: friendStoreLoading ? 0.7 : 1,
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Gửi lời mời kết bạn</Text>
+                        </Pressable>
+                      )}
+
                       {selectedGroupRole?.role === "owner" && participant._id !== user?._id && participant.role !== "owner" ? (
                         <Pressable
                           onPress={() => handleToggleDeputyRole(participant)}
@@ -3020,6 +3074,18 @@ const styles = StyleSheet.create({
   },
   groupFooterButton: {
     flex: 1,
+  },
+  relationshipPill: {
+    minHeight: 34,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  relationshipPillText: {
+    fontSize: 12,
+    fontWeight: "800",
   },
   secondaryButtonText: { fontSize: 13, fontWeight: "700" },
   pendingLabel: { fontSize: 13, fontWeight: "600" },
