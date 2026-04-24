@@ -261,6 +261,11 @@ export const chatService = {
     return res.data;
   },
 
+  async toggleConversationPin(conversationId: string) {
+    const res = await api.patch(`/conversations/${conversationId}/pin`);
+    return res.data.conversation;
+  },
+
   async markMessageDelivered(messageId: string) {
     const res = await api.post(`/messages/${messageId}/delivered`);
     return res.data.message;

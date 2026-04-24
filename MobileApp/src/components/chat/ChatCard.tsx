@@ -1,8 +1,9 @@
 import { formatOnlineTime } from "@/lib/utils";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
-import { ChevronRight } from "lucide-react-native";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Ellipsis, Pin, PinOff } from "lucide-react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
 import UserAvatar from "./UserAvatar";
 
 interface ChatCardProps {
@@ -11,6 +12,7 @@ interface ChatCardProps {
   isActive?: boolean;
   isOnline?: boolean;
   onPress: (conversationId: string) => void;
+  onTogglePin?: (conversationId: string) => void | Promise<void>;
 }
 
 const getConversationName = (
@@ -62,8 +64,10 @@ export default function ChatCard({
   isActive = false,
   isOnline = false,
   onPress,
+  onTogglePin,
 }: ChatCardProps) {
   const { isDark } = useThemeStore();
+  const [showActions, setShowActions] = useState(false);
 
   const otherUser = conversation.participants.find((p) => p._id !== currentUserId);
   const unreadCount = currentUserId
@@ -151,6 +155,9 @@ export default function ChatCard({
           </Text>
 
           <View style={styles.trailing}>
+            {conversation.isPinned ? (
+              <Pin size={14} color={isDark ? "#c084fc" : "#7c3aed"} fill={isDark ? "#c084fc" : "#7c3aed"} />
+            ) : null}
             {unreadCount > 0 ? (
               <View
                 style={[
@@ -162,15 +169,79 @@ export default function ChatCard({
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </Text>
               </View>
-            ) : (
-              <ChevronRight
-                size={18}
-                color={isDark ? "#64748b" : "#94a3b8"}
-              />
-            )}
+            ) : null}
+
+            <Pressable
+              onPress={() => setShowActions(true)}
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.menuButton,
+                { backgroundColor: pressed ? (isDark ? "#1f2937" : "#f1f5f9") : "transparent" },
+              ]}
+            >
+              <Ellipsis size={18} color={isDark ? "#94a3b8" : "#64748b"} />
+            </Pressable>
           </View>
         </View>
       </View>
+
+      <Modal
+        visible={showActions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActions(false)}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowActions(false)} />
+          <View
+            style={[
+              styles.actionSheet,
+              {
+                backgroundColor: isDark ? "#111827" : "#ffffff",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text style={[styles.actionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Tuy chon cuoc tro chuyen
+            </Text>
+
+            <Pressable
+              onPress={() => {
+                setShowActions(false);
+                onTogglePin?.(conversation._id);
+              }}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              {conversation.isPinned ? <PinOff size={16} color={isDark ? "#f8fafc" : "#0f172a"} /> : <Pin size={16} color={isDark ? "#f8fafc" : "#0f172a"} />}
+              <Text style={[styles.actionButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                {conversation.isPinned ? "Bo ghim cuoc hoi thoai" : "Ghim cuoc hoi thoai"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => setShowActions(false)}
+              style={[
+                styles.actionButton,
+                {
+                  backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Text style={[styles.actionButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                Dong
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </Pressable>
   );
 }
@@ -225,8 +296,18 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   trailing: {
-    minWidth: 28,
+    minWidth: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  menuButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "flex-end",
+    justifyContent: "center",
   },
   unreadBadge: {
     minWidth: 22,
@@ -239,6 +320,44 @@ const styles = StyleSheet.create({
   unreadText: {
     color: "#ffffff",
     fontSize: 11,
+    fontWeight: "700",
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15, 23, 42, 0.42)",
+  },
+  actionSheet: {
+    width: "82%",
+    borderRadius: 24,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    gap: 10,
+  },
+  actionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 2,
+  },
+  actionButton: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    flexDirection: "row",
+    paddingHorizontal: 14,
+  },
+  actionButtonText: {
+    fontSize: 14,
     fontWeight: "700",
   },
 });

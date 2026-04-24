@@ -8,7 +8,7 @@ import GroupChatAvatar from "./GroupChatAvatar";
 
 const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } =
+  const { activeConversationId, setActiveConversation, messages, fetchMessages, toggleConversationPin } =
     useChatStore();
 
   if (!user) return null;
@@ -59,7 +59,9 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
           : undefined
       }
       isActive={activeConversationId === convo._id}
+      isPinned={Boolean(convo.isPinned)}
       onSelect={handleSelectConversation}
+      onTogglePin={(id) => void toggleConversationPin(id)}
       unreadCount={unreadCount}
       leftSection={
         <div className="relative">

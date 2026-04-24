@@ -9,7 +9,7 @@ import UnreadCountBadge from "./UnreadCountBadge";
 import { useSocketStore } from "@/stores/useSocketStore";
 const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
   const { user } = useAuthStore();
-  const { activeConversationId, setActiveConversation, messages, fetchMessages } = useChatStore();
+  const { activeConversationId, setActiveConversation, messages, fetchMessages, toggleConversationPin } = useChatStore();
   const { onlineUsers } = useSocketStore();
 
 
@@ -39,7 +39,9 @@ const DirectMessageCard = ({ convo }: { convo: Conversation }) => {
           : undefined
       }
       isActive={activeConversationId === convo._id}
+      isPinned={Boolean(convo.isPinned)}
       onSelect={handleSelectConversation}
+      onTogglePin={(id) => void toggleConversationPin(id)}
       unreadCount={unreadCount}
       leftSection={
         <>

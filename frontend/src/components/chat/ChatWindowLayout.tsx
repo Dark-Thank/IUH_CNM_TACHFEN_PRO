@@ -1,11 +1,12 @@
 import { friendService } from "@/services/friendService";
-import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useEffect, useMemo, useState } from "react";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import ConversationAssetsPanel from "./ConversationAssetsPanel";
+import ConversationSearchPanel from "./ConversationSearchPanel";
 import CreateGroupAppointmentDialog from "./CreateGroupAppointmentDialog";
 import CreateGroupPollDialog from "./CreateGroupPollDialog";
 import ChatWindowBody from "./ChatWindowBody";
@@ -59,7 +60,11 @@ const ChatWindowLayout = () => {
   const { user } = useAuthStore();
   const typingByConversation = useSocketStore((state) => state.typingByConversation);
   const [isBlocked, setIsBlocked] = useState(false);
-  const [showAssetsPanel, setShowAssetsPanel] = useState(false);
+  const [rightPanelMode, setRightPanelMode] = useState<"none" | "attachments" | "search">("none");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [focusedSearchMessageId, setFocusedSearchMessageId] = useState<string | null>(null);
+  const [focusRequestKey, setFocusRequestKey] = useState(0);
+  const [searchLoadingHistory, setSearchLoadingHistory] = useState(false);
 
   const selectedConvo = conversations.find((c) => c._id === activeConversationId) ?? null;
   const typingUsers = useMemo(
@@ -113,11 +118,15 @@ const ChatWindowLayout = () => {
   }, [markAsSeen, selectedConvo]);
 
   useEffect(() => {
-    setShowAssetsPanel(false);
+    setRightPanelMode("none");
+    setSearchQuery("");
+    setFocusedSearchMessageId(null);
+    setFocusRequestKey(0);
+    setSearchLoadingHistory(false);
   }, [activeConversationId]);
 
   useEffect(() => {
-    if (!showAssetsPanel || !selectedConvo || loading) {
+    if (rightPanelMode !== "attachments" || !selectedConvo || loading) {
       return;
     }
 
@@ -128,13 +137,55 @@ const ChatWindowLayout = () => {
     void fetchMessages(selectedConvo._id).catch((error) => {
       console.error("Khong the tai them attachment trong cuoc tro chuyen:", error);
     });
-  }, [fetchMessages, loading, messages, selectedConvo, showAssetsPanel]);
+  }, [fetchMessages, loading, messages, rightPanelMode, selectedConvo]);
+
+  useEffect(() => {
+    if (rightPanelMode !== "search" || !selectedConvo) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadConversationHistory = async () => {
+      try {
+        setSearchLoadingHistory(true);
+
+        while (!cancelled) {
+          const currentState = useChatStore.getState().messages[selectedConvo._id];
+          const nextCursor = currentState?.nextCursor;
+
+          if (nextCursor === null) {
+            break;
+          }
+
+          await fetchMessages(selectedConvo._id);
+
+          const refreshedState = useChatStore.getState().messages[selectedConvo._id];
+          if (refreshedState?.nextCursor === nextCursor) {
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("Khong the tai lich su de tim kiem:", error);
+      } finally {
+        if (!cancelled) {
+          setSearchLoadingHistory(false);
+        }
+      }
+    };
+
+    void loadConversationHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMessages, rightPanelMode, selectedConvo]);
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
   }
 
-  if (loading) {
+  if (loading && messageItems.length === 0) {
     return <ChatWindowSkeleton />;
   }
 
@@ -151,14 +202,26 @@ const ChatWindowLayout = () => {
     <SidebarInset className="flex flex-col h-full flex-1 overflow-hidden rounded-sm shadow-md">
       <ChatWindowHeader
         chat={selectedConvo}
-        attachmentsOpen={showAssetsPanel}
-        onToggleAttachmentsPanel={() => setShowAssetsPanel((current) => !current)}
+        panelMode={rightPanelMode}
+        searchOpen={rightPanelMode === "search"}
+        onToggleAttachmentsPanel={() =>
+          setRightPanelMode((current) => (current === "attachments" ? "none" : "attachments"))
+        }
+        onToggleSearchPanel={() =>
+          setRightPanelMode((current) => (current === "search" ? "none" : "search"))
+        }
       />
 
       <div className="flex flex-1 min-h-0">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto bg-primary-foreground">
-            <ChatWindowBody isBlocked={isBlocked} />
+            <ChatWindowBody
+              isBlocked={isBlocked}
+              focusMessageId={focusedSearchMessageId}
+              focusRequestKey={focusRequestKey}
+              searchQuery={searchQuery}
+              highlightedMessageId={focusedSearchMessageId}
+            />
           </div>
 
           <div className="relative">
@@ -183,10 +246,29 @@ const ChatWindowLayout = () => {
           </div>
         </div>
 
-        {showAssetsPanel && (
+        {rightPanelMode === "attachments" && (
           <ConversationAssetsPanel
             messages={messageItems}
             conversation={selectedConvo}
+          />
+        )}
+
+        {rightPanelMode === "search" && (
+          <ConversationSearchPanel
+            conversation={selectedConvo}
+            messages={messageItems}
+            query={searchQuery}
+            onQueryChange={(value) => {
+              setSearchQuery(value);
+              setFocusedSearchMessageId(null);
+            }}
+            onClose={() => setRightPanelMode("none")}
+            onSelectMessage={(messageId) => {
+              setFocusedSearchMessageId(messageId);
+              setFocusRequestKey((current) => current + 1);
+            }}
+            activeMessageId={focusedSearchMessageId}
+            loadingHistory={searchLoadingHistory}
           />
         )}
       </div>

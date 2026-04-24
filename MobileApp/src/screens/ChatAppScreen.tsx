@@ -7,6 +7,13 @@ import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
 import ProfileModal from "@/components/chat/ProfileModal";
 import UserAvatar from "@/components/chat/UserAvatar";
 import { getApiBaseUrl } from "@/lib/backendUrl";
+import {
+  buildSearchSnippet,
+  getConversationSearchBody,
+  getMessageSearchBody,
+  getMessageSenderName,
+  normalizeSearchText,
+} from "@/lib/messageSearch";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { toast } from "@/lib/toast";
@@ -23,7 +30,7 @@ import type { Conversation, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, Phone, UserPlus, Users, Video, X } from "lucide-react-native";
+import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, Phone, Pin, Search, UserPlus, Users, Video, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -398,12 +405,15 @@ export default function ChatAppScreen() {
   const [showConversationProfile, setShowConversationProfile] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [showConversationAssets, setShowConversationAssets] = useState(false);
+  const [showMessageSearch, setShowMessageSearch] = useState(false);
 
   const [friendUsername, setFriendUsername] = useState("");
+  const [conversationSearchQuery, setConversationSearchQuery] = useState("");
   const [friendRequestMessage, setFriendRequestMessage] = useState("");
   const [searchedUser, setSearchedUser] = useState<User | null>(null);
   const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
   const [newMessageQuery, setNewMessageQuery] = useState("");
+  const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [groupName, setGroupName] = useState("");
   const [groupQuery, setGroupQuery] = useState("");
   const [joinGroupMode, setJoinGroupMode] = useState<"link" | "camera">("link");
@@ -415,6 +425,8 @@ export default function ChatAppScreen() {
   const [selectedMembersToAdd, setSelectedMembersToAdd] = useState<Friend[]>([]);
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [messageSearchLoadingHistory, setMessageSearchLoadingHistory] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const joinScanLockRef = useRef(false);
 
@@ -444,6 +456,7 @@ export default function ChatAppScreen() {
     fetchConversations,
     fetchMessages,
     markAsSeen,
+    toggleConversationPin,
     createConversation,
     addGroupMembers,
     removeGroupMember,
@@ -492,16 +505,46 @@ export default function ChatAppScreen() {
       uniqueById(conversations).sort(
         (left, right) => {
           const leftTimestamp = new Date(
-            left.lastMessageAt || left.lastMessage?.createdAt || left.updatedAt || left.createdAt || 0
+            (left.isPinned ? left.pinnedAt : left.lastMessageAt) ||
+            left.lastMessage?.createdAt ||
+            left.updatedAt ||
+            left.createdAt ||
+            0
           ).getTime();
           const rightTimestamp = new Date(
-            right.lastMessageAt || right.lastMessage?.createdAt || right.updatedAt || right.createdAt || 0
+            (right.isPinned ? right.pinnedAt : right.lastMessageAt) ||
+            right.lastMessage?.createdAt ||
+            right.updatedAt ||
+            right.createdAt ||
+            0
           ).getTime();
 
           return rightTimestamp - leftTimestamp;
         }
       ),
     [conversations]
+  );
+
+  const filteredConversations = useMemo(() => {
+    const normalizedQuery = normalizeSearchText(conversationSearchQuery);
+
+    if (!normalizedQuery) {
+      return sortedConversations;
+    }
+
+    return sortedConversations.filter((conversation) =>
+      getConversationSearchBody(conversation, user?._id).includes(normalizedQuery)
+    );
+  }, [conversationSearchQuery, sortedConversations, user?._id]);
+
+  const pinnedConversations = useMemo(
+    () => filteredConversations.filter((conversation) => conversation.isPinned),
+    [filteredConversations]
+  );
+
+  const regularConversations = useMemo(
+    () => filteredConversations.filter((conversation) => !conversation.isPinned),
+    [filteredConversations]
   );
 
   const directConversations = useMemo(
@@ -566,6 +609,23 @@ export default function ChatAppScreen() {
     [messages, selectedConvo]
   );
 
+  const messageSearchResults = useMemo(() => {
+    if (!selectedConvo) {
+      return [];
+    }
+
+    const normalizedQuery = normalizeSearchText(messageSearchQuery);
+
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    return [...messageItems]
+      .filter((message) => !message.isRecalled)
+      .filter((message) => normalizeSearchText(getMessageSearchBody(message)).includes(normalizedQuery))
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  }, [messageItems, messageSearchQuery, selectedConvo]);
+
   const pinnedMessages = useMemo(
     () => messageItems.filter((message) => message.isPinned),
     [messageItems]
@@ -582,9 +642,10 @@ export default function ChatAppScreen() {
         message={item}
         previousMessage={index > 0 ? messageItems[index - 1] : undefined}
         selectedConvo={selectedConvo!}
+        isSearchFocused={highlightedMessageId === item._id}
       />
     ),
-    [messageItems, selectedConvo]
+    [highlightedMessageId, messageItems, selectedConvo]
   );
 
   const typingLabel = typingUsers.length === 0
@@ -1305,8 +1366,54 @@ export default function ChatAppScreen() {
     setShowConversationProfile(false);
     setShowGroupManagement(false);
     setShowConversationAssets(false);
+    setShowMessageSearch(false);
+    setMessageSearchQuery("");
+    setHighlightedMessageId(null);
+    setMessageSearchLoadingHistory(false);
     resetGroupManagementState();
   }, [resetGroupManagementState, selectedConversationId]);
+
+  useEffect(() => {
+    if (!showMessageSearch || !selectedConversationId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadConversationHistory = async () => {
+      try {
+        setMessageSearchLoadingHistory(true);
+
+        while (!cancelled) {
+          const currentState = useChatStore.getState().messages[selectedConversationId];
+          const nextCursor = currentState?.nextCursor;
+
+          if (nextCursor === null) {
+            break;
+          }
+
+          await fetchMessages(selectedConversationId);
+
+          const refreshedState = useChatStore.getState().messages[selectedConversationId];
+          if (refreshedState?.nextCursor === nextCursor) {
+            break;
+          }
+        }
+      } catch (error) {
+        console.error("Loi khi tai lich su de tim tin nhan:", error);
+      } finally {
+        if (!cancelled) {
+          setMessageSearchLoadingHistory(false);
+        }
+      }
+    };
+
+    void loadConversationHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchMessages, selectedConversationId, showMessageSearch]);
 
   useEffect(() => {
     if (
@@ -1417,6 +1524,38 @@ export default function ChatAppScreen() {
       setShowConversationAssets(true);
     }
   }, [selectedConvo]);
+
+  const handleOpenMessageSearch = useCallback(() => {
+    if (!selectedConvo) {
+      return;
+    }
+
+    setShowMessageSearch(true);
+  }, [selectedConvo]);
+
+  const handleSelectMessageSearchResult = useCallback((messageId: string) => {
+    const index = messageItems.findIndex((message) => message._id === messageId);
+
+    setHighlightedMessageId(messageId);
+
+    if (index >= 0) {
+      flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+    }
+
+    setShowMessageSearch(false);
+  }, [messageItems]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setHighlightedMessageId(null);
+    }, 2200);
+
+    return () => clearTimeout(timeout);
+  }, [highlightedMessageId]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -1568,6 +1707,16 @@ export default function ChatAppScreen() {
             >
               <Menu size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
             </Pressable>
+
+            <Pressable
+              onPress={handleOpenMessageSearch}
+              style={[
+                styles.headerIconButton,
+                { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+              ]}
+            >
+              <Search size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+            </Pressable>
           </View>
         )
         : () => (
@@ -1597,6 +1746,7 @@ export default function ChatAppScreen() {
     handleBack,
     handleOpenGroupManagement,
     handleOpenConversationAssets,
+    handleOpenMessageSearch,
     handleOpenConversationProfile,
     isDark,
     navigation,
@@ -1651,6 +1801,11 @@ export default function ChatAppScreen() {
             onLayout={flushPendingScrollToLatest}
             onContentSizeChange={flushPendingScrollToLatest}
             onScroll={handleMessageScroll}
+            onScrollToIndexFailed={({ index }) => {
+              setTimeout(() => {
+                flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+              }, 250);
+            }}
             scrollEventThrottle={16}
             keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
             keyboardShouldPersistTaps="handled"
@@ -1745,6 +1900,77 @@ export default function ChatAppScreen() {
           friend={selectedConversationFriend}
           onClose={() => setShowConversationProfile(false)}
         />
+
+        <OverlayModal
+          visible={showMessageSearch}
+          title="Tim tin nhan"
+          onClose={() => setShowMessageSearch(false)}
+        >
+          <View style={styles.modalContent}>
+            <TextInput
+              value={messageSearchQuery}
+              onChangeText={setMessageSearchQuery}
+              placeholder="Nhap tu khoa can tim"
+              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+              style={[
+                styles.textInput,
+                {
+                  color: isDark ? "#f8fafc" : "#0f172a",
+                  backgroundColor: isDark ? "#111827" : "#ffffff",
+                  borderColor: isDark ? "#334155" : "#e2e8f0",
+                },
+              ]}
+            />
+
+            <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false}>
+              {!messageSearchQuery.trim() ? (
+                <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Nhap noi dung can tim trong cuoc tro chuyen hien tai.
+                </Text>
+              ) : messageSearchLoadingHistory ? (
+                <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Dang tai them lich su de tim kiem day du hon...
+                </Text>
+              ) : messageSearchResults.length === 0 ? (
+                <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Khong tim thay tin nhan phu hop.
+                </Text>
+              ) : (
+                messageSearchResults.map((message) => (
+                  <Pressable
+                    key={message._id}
+                    onPress={() => handleSelectMessageSearchResult(message._id)}
+                    style={({ pressed }) => [
+                      styles.messageSearchResult,
+                      {
+                        backgroundColor: isDark ? "#111827" : "#f8fafc",
+                        borderColor: highlightedMessageId === message._id
+                          ? (isDark ? "#c084fc" : "#8b5cf6")
+                          : (isDark ? "#1f2937" : "#e2e8f0"),
+                        opacity: pressed ? 0.92 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.messageSearchSender, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                      {getMessageSenderName(message, selectedConvo, user?._id)}
+                    </Text>
+                    <Text style={[styles.messageSearchSnippet, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                      {buildSearchSnippet(getMessageSearchBody(message), messageSearchQuery) || "Tin nhan dinh kem"}
+                    </Text>
+                    <Text style={[styles.messageSearchTime, { color: isDark ? "#64748b" : "#94a3b8" }]}>
+                      {new Date(message.createdAt).toLocaleString("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "2-digit",
+                        month: "2-digit",
+                      })}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </OverlayModal>
 
         <OverlayModal
           visible={showGroupManagement && selectedConvo?.type === "group"}
@@ -2075,22 +2301,110 @@ export default function ChatAppScreen() {
               </Pressable>
             </View>
 
-            {sortedConversations.length > 0 ? (
-              sortedConversations.map((conversation) => {
-                const otherUser = conversation.type === "direct"
-                  ? getDirectParticipant(conversation, user?._id)
-                  : null;
+            <View
+              style={[
+                styles.searchInputWrap,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                },
+              ]}
+            >
+              <Search size={16} color={isDark ? "#94a3b8" : "#64748b"} />
+              <TextInput
+                value={conversationSearchQuery}
+                onChangeText={setConversationSearchQuery}
+                placeholder="Tim kiem cuoc hoi thoai"
+                placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+                style={[styles.searchInput, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+              />
+            </View>
 
-                return (
-                  <ChatCard
-                    key={conversation._id}
-                    conversation={conversation}
-                    onPress={() => openConversationById(conversation._id)}
-                    currentUserId={user?._id}
-                    isOnline={!!otherUser && onlineUserIds.has(otherUser._id)}
-                  />
-                );
-              })
+            {filteredConversations.length > 0 ? (
+              <>
+                <View style={styles.subSection}>
+                  <View style={styles.subSectionHeader}>
+                    <Pin size={14} color={isDark ? "#c084fc" : "#7c3aed"} />
+                    <Text style={[styles.subSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                      Uu tien ({pinnedConversations.length})
+                    </Text>
+                  </View>
+
+                  {pinnedConversations.length === 0 ? (
+                    <View
+                      style={[
+                        styles.emptySection,
+                        {
+                          backgroundColor: isDark ? "#111827" : "#ffffff",
+                          borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                        Chua co cuoc hoi thoai nao duoc ghim.
+                      </Text>
+                    </View>
+                  ) : (
+                    pinnedConversations.map((conversation) => {
+                      const otherUser = conversation.type === "direct"
+                        ? getDirectParticipant(conversation, user?._id)
+                        : null;
+
+                      return (
+                        <ChatCard
+                          key={conversation._id}
+                          conversation={conversation}
+                          onPress={() => openConversationById(conversation._id)}
+                          onTogglePin={(conversationId) => void toggleConversationPin(conversationId)}
+                          currentUserId={user?._id}
+                          isOnline={!!otherUser && onlineUserIds.has(otherUser._id)}
+                        />
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={styles.subSection}>
+                  <View style={styles.subSectionHeader}>
+                    <Text style={[styles.subSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                      Khac ({regularConversations.length})
+                    </Text>
+                  </View>
+
+                  {regularConversations.length === 0 ? (
+                    <View
+                      style={[
+                        styles.emptySection,
+                        {
+                          backgroundColor: isDark ? "#111827" : "#ffffff",
+                          borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                        Khong con cuoc hoi thoai nao trong muc nay.
+                      </Text>
+                    </View>
+                  ) : (
+                    regularConversations.map((conversation) => {
+                      const otherUser = conversation.type === "direct"
+                        ? getDirectParticipant(conversation, user?._id)
+                        : null;
+
+                      return (
+                        <ChatCard
+                          key={conversation._id}
+                          conversation={conversation}
+                          onPress={() => openConversationById(conversation._id)}
+                          onTogglePin={(conversationId) => void toggleConversationPin(conversationId)}
+                          currentUserId={user?._id}
+                          isOnline={!!otherUser && onlineUserIds.has(otherUser._id)}
+                        />
+                      );
+                    })
+                  )}
+                </View>
+              </>
             ) : (
               <View
                 style={[
@@ -2850,10 +3164,27 @@ const styles = StyleSheet.create({
   },
   conversationList: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 32, gap: 22 },
   section: { gap: 12 },
+  subSection: { gap: 10 },
+  subSectionHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  subSectionTitle: { fontSize: 14, fontWeight: "800" },
   sectionHeaderCompact: { gap: 10 },
   sectionTitleBlock: { flex: 1, gap: 4 },
   sectionTitle: { fontSize: 20, fontWeight: "800" },
   sectionSubtitle: { fontSize: 13, lineHeight: 18 },
+  searchInputWrap: {
+    minHeight: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
+  },
   sidebarActionCard: {
     borderWidth: 1,
     borderRadius: 18,
@@ -2966,6 +3297,26 @@ const styles = StyleSheet.create({
   requestUsername: { fontSize: 13 },
   requestActions: { flexDirection: "row", gap: 10 },
   requestActionsRow: { flexDirection: "row", gap: 10 },
+  messageSearchResult: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 10,
+    gap: 6,
+  },
+  messageSearchSender: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  messageSearchSnippet: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  messageSearchTime: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
   primaryButton: {
     minHeight: 46,
     borderRadius: 16,

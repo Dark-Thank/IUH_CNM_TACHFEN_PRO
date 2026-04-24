@@ -107,6 +107,12 @@ export interface Conversation {
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;
   unreadCounts: Record<string, number>;
+  pinnedBy?: {
+    userId: string;
+    pinnedAt: string | null;
+  }[];
+  isPinned?: boolean;
+  pinnedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

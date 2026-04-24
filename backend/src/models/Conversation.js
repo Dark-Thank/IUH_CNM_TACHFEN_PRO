@@ -91,6 +91,22 @@ const ConversationSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    pinnedBy: {
+        type: [
+            {
+                userId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                    required: true,
+                },
+                pinnedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            }
+        ],
+        default: [],
+    },
 
 }, { timestamps: true });
 
