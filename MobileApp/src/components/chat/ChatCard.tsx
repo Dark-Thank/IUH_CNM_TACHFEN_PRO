@@ -38,8 +38,8 @@ const getConversationPreview = (
       senderId === currentUserId
         ? "Bạn"
         : (typeof senderRef === "object" ? senderRef?.displayName : "") ||
-          conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
-          "Người gửi";
+        conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
+        "Người gửi";
 
     return `${senderName}: ${lastMessage.content}`;
   }
@@ -96,12 +96,12 @@ export default function ChatCard({
     >
       <View style={styles.leading}>
         {conversation.type === "group" ? (
-  <UserAvatar
-    name={conversation.group?.name || "Group"}
-    avatarUrl={conversation.group?.avatar} // ✅ avatar group
-    size={46}
-  />
-) : (
+          <UserAvatar
+            name={conversation.group?.name || "Group"}
+            avatarUrl={conversation.group?.avatar} // ✅ avatar group
+            size={46}
+          />
+        ) : (
           <UserAvatar
             name={otherUser?.displayName || "Tachfen"}
             avatarUrl={otherUser?.avatarUrl}
