@@ -132,20 +132,8 @@ export const useSocketStore = create<SocketState>((set, get) => ({
         });
       }
 
-      const lastMessage = {
-        _id: conversation.lastMessage._id,
-        content: conversation.lastMessage.content,
-        createdAt: conversation.lastMessage.createdAt,
-        sender: {
-          _id: conversation.lastMessage.senderId,
-          displayName: "",
-          avatarUrl: null,
-        },
-      };
-
       const updatedConversation = {
         ...conversation,
-        lastMessage,
         unreadCounts,
       };
 
