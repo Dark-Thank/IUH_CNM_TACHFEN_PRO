@@ -2,12 +2,13 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useSocketStore } from '@/stores/useSocketStore';
 import type { Conversation } from "@/types/chat";
-import { ImagePlus, Mic, Paperclip, Send, Square, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { AtSign, ImagePlus, Mic, Paperclip, Send, Square, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
 import { Input } from "../ui/input";
 import EmmojiPicker from './EmmojiPicker';
+import UserAvatar from './UserAvatar';
 
 const getReplyPreviewContent = (message?: { content?: string | null; messageType?: string; imgUrls?: string[]; fileUrls?: { url: string }[] }) => {
     const trimmedContent = typeof message?.content === "string" ? message.content.trim() : "";
@@ -47,6 +48,10 @@ type VoiceDraft = {
     durationSeconds: number;
     previewUrl: string;
 };
+
+type MentionOption =
+    | { type: "all"; id: "all"; label: string; insertText: string }
+    | { type: "member"; id: string; label: string; avatarUrl?: string | null; insertText: string };
 
 const getSupportedAudioMimeType = () => {
     if (typeof MediaRecorder === "undefined") {
@@ -93,6 +98,7 @@ const MessageInput = ({
     const typingTimeoutRef = useRef<number | null>(null);
     const typingConversationIdRef = useRef(selectedConvo._id);
     const isTypingRef = useRef(false);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     // Sync the prop value to local state
     useEffect(() => {
@@ -100,6 +106,7 @@ const MessageInput = ({
     }, [propIsBlocked]);
 
     const [value, setValue] = useState("");
+    const [selectionStart, setSelectionStart] = useState(0);
     const [files, setFiles] = useState<File[]>([]);
     const [voiceDraft, setVoiceDraft] = useState<VoiceDraft | null>(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -109,6 +116,57 @@ const MessageInput = ({
     const chunksRef = useRef<Blob[]>([]);
     const recordingStartedAtRef = useRef<number | null>(null);
     const recordingTimerRef = useRef<number | null>(null);
+    const conversationType = String(selectedConvo.type ?? "").toLowerCase();
+    const isGroupConversation =
+        conversationType === "group" ||
+        Boolean(selectedConvo.group?.name) ||
+        selectedConvo.participants.length > 2;
+    const mentionSearch = useMemo(() => {
+        if (!isGroupConversation) {
+            return null;
+        }
+
+        const cursorPosition = Math.min(selectionStart || value.length, value.length);
+        const textBeforeCursor = value.slice(0, cursorPosition);
+        const match = textBeforeCursor.match(/(^|\s)@([^@\s]*)$/);
+
+        if (!match) {
+            return null;
+        }
+
+        return {
+            query: match[2].toLowerCase(),
+            start: textBeforeCursor.length - match[2].length - 1,
+            end: cursorPosition,
+        };
+    }, [isGroupConversation, selectionStart, value]);
+
+    const mentionOptions = useMemo<MentionOption[]>(() => {
+        if (!mentionSearch) {
+            return [];
+        }
+
+        const options: MentionOption[] = [
+            { type: "all", id: "all", label: "All", insertText: "@All" },
+            ...selectedConvo.participants.map((participant) => ({
+                type: "member" as const,
+                id: participant._id,
+                label: participant.displayName,
+                avatarUrl: participant.avatarUrl,
+                insertText: `@${participant.displayName}`,
+            })),
+        ];
+
+        if (!mentionSearch.query) {
+            return options;
+        }
+
+        return options.filter((option) =>
+            option.label.toLowerCase().includes(mentionSearch.query)
+        );
+    }, [mentionSearch, selectedConvo.participants]);
+
+    const showMentionPicker = !isBlocked && mentionOptions.length > 0;
 
     const stopTypingIndicator = (conversationId = typingConversationIdRef.current) => {
         if (typingTimeoutRef.current) {
@@ -203,9 +261,11 @@ const MessageInput = ({
 
     useEffect(() => {
         setValue("");
+        setSelectionStart(0);
         setFiles([]);
         stopTypingIndicator();
         setValue("");
+        setSelectionStart(0);
         setFiles([]);
         clearReplyingMessage();
         setIsRecording(false);
@@ -299,6 +359,31 @@ const MessageInput = ({
         }
     };
 
+    const handleChangeText = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setValue(event.target.value);
+        setSelectionStart(event.target.selectionStart ?? event.target.value.length);
+    };
+
+    const handleSelectMention = (option: MentionOption) => {
+        if (!mentionSearch) {
+            return;
+        }
+
+        const beforeMention = value.slice(0, mentionSearch.start);
+        const afterMention = value.slice(mentionSearch.end);
+        const shouldAddSpace = afterMention.length === 0 || !afterMention.startsWith(" ");
+        const nextValue = `${beforeMention}${option.insertText}${shouldAddSpace ? " " : ""}${afterMention}`;
+        const nextCursor = beforeMention.length + option.insertText.length + (shouldAddSpace ? 1 : 0);
+
+        setValue(nextValue);
+        setSelectionStart(nextCursor);
+
+        window.requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(nextCursor, nextCursor);
+        });
+    };
+
     if (!user) return null;
 
     const sendMessage = async () => {
@@ -339,6 +424,7 @@ const MessageInput = ({
             }
 
             setValue("");
+            setSelectionStart(0);
             setFiles([]);
             resetVoiceDraft();
             clearReplyingMessage();
@@ -523,9 +609,50 @@ const MessageInput = ({
 
                 {/* TEXT */}
                 <div className="flex-1 relative">
+                    {showMentionPicker && (
+                        <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-popover py-1 shadow-lg">
+                            {mentionOptions.map((option) => (
+                                <button
+                                    key={`${option.type}-${option.id}`}
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        handleSelectMention(option);
+                                    }}
+                                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-accent"
+                                >
+                                    {option.type === "all" ? (
+                                        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                            <AtSign className="size-4" />
+                                        </span>
+                                    ) : (
+                                        <UserAvatar
+                                            type="chat"
+                                            name={option.label}
+                                            avatarUrl={option.avatarUrl ?? undefined}
+                                        />
+                                    )}
+
+                                    <span className="min-w-0 flex-1">
+                                        <span className="block truncate text-sm font-semibold text-foreground">
+                                            {option.label}
+                                        </span>
+                                        <span className="block truncate text-xs text-muted-foreground">
+                                            {option.type === "all" ? "Tag tat ca thanh vien" : "Thanh vien nhom"}
+                                        </span>
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <Input
+                        ref={inputRef}
                         value={value}
-                        onChange={(e) => setValue(e.target.value)}
+                        onChange={handleChangeText}
+                        onSelect={(event) => {
+                            setSelectionStart(event.currentTarget.selectionStart ?? value.length);
+                        }}
                         onKeyDown={handleKeyPress}
                         placeholder={isBlocked ? "Bạn không thể nhắn tin..." : "Soạn tin nhắn..."}
                         disabled={isBlocked}

@@ -5,7 +5,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
 import { Audio } from "expo-av";
-import { FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
+import { AtSign, FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Image,
@@ -19,6 +19,7 @@ import {
 
 import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import GroupFeatureBar from "./GroupFeatureBar";
+import UserAvatar from "./UserAvatar";
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -56,6 +57,10 @@ interface FileItem {
   voiceDurationSeconds?: number;
 }
 
+type MentionOption =
+  | { type: "all"; id: "all"; label: string; insertText: string }
+  | { type: "member"; id: string; label: string; avatarUrl?: string | null; insertText: string };
+
 // interface MessageInputProps {
 // interface MessageInputProps {
 //   selectedConvo: Conversation;
@@ -80,6 +85,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
   const { isDark } = useThemeStore();
 
   const [value, setValue] = useState("");
+  const [selectionStart, setSelectionStart] = useState(0);
   const [files, setFiles] = useState<FileItem[]>([]);
   const [voiceDraft, setVoiceDraft] = useState<FileItem | null>(null);
   const [sending, setSending] = useState(false);
@@ -95,8 +101,58 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
   const placeholderColor = isDark
     ? "#94a3b8"
     : "#64748b";
-  const isGroupConversation = selectedConvo.type === "group";
+  const conversationType = String(selectedConvo.type ?? "").toLowerCase();
+  const isGroupConversation =
+    conversationType === "group" ||
+    Boolean(selectedConvo.group?.name) ||
+    selectedConvo.participants.length > 2;
   const hasComposerContent = value.trim().length > 0 || files.length > 0 || !!voiceDraft;
+  const mentionSearch = useMemo(() => {
+    if (!isGroupConversation) {
+      return null;
+    }
+
+    const cursorPosition = Math.min(selectionStart || value.length, value.length);
+    const textBeforeCursor = value.slice(0, cursorPosition);
+    const match = textBeforeCursor.match(/(^|\s)@([^@\s]*)$/);
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      query: match[2].toLowerCase(),
+      start: textBeforeCursor.length - match[2].length - 1,
+      end: cursorPosition,
+    };
+  }, [isGroupConversation, selectionStart, value]);
+
+  const mentionOptions = useMemo<MentionOption[]>(() => {
+    if (!mentionSearch) {
+      return [];
+    }
+
+    const options: MentionOption[] = [
+      { type: "all", id: "all", label: "All", insertText: "@All" },
+      ...selectedConvo.participants.map((participant) => ({
+        type: "member" as const,
+        id: participant._id,
+        label: participant.displayName,
+        avatarUrl: participant.avatarUrl,
+        insertText: `@${participant.displayName}`,
+      })),
+    ];
+
+    if (!mentionSearch.query) {
+      return options;
+    }
+
+    return options.filter((option) =>
+      option.label.toLowerCase().includes(mentionSearch.query)
+    );
+  }, [mentionSearch, selectedConvo.participants]);
+
+  const showMentionPicker = !disabled && mentionOptions.length > 0;
 
   useEffect(() => {
     ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -164,6 +220,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
     setFiles([]);
     setValue("");
+    setSelectionStart(0);
     setVoiceDraft(null);
     clearReplyingMessage();
     setIsRecording(false);
@@ -272,6 +329,26 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
   const removeVoiceDraft = () => {
     setVoiceDraft(null);
+  };
+
+  const handleChangeText = (nextValue: string) => {
+    setValue(nextValue);
+    setSelectionStart(nextValue.length);
+  };
+
+  const handleSelectMention = (option: MentionOption) => {
+    if (!mentionSearch) {
+      return;
+    }
+
+    const beforeMention = value.slice(0, mentionSearch.start);
+    const afterMention = value.slice(mentionSearch.end);
+    const shouldAddSpace = afterMention.length === 0 || !afterMention.startsWith(" ");
+    const nextValue = `${beforeMention}${option.insertText}${shouldAddSpace ? " " : ""}${afterMention}`;
+    const nextCursor = beforeMention.length + option.insertText.length + (shouldAddSpace ? 1 : 0);
+
+    setValue(nextValue);
+    setSelectionStart(nextCursor);
   };
 
   const startRecording = async () => {
@@ -393,6 +470,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
     setSending(true);
     setValue("");
+    setSelectionStart(0);
 
     try {
       if (selectedConvo.type === "direct") {
@@ -422,6 +500,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
     } catch (error) {
       console.error(error);
       setValue(trimmed);
+      setSelectionStart(trimmed.length);
       const serverMessage = (error as any)?.response?.data?.message;
       toast.error(
         serverMessage || "Gửi tin nhắn thất bại"
@@ -594,7 +673,70 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
             </Pressable>
           </View>
         )}
+
       </View>
+
+      {showMentionPicker ? (
+        <View
+          style={[
+            styles.mentionPicker,
+            {
+              backgroundColor: isDark ? "#111827" : "#ffffff",
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+            },
+          ]}
+        >
+          <ScrollView
+            keyboardShouldPersistTaps="always"
+            nestedScrollEnabled
+            style={styles.mentionList}
+          >
+            {mentionOptions.map((option) => (
+              <Pressable
+                key={`${option.type}-${option.id}`}
+                onPress={() => handleSelectMention(option)}
+                style={({ pressed }) => [
+                  styles.mentionRow,
+                  {
+                    backgroundColor: pressed
+                      ? isDark ? "#1f2937" : "#f1f5f9"
+                      : "transparent",
+                  },
+                ]}
+              >
+                {option.type === "all" ? (
+                  <View style={[styles.mentionAllIcon, { backgroundColor: isDark ? "#312e81" : "#ede9fe" }]}>
+                    <AtSign size={18} color={isDark ? "#ddd6fe" : "#6d28d9"} />
+                  </View>
+                ) : (
+                  <UserAvatar
+                    name={option.label}
+                    avatarUrl={option.avatarUrl}
+                    size={34}
+                  />
+                )}
+
+                <View style={styles.mentionTextBlock}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.mentionName, { color: isDark ? "#f8fafc" : "#0f172a" }]}
+                  >
+                    {option.label}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.mentionMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}
+                  >
+                    {option.type === "all" ? "Tag tat ca thanh vien" : "Thanh vien nhom"}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
+      <View style={styles.composerRow}>
 
       {/* IMAGE BUTTON */}
       <Pressable
@@ -637,7 +779,10 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
       >
         <TextInput
           value={value}
-          onChangeText={setValue}
+          onChangeText={handleChangeText}
+          onSelectionChange={(event) => {
+            setSelectionStart(event.nativeEvent.selection.start);
+          }}
           placeholder="Soạn tin nhắn..."
           placeholderTextColor={
             placeholderColor
@@ -779,19 +924,23 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
         </Pressable>
       ) : null}
 
+      </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 14,
     borderTopWidth: 1,
+  },
+  composerRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 10,
   },
   previewStack: {
     position: "absolute",
@@ -799,6 +948,8 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     gap: 8,
+    zIndex: 40,
+    elevation: 40,
   },
   replyPreviewBar: {
     flexDirection: "row",
@@ -827,6 +978,48 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  mentionPicker: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: "hidden",
+    zIndex: 50,
+    marginBottom: 10,
+    shadowColor: "#020617",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  mentionList: {
+    maxHeight: 220,
+  },
+  mentionRow: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mentionAllIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mentionTextBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mentionName: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  mentionMeta: {
+    marginTop: 2,
+    fontSize: 12,
   },
 
   iconButton: {

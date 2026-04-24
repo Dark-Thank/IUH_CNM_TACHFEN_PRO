@@ -1214,6 +1214,10 @@ export const respondToGroupAppointment = async (req, res) => {
       return res.status(400).json({ message: "Tin nhan nay khong phai lich hen" });
     }
 
+    if (new Date(message.appointmentMeta.scheduledAt).getTime() <= Date.now()) {
+      return res.status(400).json({ message: "Lich hen da den thoi gian dien ra" });
+    }
+
     const existingResponse = message.appointmentMeta.responses.find(
       (response) => response.userId.toString() === userId.toString()
     );

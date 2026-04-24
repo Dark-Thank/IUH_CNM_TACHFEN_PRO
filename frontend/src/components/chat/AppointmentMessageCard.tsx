@@ -56,6 +56,8 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
     return null;
   }
 
+  const scheduledAt = new Date(appointmentMeta.scheduledAt);
+  const hasStarted = !Number.isNaN(scheduledAt.getTime()) && scheduledAt.getTime() <= Date.now();
   const currentResponse = appointmentMeta.responses.find((response) => response.userId === viewerId)?.status;
   const isCreator = appointmentMeta.createdBy === viewerId;
 
@@ -108,6 +110,12 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
         </div>
       )}
 
+      {hasStarted && (
+        <p className="text-xs font-medium text-muted-foreground">
+          Lịch hẹn đã tới giờ, không thể cập nhật phản hồi nữa.
+        </p>
+      )}
+
       {isCreator && onDelete && (
         <div className="flex justify-end">
           <button
@@ -141,7 +149,7 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
               key={status}
               type="button"
               onClick={() => void handleRespond(status)}
-              disabled={Boolean(submittingStatus) || deleting}
+              disabled={Boolean(submittingStatus) || deleting || hasStarted}
               className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${
                 isSelected
                   ? "border-primary bg-primary text-primary-foreground"
