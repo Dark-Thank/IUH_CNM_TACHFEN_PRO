@@ -54,7 +54,7 @@ unblockUser: (id: string) =>
       set({ loading: true });
       return await friendService.searchByUsername(username);
     } catch (error) {
-      console.error("Loi xay ra khi tim user bang username", error);
+      console.error("Lỗi xảy ra khi tìm user bằng username", error);
 
       return null;
     } finally {
@@ -64,7 +64,7 @@ unblockUser: (id: string) =>
 
   addFriend: async (to, message) => {
     if (!authSession.getAccessToken()) {
-      return "Ban can dang nhap de gui loi moi ket ban.";
+      return "Bạn cần đăng nhập để gửi lời mời kết bạn.";
     }
 
     try {
@@ -76,8 +76,8 @@ unblockUser: (id: string) =>
     //   return "Lỗi gửi kết bạn";
 
     } catch (error: any) {
-      console.error("Loi xay ra khi addFriend", error);
-      return error?.response?.data?.message ?? "Loi xay ra khi gui ket ban. Hay thu lai";
+      console.error("Lỗi xảy ra khi addFriend", error);
+      return error?.response?.data?.message ?? "Lỗi xảy ra khi gửi kết bạn. Hãy thử lại";
     } finally {
       set({ loading: false });
     }
@@ -114,7 +114,7 @@ unblockUser: (id: string) =>
       set({ receivedList: received, sentList: sent });
     } catch (error) {
       if (!isUnauthorizedError(error)) {
-        console.error("Loi xay ra khi getAllFriendRequests", error);
+        console.error("Lỗi xảy ra khi getAllFriendRequests", error);
       }
 
     } finally {

@@ -86,14 +86,14 @@ const formatDateLabel = (date: Date, minimumDate: Date) => {
   tomorrow.setDate(today.getDate() + 1);
 
   if (isSameDay(date, today)) {
-    return `Hom nay, ${new Intl.DateTimeFormat("vi-VN", {
+    return `Hôm nay, ${new Intl.DateTimeFormat("vi-VN", {
       day: "2-digit",
       month: "2-digit",
     }).format(date)}`;
   }
 
   if (isSameDay(date, tomorrow)) {
-    return `Ngay mai, ${new Intl.DateTimeFormat("vi-VN", {
+    return `Ngày mai, ${new Intl.DateTimeFormat("vi-VN", {
       day: "2-digit",
       month: "2-digit",
     }).format(date)}`;
@@ -244,7 +244,7 @@ export default function DateTimePickerField({
               ]}
             >
               <Text style={[styles.clearButtonText, { color: isDark ? "#e2e8f0" : "#334155" }]}>
-                Xoa
+                Xóa
               </Text>
             </Pressable>
           ) : null}
@@ -274,7 +274,7 @@ export default function DateTimePickerField({
             </Text>
 
             <Text style={[styles.sectionTitle, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-              Chon ngay
+              Chọn ngày
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateList}>
               {dateOptions.map((date) => {
@@ -306,7 +306,7 @@ export default function DateTimePickerField({
             </ScrollView>
 
             <Text style={[styles.sectionTitle, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-              Chon gio
+              Chọn giờ
             </Text>
             <ScrollView style={styles.timeScroll} showsVerticalScrollIndicator={false}>
               <View style={styles.timeGrid}>
@@ -350,7 +350,7 @@ export default function DateTimePickerField({
                 ]}
               >
                 <Text style={[styles.footerButtonText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Huy
+                  Hủy
                 </Text>
               </Pressable>
 
@@ -364,7 +364,7 @@ export default function DateTimePickerField({
                 ]}
               >
                 <Text style={[styles.footerButtonText, styles.confirmButtonText]}>
-                  Xac nhan
+                  Xác nhận
                 </Text>
               </Pressable>
             </View>

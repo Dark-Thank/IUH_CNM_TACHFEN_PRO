@@ -61,7 +61,7 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
 };
 
 const getCallTypeLabel = (callType?: "audio" | "video") =>
-  callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai";
+  callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại";
 
 const formatCallDuration = (seconds = 0) => {
   const safeSeconds = Math.max(0, Math.floor(seconds));
@@ -80,7 +80,7 @@ const getCallSummaryTitle = (message: Message, viewerId?: string) => {
   const callMeta = message.callMeta;
 
   if (!callMeta) {
-    return message.content ?? "Cuoc goi";
+    return message.content ?? "Cuộc gọi";
   }
 
   const typeLabel = getCallTypeLabel(callMeta.callType);
@@ -88,19 +88,19 @@ const getCallSummaryTitle = (message: Message, viewerId?: string) => {
 
   switch (callMeta.outcome) {
     case "busy":
-      return isCaller ? "Nguoi nhan dang ban" : "Ban dang ban";
+      return isCaller ? "Người nhận đang bận" : "Bạn đang bận";
     case "declined":
-      return isCaller ? `${typeLabel} bi tu choi` : `Da tu choi ${typeLabel.toLowerCase()}`;
+      return isCaller ? `${typeLabel} bị từ chối` : `Đã từ chối ${typeLabel.toLowerCase()}`;
     case "missed":
-      return isCaller ? `${typeLabel} khong duoc tra loi` : `${typeLabel} nho`;
+      return isCaller ? `${typeLabel} không được trả lời` : `${typeLabel} nhỡ`;
     case "cancelled":
-      return `${typeLabel} da huy`;
+      return `${typeLabel} đã hủy`;
     case "disconnected":
-      return `${typeLabel} bi gian doan`;
+      return `${typeLabel} bị gián đoạn`;
     case "reconnect-timeout":
-      return `${typeLabel} mat ket noi`;
+      return `${typeLabel} mất kết nối`;
     case "completed":
-      return isCaller ? `${typeLabel} di` : `${typeLabel} den`;
+      return isCaller ? `${typeLabel} đi` : `${typeLabel} đến`;
     default:
       return typeLabel;
   }
@@ -328,7 +328,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
       "Thu hồi",
       "Tin nhắn sẽ bị thu hồi cho tất cả thành viên. Tiếp tục?",
       [
-        { text: "Huy", style: "cancel" },
+        { text: "Hủy", style: "cancel" },
         {
           text: "Thu hồi",
           style: "destructive",
@@ -574,7 +574,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
                 <Phone size={15} color={isDark ? "#ddd6fe" : "#6d28d9"} />
               )}
               <Text style={[styles.callActionLabel, { color: isDark ? "#ddd6fe" : "#6d28d9" }]}>
-                Goi lai
+                Gọi lại
               </Text>
             </Pressable>
           ) : null}
@@ -630,6 +630,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
           <PollMessageCard
             message={message}
             viewerId={currentUserId}
+            participants={selectedConvo.participants}
             onVote={handleVotePoll}
             onAddOption={handleAddPollOption}
             onClose={handleClosePoll}

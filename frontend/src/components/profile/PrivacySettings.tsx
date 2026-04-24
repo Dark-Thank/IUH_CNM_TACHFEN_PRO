@@ -19,7 +19,7 @@ const PrivacySettings = () => {
 
   const handleDeleteAccount = async () => {
     const confirmed = window.confirm(
-      "Ban co chac chan muon xoa tai khoan? Toan bo du lieu lien quan den tai khoan se bi xoa."
+      "Bạn có chắc chắn muốn xóa tài khoản? Toàn bộ dữ liệu liên quan đến tài khoản sẽ bị xóa."
     );
 
     if (!confirmed) {
@@ -32,7 +32,7 @@ const PrivacySettings = () => {
       await deleteAccount();
       navigate("/signin", { replace: true });
     } catch (error) {
-      console.error("Khong the xoa tai khoan", error);
+      console.error("Không thể xóa tài khoản", error);
     } finally {
       setDeleting(false);
     }
@@ -43,10 +43,10 @@ const PrivacySettings = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-primary" />
-          Quyen rieng tu va bao mat
+          Quyền riêng tư và bảo mật
         </CardTitle>
         <CardDescription>
-          Quan ly cai dat bao mat va thao tac nhay cam cua tai khoan.
+          Quản lý cài đặt bảo mật và thao tác nhạy cảm của tài khoản.
         </CardDescription>
       </CardHeader>
 
@@ -61,7 +61,7 @@ const PrivacySettings = () => {
             className="w-full justify-start glass-light border-border/30 hover:text-info"
           >
             <Bell className="h-4 w-4 mr-2" />
-            Cai dat thong bao
+            Cài đặt thông báo
           </Button>
 
           <Button
@@ -69,12 +69,12 @@ const PrivacySettings = () => {
             className="w-full justify-start glass-light border-border/30 hover:text-destructive"
           >
             <ShieldBan className="size-4 mr-2" />
-            Chan va bao cao
+            Chặn và báo cáo
           </Button>
         </div>
 
         <div className="pt-4 border-t border-border/30">
-          <h4 className="font-medium mb-3 text-destructive">Khu vuc nguy hiem</h4>
+          <h4 className="font-medium mb-3 text-destructive">Khu vực nguy hiểm</h4>
           <Button
             type="button"
             variant="destructive"
@@ -82,7 +82,7 @@ const PrivacySettings = () => {
             onClick={handleDeleteAccount}
             disabled={deleting}
           >
-            {deleting ? "Dang xoa tai khoan..." : "Xoa tai khoan"}
+            {deleting ? "Đang xóa tài khoản..." : "Xóa tài khoản"}
           </Button>
         </div>
       </CardContent>

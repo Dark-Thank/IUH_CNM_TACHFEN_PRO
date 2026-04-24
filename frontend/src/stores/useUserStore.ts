@@ -20,12 +20,12 @@ export const useUserStore = create<UserState>(() => ({
         try {
           await useChatStore.getState().fetchConversations();
         } catch (chatError) {
-          console.error("Loi khi dong bo conversations sau khi doi avatar", chatError);
+          console.error("Lỗi khi đồng bộ conversations sau khi đổi avatar", chatError);
         }
       }
     } catch (error: any) {
-      console.error("Loi khi updateAvatarUrl", error);
-      toast.error(error.response?.data?.message || "Upload avatar khong thanh cong!");
+      console.error("Lỗi khi updateAvatarUrl", error);
+      toast.error(error.response?.data?.message || "Upload avatar không thành công!");
       throw error;
     }
   },
@@ -39,13 +39,13 @@ export const useUserStore = create<UserState>(() => ({
       try {
         await useChatStore.getState().fetchConversations();
       } catch (chatError) {
-        console.error("Loi khi dong bo conversations sau khi cap nhat profile", chatError);
+        console.error("Lỗi khi đồng bộ conversations sau khi cập nhật profile", chatError);
       }
 
-      toast.success("Cap nhat thong tin thanh cong.");
+      toast.success("Cập nhật thông tin thành công.");
     } catch (error: any) {
-      console.error("Loi khi updateProfile", error);
-      toast.error(error.response?.data?.message || "Cap nhat thong tin that bai.");
+      console.error("Lỗi khi updateProfile", error);
+      toast.error(error.response?.data?.message || "Cập nhật thông tin thất bại.");
       throw error;
     }
   },
@@ -55,10 +55,10 @@ export const useUserStore = create<UserState>(() => ({
 
       await userService.deleteAccount();
       clearState();
-      toast.success("Xoa tai khoan thanh cong.");
+      toast.success("Xóa tài khoản thành công.");
     } catch (error: any) {
-      console.error("Loi khi deleteAccount", error);
-      toast.error(error.response?.data?.message || "Khong the xoa tai khoan.");
+      console.error("Lỗi khi deleteAccount", error);
+      toast.error(error.response?.data?.message || "Không thể xóa tài khoản.");
       throw error;
     }
   },
