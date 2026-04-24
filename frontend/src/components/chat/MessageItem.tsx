@@ -269,6 +269,7 @@ const MessageItem = ({
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [reactionDialogEmoji, setReactionDialogEmoji] = useState<string | null>(null);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
+  const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
 
   const handleDownloadFile = async (fileIndex: number, fileName: string) => {
@@ -304,6 +305,7 @@ const MessageItem = ({
   const isAppointmentMessage = message.messageType === "appointment" && Boolean(message.appointmentMeta);
   const voiceAttachment = getVoiceAttachment(message);
   const downloadableFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
+  const hasCardContent = message.content || message.replyTo || message.forwardedFrom || downloadableFiles.length > 0 || message.isRecalled || isDeletedForCurrentUser || isCallMessage || isPollMessage || isAppointmentMessage || isVoice;
   const canForward = !message.isRecalled
     && !isDeletedForCurrentUser
     && !isPollMessage
@@ -478,8 +480,11 @@ const MessageItem = ({
             isOwn ? "flex-row-reverse" : "flex-row"
           )}
         >
-          {/* MESSAGE CARD */}
-          <Card
+          {/* MESSAGE CARD + IMAGES WRAPPER */}
+          <div className="flex flex-col gap-2">
+            {/* MESSAGE CARD */}
+            {hasCardContent && (
+            <Card
             className={cn(
               "px-4 py-2 inline-block max-w-[70vw]",
               message.isRecalled
@@ -623,19 +628,6 @@ const MessageItem = ({
                   </p>
                 )}
 
-                {/* IMAGES */}
-                {(message.imgUrls || []).length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {(message.imgUrls || []).map((url, index) => (
-                      <img
-                        key={index}
-                        src={url}
-                        className="max-w-50 rounded-lg"
-                      />
-                    ))}
-                  </div>
-                )}
-
                 {downloadableFiles.length > 0 && (
                   <div className="mt-2 space-y-1">
                     {downloadableFiles.map((file) => {
@@ -661,6 +653,24 @@ const MessageItem = ({
               </>
             )}
           </Card>
+            )}
+
+          {/* IMAGES - Outside Card */}
+          {(message.imgUrls || []).length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {(message.imgUrls || []).map((url, index) => (
+                <img
+                  key={index}
+                  src={url}
+                  onClick={() => setSelectedImageUrl(url)}
+                  className="max-w-50 rounded-lg shadow-md object-cover cursor-pointer hover:opacity-80 transition"
+                  alt={`Ảnh ${index + 1}`}
+                />
+              ))}
+            </div>
+          )}
+          </div>
+
           {/* ACTION MENU */}
           <DropdownMenu>
             <DropdownMenuTrigger className="opacity-0 group-hover:opacity-100 shrink-0 self-center">
@@ -920,6 +930,24 @@ const MessageItem = ({
                   : `Thả ${reactionDialogEmoji}`}
               </Button>
             ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(selectedImageUrl)} onOpenChange={(open) => {
+        if (!open) {
+          setSelectedImageUrl(null);
+        }
+      }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] p-0 border-0 bg-black/90">
+          <div className="relative w-full h-full flex items-center justify-center">
+            {selectedImageUrl && (
+              <img
+                src={selectedImageUrl}
+                alt="Xem chi tiết ảnh"
+                className="w-full h-full object-contain max-w-full max-h-[85vh] rounded-lg"
+              />
+            )}
           </div>
         </DialogContent>
       </Dialog>
