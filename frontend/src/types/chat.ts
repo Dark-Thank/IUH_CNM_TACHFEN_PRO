@@ -22,12 +22,16 @@ export interface LastMessage {
   _id: string;
   content: string | null;
   createdAt: string;
-  // ĐỔI TÊN TỪ sender THÀNH senderId ĐỂ KHỚP VỚI BACKEND
-  senderId: {
+  sender?: {
     _id: string;
     displayName: string;
     avatarUrl?: string | null;
-  };
+  } | null;
+  senderId?: string | {
+    _id: string;
+    displayName?: string;
+    avatarUrl?: string | null;
+  } | null;
 }
 
 export interface CallMeta {

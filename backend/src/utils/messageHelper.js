@@ -46,13 +46,15 @@ export const getMessagePreviewContent = (message) => {
 
 export const updateConversationAfterCreateMessage = (conversation, message,
     senderId) => {
+    const normalizedSenderId = getEntityId(senderId);
+
     conversation.set({
         seenBy: [],
         lastMessageAt: message.createdAt,
         lastMessage: {
             _id: message._id,
             content: getMessagePreviewContent(message),
-            senderId,
+            senderId: normalizedSenderId,
             createdAt: message.createdAt
         }
     });
@@ -62,8 +64,13 @@ export const updateConversationAfterCreateMessage = (conversation, message,
     }
 
     conversation.participants.forEach((p) => {
-        const memberId = p.userId.toString();
-        const isSender = memberId === senderId.toString();
+        const memberId = getEntityId(p.userId || p);
+
+        if (!memberId) {
+            return;
+        }
+
+        const isSender = memberId === normalizedSenderId;
         const prevCount = conversation.unreadCounts.get(memberId) || 0;
         conversation.unreadCounts.set(memberId, isSender ? 0 : prevCount + 1);
     });

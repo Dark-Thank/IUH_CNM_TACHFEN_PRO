@@ -1,6 +1,7 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import type { Conversation } from "@/types/chat";
+import { cn } from "@/lib/utils";
 import ChatCard from "./ChatCard";
 import UnreadCountBadge from "./UnreadCountBadge";
 import GroupChatAvatar from "./GroupChatAvatar";
@@ -15,35 +16,29 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
   const unreadCount = convo.unreadCounts?.[user._id] || 0;
   const groupName = convo.group?.name ?? "Nhóm trò chuyện";
 
-  // Hàm xử lý hiển thị nội dung: "Tên: Tin nhắn"
- const renderLastMessageContent = () => {
+  const renderLastMessageContent = () => {
     const lastMsg = convo.lastMessage;
-    if (!lastMsg) return "Chưa có tin nhắn";
-
-    // 1. Lấy object người gửi (kiểm tra cả senderId và sender cho chắc)
-    const senderObj = (lastMsg as any).senderId || (lastMsg as any).sender;
-    
-    // Nếu không thấy object người gửi (có thể chỉ là ID dạng string)
-    if (!senderObj || typeof senderObj === 'string') {
-      return `Người gửi: ${lastMsg.content || "..."}`;
+    if (!lastMsg) {
+      return "Chưa có tin nhắn";
     }
 
-    // 2. Kiểm tra xem có phải mình gửi không
-    const isMe = senderObj._id === user._id;
-    if (isMe) return `Bạn: ${lastMsg.content || "..."}`;
+    const messagePreview = lastMsg.content?.trim() || "...";
+    const senderRef = lastMsg.sender ?? lastMsg.senderId;
+    const senderId =
+      typeof senderRef === "string"
+        ? senderRef
+        : senderRef?._id;
 
-    // 3. Lấy tên hiển thị (Thử displayName trước, name sau)
-    const fullName = (senderObj.displayName || senderObj.name || "").trim();
-    
-    if (fullName) {
-      // Cắt lấy tên cuối cùng (Ví dụ: "Nguyễn Hùng" -> "Hùng")
-      const nameParts = fullName.split(" ");
-      const firstName = nameParts[nameParts.length - 1]; 
-      return `${firstName}: ${lastMsg.content || "..."}`;
+    if (senderId === user._id) {
+      return `Bạn: ${messagePreview}`;
     }
 
-    // Fallback cuối cùng nếu mọi thứ trên đều hụt
-    return `Thành viên: ${lastMsg.content || "..."}`;
+    const senderName =
+      (typeof senderRef === "object" ? senderRef?.displayName : "") ||
+      convo.participants.find((participant) => participant._id === senderId)?.displayName ||
+      "Người gửi";
+
+    return `${senderName}: ${messagePreview}`;
   };
 
   const handleSelectConversation = async (id: string) => {
@@ -59,8 +54,8 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
       name={groupName}
       // Truyền Date để ChatCard tự hiển thị (16h, 1d...)
       timestamp={
-        convo.lastMessage?.createdAt 
-          ? new Date(convo.lastMessage.createdAt) 
+        convo.lastMessage?.createdAt
+          ? new Date(convo.lastMessage.createdAt)
           : undefined
       }
       isActive={activeConversationId === convo._id}
@@ -81,7 +76,12 @@ const GroupChatCard = ({ convo }: { convo: Conversation }) => {
         </div>
       }
       subtitle={
-        <p className="text-sm truncate text-muted-foreground">
+        <p
+          className={cn(
+            "text-sm truncate",
+            unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
+          )}
+        >
           {renderLastMessageContent()}
         </p>
       }

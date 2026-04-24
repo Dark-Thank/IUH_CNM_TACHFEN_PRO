@@ -1,13 +1,13 @@
 import { useMemo } from "react";
 import { Download, FileText, ImageIcon } from "lucide-react";
 import { chatService } from "@/services/chatServiec";
-import type { Message,Conversation } from "@/types/chat";
+import type { Message, Conversation } from "@/types/chat";
 import ConversationSettings from "./ConversationSettings";
 
 type Props = {
-  
+
   messages: Message[];
-   conversation: Conversation; 
+  conversation: Conversation;
 };
 
 type FileEntry = {
@@ -108,9 +108,9 @@ const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
     <aside className="w-[320px] shrink-0 border-l bg-background/95 backdrop-blur-sm">
       <div className="flex h-full flex-col">
         <div className="border-b px-4 py-4">
-          <h3 className="text-sm font-semibold text-foreground">Tep va Hinh anh</h3>
+          <h3 className="text-sm font-semibold text-foreground">Tệp và hình ảnh</h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Xem nhanh cac tep va hinh anh trong cuoc tro chuyen hien tai.
+            Xem nhanh các tệp và hình ảnh trong cuộc trò chuyện hiện tại.
           </p>
         </div>
 
@@ -120,13 +120,13 @@ const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
             <div className="flex items-center gap-2">
               <ImageIcon className="size-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">
-                Hinh anh gan day ({images.length})
+                Hình ảnh gần đây ({images.length})
               </h4>
             </div>
 
             {images.length === 0 ? (
               <div className="rounded-xl border border-dashed px-4 py-5 text-sm text-muted-foreground">
-                Chua co hinh anh nao trong du lieu da tai.
+                Chưa có hình ảnh nào trong dữ liệu đã tải.
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
@@ -159,13 +159,13 @@ const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
             <div className="flex items-center gap-2">
               <FileText className="size-4 text-primary" />
               <h4 className="text-sm font-semibold text-foreground">
-                Tep gan day ({files.length})
+                Tệp gần đây ({files.length})
               </h4>
             </div>
 
             {files.length === 0 ? (
               <div className="rounded-xl border border-dashed px-4 py-5 text-sm text-muted-foreground">
-                Chua co tep nao trong du lieu da tai.
+                Chưa có tệp nào trong dữ liệu đã tải.
               </div>
             ) : (
               <div className="space-y-3">
@@ -180,7 +180,7 @@ const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
                           {entry.file.name}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {entry.file.type || "Khong ro dinh dang"}
+                          {entry.file.type || "Không rõ định dạng"}
                           {formatFileSize(entry.file.size)
                             ? ` - ${formatFileSize(entry.file.size)}`
                             : ""}

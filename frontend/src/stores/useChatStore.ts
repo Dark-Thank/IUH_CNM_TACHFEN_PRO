@@ -429,19 +429,28 @@ export const useChatStore = create<ChatState>()(
         }
       },
       updateConversation: (updated: Partial<Conversation> & { _id: string }) =>
-        set((state) => ({
-          conversations: state.conversations.map((c) =>
-            c._id !== updated._id
-              ? c
-              : {
-                ...c,
-                group: {
-                  ...c.group,
-                  ...updated.group,
-                },
-              }
-          ),
-        })),
+        set((state) => {
+          const currentConversation = state.conversations.find(
+            (conversation) => conversation._id === updated._id
+          );
+
+          if (!currentConversation) {
+            return state;
+          }
+
+          const nextConversation = {
+            ...currentConversation,
+            ...updated,
+            group: {
+              ...currentConversation.group,
+              ...updated.group,
+            },
+          };
+
+          return {
+            conversations: mergeConversationList(state.conversations, nextConversation),
+          };
+        }),
 
 
       upsertConversation: (conversation) => {

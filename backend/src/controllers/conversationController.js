@@ -6,9 +6,12 @@ import { io } from "../socket/index.js";
 import {
     emitConversationRemoved,
     emitConversationUpsert,
+    emitNewMessage,
+    formatMessageForClient,
     formatMessagesForClient,
     formatConversationForSocket,
     getConversationParticipantIds,
+    updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
 import crypto from "crypto";
 import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
@@ -124,6 +127,54 @@ const loadConversation = async (conversationId) => {
     }
 
     return populateConversation(conversation);
+};
+
+const getParticipantDisplayName = (conversation, userId) => (
+    getParticipant(conversation, userId)?.userId?.displayName || "Thành viên"
+);
+
+const quoteDisplayNames = (names = []) => {
+    const filteredNames = names.map((value) => value?.trim()).filter(Boolean);
+
+    if (filteredNames.length === 0) {
+        return "thành viên mới";
+    }
+
+    if (filteredNames.length === 1) {
+        return filteredNames[0];
+    }
+
+    if (filteredNames.length === 2) {
+        return `${filteredNames[0]} và ${filteredNames[1]}`;
+    }
+
+    return `${filteredNames.slice(0, -1).join(", ")} và ${filteredNames[filteredNames.length - 1]}`;
+};
+
+const createGroupNoticeMessage = async (conversation, actorId, content, extraRooms = []) => {
+    const trimmedContent = typeof content === "string" ? content.trim() : "";
+
+    if (!conversation || !trimmedContent) {
+        return null;
+    }
+
+    const noticeMessage = await Message.create({
+        conversationId: conversation._id,
+        senderId: actorId,
+        content: trimmedContent,
+        messageType: "text",
+    });
+
+    updateConversationAfterCreateMessage(conversation, noticeMessage, actorId);
+    await conversation.save();
+    await populateConversation(conversation);
+
+    const formattedMessage = await formatMessageForClient(noticeMessage);
+
+    emitConversationUpsert(io, conversation);
+    emitNewMessage(io, conversation, formattedMessage, extraRooms);
+
+    return formattedMessage;
 };
 
 const ensureFriendsWithActor = async (actorId, memberIds = []) => {
@@ -260,15 +311,28 @@ export const createConversation = async (req, res) => {
         }
 
         await populateConversation(conversation);
-        const formatted = formatConversationForSocket(conversation);
-
-
         if (type === "group") {
+            const creatorName = getParticipantDisplayName(conversation, userId);
+
+            await createGroupNoticeMessage(
+                conversation,
+                userId,
+                conversation.group?.name?.trim()
+                    ? `${creatorName} đã tạo nhóm "${conversation.group.name.trim()}"`
+                    : `${creatorName} đã tạo nhóm mới`,
+                [userId.toString(), ...uniqueMemberIds]
+            );
+
+            const formattedGroupConversation = formatConversationForSocket(conversation);
+
             uniqueMemberIds.forEach((memberId) => {
-                io.to(memberId).emit("new-group", formatted);
+                io.to(memberId).emit("new-group", formattedGroupConversation);
             });
+
+            return res.status(201).json({ conversation: formattedGroupConversation });
         }
-        return res.status(201).json({ conversation: formatted });
+
+        return res.status(201).json({ conversation: formatConversationForSocket(conversation) });
 
 
     } catch (error) {
@@ -300,11 +364,10 @@ export const updateGroupAvatar = async (req, res) => {
                 { path: "lastMessage.senderId", select: "displayName avatarUrl" },
             ]);
 
-        //  (QUAN TRỌNG) emit realtime cho sidebar
-        io.to(id).emit("conversation-updated", updated);
+        emitConversationUpsert(io, updated);
 
         return res.status(200).json({
-            conversation: updated,
+            conversation: formatConversationForSocket(updated),
         });
 
     } catch (error) {
@@ -340,25 +403,9 @@ export const renameGroup = async (req, res) => {
             return res.status(404).json({ message: "Không tìm thấy nhóm" });
         }
 
-        //  format giống getConversations
-        const participants = (conversation.participants || []).map((p) => ({
-            _id: p.userId?._id,
-            displayName: p.userId?.displayName,
-            avatarUrl: p.userId?.avatarUrl ?? null,
-            joinedAt: p.joinedAt,
-        }));
+        emitConversationUpsert(io, conversation);
 
-        const formatted = {
-            ...conversation.toObject(),
-            participants,
-        };
-
-        //  REALTIME SOCKET (QUAN TRỌNG)
-        conversation.participants.forEach((p) => {
-            io.to(p.userId.toString()).emit("conversation-updated", formatted);
-        });
-
-        return res.json({ conversation: formatted });
+        return res.json({ conversation: formatConversationForSocket(conversation) });
 
     } catch (err) {
         console.error(err);
@@ -570,7 +617,14 @@ export const addGroupMembers = async (req, res) => {
         await conversation.save();
         await populateConversation(conversation);
 
-        emitConversationUpsert(io, conversation);
+        const actorName = getParticipantDisplayName(conversation, actorId);
+        const addedMemberNames = nextMemberIds.map((memberId) => getParticipantDisplayName(conversation, memberId));
+
+        await createGroupNoticeMessage(
+            conversation,
+            actorId,
+            `${actorName} đã thêm ${quoteDisplayNames(addedMemberNames)} vào nhóm`
+        );
 
         nextMemberIds.forEach((memberId) => {
             io.to(memberId).emit("new-group", formatConversationForSocket(conversation));
@@ -648,11 +702,19 @@ export const removeGroupMember = async (req, res) => {
             return res.status(403).json({ message: "Bạn không có quyền xóa thành viên này" });
         }
 
+        const actorName = getParticipantDisplayName(conversation, actorId);
+        const removedMemberName = getParticipantDisplayName(conversation, memberId);
+
         removeParticipantState(conversation, memberId);
         await conversation.save();
         await populateConversation(conversation);
 
-        emitConversationUpsert(io, conversation);
+        await createGroupNoticeMessage(
+            conversation,
+            actorId,
+            `${actorName} đã xóa ${removedMemberName} khỏi nhóm`
+        );
+
         emitConversationRemoved(io, conversationId, [memberId]);
 
         return res.status(200).json({ conversation: formatConversationForSocket(conversation) });
@@ -766,11 +828,18 @@ export const leaveGroup = async (req, res) => {
             });
         }
 
+        const actorName = getParticipantDisplayName(conversation, actorId);
+
         removeParticipantState(conversation, actorId);
         await conversation.save();
         await populateConversation(conversation);
 
-        emitConversationUpsert(io, conversation);
+        await createGroupNoticeMessage(
+            conversation,
+            actorId,
+            `${actorName} đã rời nhóm`
+        );
+
         emitConversationRemoved(io, conversationId, [actorId]);
 
         return res.status(200).json({ message: "Đã rời nhóm", conversationId });
@@ -846,9 +915,17 @@ export const joinGroupByToken = async (req, res) => {
         await conversation.save();
 
         await populateConversation(conversation);
+        const actorName = getParticipantDisplayName(conversation, userId);
+
+        await createGroupNoticeMessage(
+            conversation,
+            userId,
+            `${actorName} đã tham gia nhóm`,
+            [userId.toString()]
+        );
+
         const formattedConversation = formatConversationForSocket(conversation);
 
-        emitConversationUpsert(io, conversation);
         io.to(userId.toString()).emit("new-group", formattedConversation);
 
         return res.status(200).json({

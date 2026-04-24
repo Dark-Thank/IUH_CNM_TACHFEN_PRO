@@ -40,7 +40,7 @@ const matchesQuery = (value: string, query: string) =>
 const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) => {
     const { user } = useAuthStore();
     const {
-        loading,
+        loading: chatLoading,
         addGroupMembers,
         removeGroupMember,
         updateGroupMemberRole,
@@ -48,9 +48,22 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
         leaveGroup,
         disbandGroup,
     } = useChatStore();
-    const { friends, getFriends } = useFriendStore();
+    const {
+        friends,
+        sentList,
+        loading: friendLoading,
+        getFriends,
+        getAllFriendRequests,
+        addFriend,
+    } = useFriendStore();
     const [search, setSearch] = useState("");
     const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+
+    const friendIds = useMemo(() => new Set(friends.map((friend) => friend._id)), [friends]);
+    const pendingInviteIds = useMemo(
+        () => new Set(sentList.map((request) => request.to?._id).filter(Boolean)),
+        [sentList]
+    );
 
     const me = useMemo(
         () => conversation.participants.find((participant) => participant._id === user?._id) ?? null,
@@ -86,7 +99,8 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
         }
 
         void getFriends();
-    }, [getFriends, open]);
+        void getAllFriendRequests();
+    }, [getAllFriendRequests, getFriends, open]);
 
     const canAddMembers = Boolean(me);
     const isOwner = me?.role === "owner";
@@ -136,6 +150,23 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
             setSelectedFriendIds([]);
             setSearch("");
         }, "Đã thêm thành viên vào nhóm");
+    };
+
+    const handleSendFriendRequest = async (participant: Participant) => {
+        const resultMessage = await addFriend(participant._id);
+
+        if (!resultMessage) {
+            toast.error("Không thể gửi lời mời kết bạn");
+            return;
+        }
+
+        if (/lỗi|that bai|thất bại/i.test(resultMessage)) {
+            toast.error(resultMessage);
+            return;
+        }
+
+        toast.success(resultMessage);
+        await getAllFriendRequests();
     };
 
     const handleRemoveMember = async (participant: Participant) => {
@@ -253,12 +284,30 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                             </div>
 
                                             <div className="flex flex-wrap gap-2">
+                                                {participant._id === user?._id ? (
+                                                    <Badge variant="secondary">Bạn</Badge>
+                                                ) : friendIds.has(participant._id) ? (
+                                                    <Badge variant="secondary">Bạn bè</Badge>
+                                                ) : pendingInviteIds.has(participant._id) ? (
+                                                    <Badge variant="outline">Đã gửi lời mời</Badge>
+                                                ) : (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        disabled={friendLoading}
+                                                        onClick={() => void handleSendFriendRequest(participant)}
+                                                    >
+                                                        Gửi lời mời kết bạn
+                                                    </Button>
+                                                )}
+
                                                 {isOwner && participant._id !== user?._id && participant.role !== "owner" ? (
                                                     <Button
                                                         type="button"
                                                         variant="outline"
                                                         size="sm"
-                                                        disabled={loading}
+                                                        disabled={chatLoading}
                                                         onClick={() => void handleToggleDeputy(participant)}
                                                     >
                                                         {participant.role === "deputy" ? "Thu hồi phó nhóm" : "Bổ nhiệm phó nhóm"}
@@ -270,7 +319,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                                         type="button"
                                                         variant="secondary"
                                                         size="sm"
-                                                        disabled={loading}
+                                                        disabled={chatLoading}
                                                         onClick={() => void handleTransferOwnership(participant)}
                                                     >
                                                         Chuyển chủ nhóm
@@ -282,7 +331,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                                         type="button"
                                                         variant="destructiveOutline"
                                                         size="sm"
-                                                        disabled={loading}
+                                                        disabled={chatLoading}
                                                         onClick={() => void handleRemoveMember(participant)}
                                                     >
                                                         Xóa khỏi nhóm
@@ -310,7 +359,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                             value={search}
                                             onChange={(event) => setSearch(event.target.value)}
                                             placeholder="Tìm bạn bè theo tên hoặc username"
-                                            disabled={!canAddMembers || loading}
+                                            disabled={!canAddMembers || chatLoading}
                                         />
 
                                         <div className="max-h-64 space-y-2 overflow-y-auto">
@@ -326,7 +375,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                                         <button
                                                             key={friend._id}
                                                             type="button"
-                                                            disabled={!canAddMembers || loading}
+                                                            disabled={!canAddMembers || chatLoading}
                                                             onClick={() => toggleSelection(friend._id)}
                                                             className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition-colors ${selected
                                                                 ? "border-primary bg-primary/10"
@@ -354,7 +403,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                         <Button
                                             type="button"
                                             className="w-full"
-                                            disabled={!canAddMembers || loading || selectedFriendIds.length === 0}
+                                            disabled={!canAddMembers || chatLoading || selectedFriendIds.length === 0}
                                             onClick={() => void handleAddMembers()}
                                         >
                                             Thêm vào nhóm
@@ -368,7 +417,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            disabled={loading}
+                                            disabled={chatLoading}
                                             onClick={() => void handleLeaveGroup()}
                                         >
                                             Rời nhóm
@@ -378,7 +427,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
                                             <Button
                                                 type="button"
                                                 variant="destructive"
-                                                disabled={loading}
+                                                disabled={chatLoading}
                                                 onClick={() => void handleDisbandGroup()}
                                             >
                                                 Giải tán nhóm
