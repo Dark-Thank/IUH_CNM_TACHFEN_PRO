@@ -126,10 +126,6 @@ const AppointmentMessageCard = ({ message, viewerId, onRespond, onDelete }: Appo
           <div className="text-base font-semibold">{summary.going}</div>
           <div>Tham gia</div>
         </div>
-        <div className="rounded-xl bg-amber-500/10 px-2 py-2 text-amber-700">
-          <div className="text-base font-semibold">{summary.maybe}</div>
-          <div>Có thể</div>
-        </div>
         <div className="rounded-xl bg-rose-500/10 px-2 py-2 text-rose-700">
           <div className="text-base font-semibold">{summary.declined}</div>
           <div>Từ chối</div>

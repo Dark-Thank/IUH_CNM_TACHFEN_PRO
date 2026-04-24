@@ -247,6 +247,7 @@ const MessageItem = ({
     reactToMessage,
     setReplyingMessage,
     voteOnGroupPoll,
+    addOptionToGroupPoll,
     closeGroupPoll,
     respondToGroupAppointment,
     deleteGroupAppointment,
@@ -388,6 +389,10 @@ const MessageItem = ({
 
   const handleVotePoll = async (optionId: string) => {
     await voteOnGroupPoll(message._id, optionId);
+  };
+
+  const handleAddPollOption = async (text: string) => {
+    await addOptionToGroupPoll(message._id, text);
   };
 
   const handleClosePoll = async () => {
@@ -554,6 +559,7 @@ const MessageItem = ({
                 message={message}
                 viewerId={user?._id}
                 onVote={handleVotePoll}
+                onAddOption={handleAddPollOption}
                 onClose={handleClosePoll}
               />
             ) : isAppointmentMessage ? (

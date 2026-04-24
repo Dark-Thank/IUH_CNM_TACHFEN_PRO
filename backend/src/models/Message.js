@@ -106,6 +106,22 @@ const pollMetaSchema = new mongoose.Schema({
         type: [pollOptionSchema],
         default: [],
     },
+    hideVoters: {
+        type: Boolean,
+        default: false,
+    },
+    hideResultsUntilVote: {
+        type: Boolean,
+        default: false,
+    },
+    allowMultipleChoices: {
+        type: Boolean,
+        default: false,
+    },
+    allowUserAddedOptions: {
+        type: Boolean,
+        default: true,
+    },
     expiresAt: {
         type: Date,
         default: null,

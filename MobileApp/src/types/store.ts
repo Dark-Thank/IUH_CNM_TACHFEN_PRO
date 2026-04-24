@@ -101,9 +101,14 @@ export interface ChatState {
     payload: {
       question: string;
       options: string[];
+      hideVoters?: boolean;
+      hideResultsUntilVote?: boolean;
+      allowMultipleChoices?: boolean;
+      allowUserAddedOptions?: boolean;
       expiresAt?: string | null;
     }
   ) => Promise<void>;
+  addOptionToGroupPoll: (messageId: string, text: string) => Promise<void>;
   voteOnGroupPoll: (messageId: string, optionId: string) => Promise<void>;
   closeGroupPoll: (messageId: string) => Promise<void>;
   createGroupAppointment: (

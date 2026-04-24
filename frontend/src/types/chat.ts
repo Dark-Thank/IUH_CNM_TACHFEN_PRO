@@ -60,6 +60,10 @@ export interface PollOption {
 export interface PollMeta {
   question: string;
   options: PollOption[];
+  hideVoters?: boolean;
+  hideResultsUntilVote?: boolean;
+  allowMultipleChoices?: boolean;
+  allowUserAddedOptions?: boolean;
   expiresAt?: string | null;
   createdBy: string;
   closedAt?: string | null;

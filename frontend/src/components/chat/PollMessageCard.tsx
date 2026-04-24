@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import type { Message } from "@/types/chat";
 
@@ -6,6 +6,7 @@ type PollMessageCardProps = {
   message: Message;
   viewerId?: string;
   onVote: (optionId: string) => Promise<void>;
+  onAddOption?: (text: string) => Promise<void>;
   onClose?: () => Promise<void>;
 };
 
@@ -29,8 +30,10 @@ const formatPollDeadline = (value?: string | null) => {
   }).format(parsed);
 };
 
-const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCardProps) => {
+const PollMessageCard = ({ message, viewerId, onVote, onAddOption, onClose }: PollMessageCardProps) => {
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null);
+  const [newOptionText, setNewOptionText] = useState("");
+  const [addingOption, setAddingOption] = useState(false);
   const [closing, setClosing] = useState(false);
   const pollMeta = message.pollMeta;
 
@@ -49,7 +52,23 @@ const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCard
   const isManuallyClosed = Boolean(closedAt && !Number.isNaN(closedAt.getTime()));
   const isClosed = isExpired || isManuallyClosed;
   const isCreator = pollMeta.createdBy === viewerId;
-  const selectedOptionId = pollMeta.options.find((option) => option.voterIds.includes(viewerId || ""))?._id;
+  const allowMultipleChoices = pollMeta.allowMultipleChoices === true;
+  const allowUserAddedOptions = pollMeta.allowUserAddedOptions !== false;
+  const hideResultsUntilVote = pollMeta.hideResultsUntilVote === true;
+  const selectedOptionIds = new Set(
+    pollMeta.options
+      .filter((option) => option.voterIds.includes(viewerId || ""))
+      .map((option) => option._id)
+  );
+  const hasVoted = selectedOptionIds.size > 0;
+  const canRevealResults = !hideResultsUntilVote || hasVoted || isClosed;
+  const canAddOptions = Boolean(onAddOption) && allowUserAddedOptions && !isClosed && pollMeta.options.length < 10;
+  const pollSettings = [
+    pollMeta.hideVoters ? "Ẩn người bình chọn" : null,
+    hideResultsUntilVote ? "Ẩn kết quả trước khi bình chọn" : null,
+    allowMultipleChoices ? "Chọn nhiều phương án" : null,
+    allowUserAddedOptions ? "Có thể thêm phương án" : null,
+  ].filter((item): item is string => Boolean(item));
   const statusLabel = isManuallyClosed
     ? `Người tạo đã đóng bình chọn lúc ${formatPollDeadline(pollMeta.closedAt)}`
     : pollMeta.expiresAt
@@ -82,6 +101,31 @@ const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCard
     }
   };
 
+  const handleAddOption = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!onAddOption) {
+      return;
+    }
+
+    const normalizedText = newOptionText.trim();
+
+    if (!normalizedText) {
+      toast.error("Nhập lựa chọn mới");
+      return;
+    }
+
+    try {
+      setAddingOption(true);
+      await onAddOption(normalizedText);
+      setNewOptionText("");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Không thể thêm lựa chọn");
+    } finally {
+      setAddingOption(false);
+    }
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
@@ -91,13 +135,29 @@ const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCard
         </div>
 
         <div className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-          {totalVotes} vote
+          {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "vote"}` : "Kết quả ẩn"}
         </div>
       </div>
 
       {statusLabel && (
         <p className="text-xs text-muted-foreground">
           {statusLabel}
+        </p>
+      )}
+
+      {pollSettings.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {pollSettings.map((item) => (
+            <span key={item} className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+              {item}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {!canRevealResults && (
+        <p className="text-xs text-muted-foreground">
+          Kết quả sẽ hiển thị sau khi bạn bình chọn hoặc khi poll đã đóng.
         </p>
       )}
 
@@ -118,7 +178,7 @@ const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCard
         {pollMeta.options.map((option) => {
           const voteCount = option.voterIds.length;
           const votePercent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
-          const isSelected = selectedOptionId === option._id;
+          const isSelected = selectedOptionIds.has(option._id);
 
           return (
             <button
@@ -134,24 +194,67 @@ const PollMessageCard = ({ message, viewerId, onVote, onClose }: PollMessageCard
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-foreground">{option.text}</span>
-                <span className="text-xs text-muted-foreground">{voteCount}</span>
+                {canRevealResults && (
+                  <span className="text-xs text-muted-foreground">{voteCount}</span>
+                )}
               </div>
 
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                <div
-                  className={`h-full rounded-full transition-all ${isSelected ? "bg-primary" : "bg-primary/50"}`}
-                  style={{ width: `${votePercent}%` }}
-                />
-              </div>
+              {canRevealResults && (
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={`h-full rounded-full transition-all ${isSelected ? "bg-primary" : "bg-primary/50"}`}
+                    style={{ width: `${votePercent}%` }}
+                  />
+                </div>
+              )}
 
               <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span>{votePercent}%</span>
-                <span>{isSelected ? "Bạn đã chọn" : "Chọn lựa chọn này"}</span>
+                <span>{canRevealResults ? `${votePercent}%` : "Kết quả đang ẩn"}</span>
+                <span>
+                  {isSelected
+                    ? "Bạn đã chọn"
+                    : allowMultipleChoices
+                      ? "Nhấn để bật hoặc tắt phương án này"
+                      : "Chọn lựa chọn này"}
+                </span>
               </div>
             </button>
           );
         })}
       </div>
+
+      {canAddOptions && (
+        <form onSubmit={(event) => void handleAddOption(event)} className="space-y-2 rounded-xl border bg-muted/20 p-3">
+          <p className="text-xs text-muted-foreground">
+            Mọi thành viên trong nhóm đều có thể thêm lựa chọn mới.
+          </p>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newOptionText}
+              onChange={(event) => setNewOptionText(event.target.value)}
+              placeholder="Nhập lựa chọn mới"
+              disabled={addingOption || Boolean(submittingOptionId) || closing}
+              className="h-10 flex-1 rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary"
+            />
+
+            <button
+              type="submit"
+              disabled={addingOption || Boolean(submittingOptionId) || closing}
+              className="inline-flex h-10 items-center rounded-lg border border-border px-3 text-sm font-medium text-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {addingOption ? "Đang thêm..." : "Thêm"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!isClosed && pollMeta.options.length >= 10 && (
+        <p className="text-xs text-muted-foreground">
+          Đã đạt tối đa 10 lựa chọn.
+        </p>
+      )}
     </div>
   );
 };

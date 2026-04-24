@@ -33,12 +33,20 @@ const CreateGroupPollDialog = ({ conversationId, disabled = false }: CreateGroup
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState<string[]>(defaultOptions);
   const [expiresAt, setExpiresAt] = useState("");
+  const [hideVoters, setHideVoters] = useState(false);
+  const [hideResultsUntilVote, setHideResultsUntilVote] = useState(false);
+  const [allowMultipleChoices, setAllowMultipleChoices] = useState(false);
+  const [allowUserAddedOptions, setAllowUserAddedOptions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const resetState = () => {
     setQuestion("");
     setOptions(defaultOptions);
     setExpiresAt("");
+    setHideVoters(false);
+    setHideResultsUntilVote(false);
+    setAllowMultipleChoices(false);
+    setAllowUserAddedOptions(true);
     setSubmitting(false);
   };
 
@@ -98,6 +106,10 @@ const CreateGroupPollDialog = ({ conversationId, disabled = false }: CreateGroup
       await createGroupPoll(conversationId, {
         question: normalizedQuestion,
         options: normalizedOptions,
+        hideVoters,
+        hideResultsUntilVote,
+        allowMultipleChoices,
+        allowUserAddedOptions,
         expiresAt: expiresAt || null,
       });
       setOpen(false);
@@ -192,6 +204,74 @@ const CreateGroupPollDialog = ({ conversationId, disabled = false }: CreateGroup
               min={getDateTimeLocalMinValue()}
               disabled={submitting}
             />
+          </div>
+
+          <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+            <p className="text-sm font-medium">Tùy chọn nâng cao</p>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={hideVoters}
+                onChange={(event) => setHideVoters(event.target.checked)}
+                disabled={submitting}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="block font-medium">Ẩn người bình chọn</span>
+                <span className="block text-xs text-muted-foreground">
+                  Không hiển thị danh tính người đã bỏ phiếu.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={hideResultsUntilVote}
+                onChange={(event) => setHideResultsUntilVote(event.target.checked)}
+                disabled={submitting}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="block font-medium">Ẩn kết quả khi chưa bình chọn</span>
+                <span className="block text-xs text-muted-foreground">
+                  Thành viên phải bình chọn mới thấy kết quả khi poll còn mở.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={allowMultipleChoices}
+                onChange={(event) => setAllowMultipleChoices(event.target.checked)}
+                disabled={submitting}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="block font-medium">Chọn nhiều phương án</span>
+                <span className="block text-xs text-muted-foreground">
+                  Cho phép mỗi thành viên chọn nhiều lựa chọn trong cùng poll.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3 text-sm">
+              <input
+                type="checkbox"
+                checked={allowUserAddedOptions}
+                onChange={(event) => setAllowUserAddedOptions(event.target.checked)}
+                disabled={submitting}
+                className="mt-0.5 size-4"
+              />
+              <span>
+                <span className="block font-medium">Có thể thêm phương án</span>
+                <span className="block text-xs text-muted-foreground">
+                  Thành viên trong nhóm có thể thêm lựa chọn mới khi poll còn mở.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
 

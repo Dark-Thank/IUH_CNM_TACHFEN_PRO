@@ -16,8 +16,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Ung dung can quyen microphone de goi thoai, goi video va ghi am tin nhan.",
-        "NSCameraUsageDescription": "Ung dung can quyen camera de thuc hien cuoc goi video."
-      }
+        "NSCameraUsageDescription": "Ung dung can quyen camera de thuc hien cuoc goi video.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "com.hoan22729651.MobileApp"
     },
     "android": {
       "permissions": [
@@ -36,6 +38,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "61fae442-09ac-4dd2-85f6-5873cdc033c9"
+      }
+    },
+    "owner": "lonhhh"
   }
 }

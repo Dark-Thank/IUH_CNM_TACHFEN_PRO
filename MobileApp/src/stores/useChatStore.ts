@@ -292,10 +292,24 @@ export const useChatStore = create<ChatState>()(
             conversationId,
             question: payload.question,
             options: payload.options,
+            hideVoters: payload.hideVoters ?? false,
+            hideResultsUntilVote: payload.hideResultsUntilVote ?? false,
+            allowMultipleChoices: payload.allowMultipleChoices ?? false,
+            allowUserAddedOptions: payload.allowUserAddedOptions ?? true,
             expiresAt: payload.expiresAt ?? null,
           });
         } catch (error) {
           console.error("Loi khi tao binh chon nhom:", error);
+          throw error;
+        }
+      },
+
+      addOptionToGroupPoll: async (messageId, text) => {
+        try {
+          const updatedMessage = await chatService.addOptionToGroupPoll(messageId, text);
+          get().updateMessage(updatedMessage);
+        } catch (error) {
+          console.error("Loi khi them lua chon cho binh chon:", error);
           throw error;
         }
       },

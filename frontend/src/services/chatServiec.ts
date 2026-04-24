@@ -86,9 +86,18 @@ export const chatService = {
     conversationId: string;
     question: string;
     options: string[];
+    hideVoters?: boolean;
+    hideResultsUntilVote?: boolean;
+    allowMultipleChoices?: boolean;
+    allowUserAddedOptions?: boolean;
     expiresAt?: string | null;
   }) {
     const res = await api.post("/messages/group/poll", payload);
+    return res.data.message;
+  },
+
+  async addOptionToGroupPoll(messageId: string, text: string) {
+    const res = await api.post(`/messages/${messageId}/poll-option`, { text });
     return res.data.message;
   },
 

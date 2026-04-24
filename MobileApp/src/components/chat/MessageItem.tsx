@@ -177,6 +177,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
     togglePinMessage,
     deleteMessageForMe,
     voteOnGroupPoll,
+    addOptionToGroupPoll,
     closeGroupPoll,
     respondToGroupAppointment,
     deleteGroupAppointment,
@@ -303,6 +304,9 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
 
   const handleVotePoll = async (optionId: string) => {
     await voteOnGroupPoll(message._id, optionId);
+  };
+  const handleAddPollOption = async (text: string) => {
+    await addOptionToGroupPoll(message._id, text);
   };
   const handleClosePoll = async () => {
     await closeGroupPoll(message._id);
@@ -627,6 +631,7 @@ function MessageItem({ message, previousMessage, selectedConvo }: MessageItemPro
             message={message}
             viewerId={currentUserId}
             onVote={handleVotePoll}
+            onAddOption={handleAddPollOption}
             onClose={handleClosePoll}
           />
         ) : null}

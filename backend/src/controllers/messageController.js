@@ -247,7 +247,39 @@ const parseDateValue = (value, { required = false } = {}) => {
   return { value: parsed };
 };
 
-const parsePollPayload = ({ question, options, expiresAt }) => {
+const parseBooleanFlag = (value, defaultValue = false) => {
+  if (value === undefined || value === null || value === "") {
+    return { value: defaultValue };
+  }
+
+  if (typeof value === "boolean") {
+    return { value };
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value.trim().toLowerCase();
+
+    if (["true", "1", "yes", "on"].includes(normalizedValue)) {
+      return { value: true };
+    }
+
+    if (["false", "0", "no", "off"].includes(normalizedValue)) {
+      return { value: false };
+    }
+  }
+
+  return { error: "Gia tri tuy chon khong hop le" };
+};
+
+const parsePollPayload = ({
+  question,
+  options,
+  expiresAt,
+  hideVoters,
+  hideResultsUntilVote,
+  allowMultipleChoices,
+  allowUserAddedOptions,
+}) => {
   const normalizedQuestion = normalizeOptionalText(question);
 
   if (!normalizedQuestion) {
@@ -294,14 +326,54 @@ const parsePollPayload = ({ question, options, expiresAt }) => {
     return { error: "Han binh chon phai lon hon thoi diem hien tai" };
   }
 
+  const hideVotersResult = parseBooleanFlag(hideVoters, false);
+
+  if (hideVotersResult.error) {
+    return { error: hideVotersResult.error };
+  }
+
+  const hideResultsUntilVoteResult = parseBooleanFlag(hideResultsUntilVote, false);
+
+  if (hideResultsUntilVoteResult.error) {
+    return { error: hideResultsUntilVoteResult.error };
+  }
+
+  const allowMultipleChoicesResult = parseBooleanFlag(allowMultipleChoices, false);
+
+  if (allowMultipleChoicesResult.error) {
+    return { error: allowMultipleChoicesResult.error };
+  }
+
+  const allowUserAddedOptionsResult = parseBooleanFlag(allowUserAddedOptions, true);
+
+  if (allowUserAddedOptionsResult.error) {
+    return { error: allowUserAddedOptionsResult.error };
+  }
+
   return {
     value: {
       question: normalizedQuestion,
       options: normalizedOptions,
+      hideVoters: hideVotersResult.value,
+      hideResultsUntilVote: hideResultsUntilVoteResult.value,
+      allowMultipleChoices: allowMultipleChoicesResult.value,
+      allowUserAddedOptions: allowUserAddedOptionsResult.value,
       expiresAt: expiresAtResult.value,
     },
   };
 };
+
+const parsePollOptionText = (value) => {
+  const normalizedText = normalizeOptionalText(value);
+
+  if (!normalizedText) {
+    return { error: "Noi dung lua chon khong duoc de trong" };
+  }
+
+  return { value: normalizedText };
+};
+
+const pollAllowsUserAddedOptions = (pollMeta) => pollMeta?.allowUserAddedOptions !== false;
 
 const parseAppointmentPayload = ({ title, description, location, scheduledAt }) => {
   const normalizedTitle = normalizeOptionalText(title);
@@ -861,7 +933,15 @@ export const createGroupPoll = async (req, res) => {
       return res.status(400).json({ message: parsedPayload.error });
     }
 
-    const { question, options, expiresAt } = parsedPayload.value;
+    const {
+      question,
+      options,
+      hideVoters,
+      hideResultsUntilVote,
+      allowMultipleChoices,
+      allowUserAddedOptions,
+      expiresAt,
+    } = parsedPayload.value;
     const message = await Message.create({
       conversationId: conversation._id,
       senderId,
@@ -873,6 +953,10 @@ export const createGroupPoll = async (req, res) => {
           text: optionText,
           voterIds: [],
         })),
+        hideVoters,
+        hideResultsUntilVote,
+        allowMultipleChoices,
+        allowUserAddedOptions,
         expiresAt,
         createdBy: senderId,
         closedAt: null,
@@ -929,14 +1013,24 @@ export const voteOnGroupPoll = async (req, res) => {
       (voterId) => voterId.toString() === userId.toString()
     );
 
-    message.pollMeta.options.forEach((option) => {
-      option.voterIds = option.voterIds.filter(
-        (voterId) => voterId.toString() !== userId.toString()
-      );
-    });
+    if (message.pollMeta.allowMultipleChoices) {
+      if (alreadySelected) {
+        selectedOption.voterIds = selectedOption.voterIds.filter(
+          (voterId) => voterId.toString() !== userId.toString()
+        );
+      } else {
+        selectedOption.voterIds.push(userId);
+      }
+    } else {
+      message.pollMeta.options.forEach((option) => {
+        option.voterIds = option.voterIds.filter(
+          (voterId) => voterId.toString() !== userId.toString()
+        );
+      });
 
-    if (!alreadySelected) {
-      selectedOption.voterIds.push(userId);
+      if (!alreadySelected) {
+        selectedOption.voterIds.push(userId);
+      }
     }
 
     await message.save();
@@ -945,6 +1039,65 @@ export const voteOnGroupPoll = async (req, res) => {
     return res.status(200).json({ message });
   } catch (error) {
     console.error("Loi khi vote binh chon:", error);
+    return res.status(500).json({ message: "Loi he thong" });
+  }
+};
+
+export const addOptionToGroupPoll = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user._id;
+
+    const parsedOptionText = parsePollOptionText(req.body?.text);
+
+    if (parsedOptionText.error) {
+      return res.status(400).json({ message: parsedOptionText.error });
+    }
+
+    const result = await loadAuthorizedGroupMessage(messageId, userId);
+
+    if (result.error) {
+      return res.status(result.error.status).json(result.error.payload);
+    }
+
+    const { message } = result;
+
+    if (message.messageType !== "poll" || !message.pollMeta) {
+      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+    }
+
+    if (isPollClosed(message.pollMeta)) {
+      return res.status(400).json({ message: "Binh chon da dong" });
+    }
+
+    if (!pollAllowsUserAddedOptions(message.pollMeta)) {
+      return res.status(400).json({ message: "Binh chon nay khong cho phep them lua chon" });
+    }
+
+    if (message.pollMeta.options.length >= POLL_MAX_OPTIONS) {
+      return res.status(400).json({ message: `Chi ho tro toi da ${POLL_MAX_OPTIONS} lua chon` });
+    }
+
+    const normalizedText = parsedOptionText.value;
+    const duplicatedOption = message.pollMeta.options.some(
+      (option) => normalizeOptionalText(option.text).toLowerCase() === normalizedText.toLowerCase()
+    );
+
+    if (duplicatedOption) {
+      return res.status(400).json({ message: "Lua chon nay da ton tai" });
+    }
+
+    message.pollMeta.options.push({
+      text: normalizedText,
+      voterIds: [],
+    });
+
+    await message.save();
+    io.to(message.conversationId.toString()).emit("update-message", { message });
+
+    return res.status(200).json({ message });
+  } catch (error) {
+    console.error("Loi khi them lua chon cho binh chon:", error);
     return res.status(500).json({ message: "Loi he thong" });
   }
 };

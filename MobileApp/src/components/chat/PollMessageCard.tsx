@@ -2,12 +2,13 @@ import { toast } from "@/lib/toast";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Message } from "@/types/chat";
 import { useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 type PollMessageCardProps = {
   message: Message;
   viewerId?: string;
   onVote: (optionId: string) => Promise<void>;
+  onAddOption?: (text: string) => Promise<void>;
   onClose?: () => Promise<void>;
 };
 
@@ -35,10 +36,13 @@ export default function PollMessageCard({
   message,
   viewerId,
   onVote,
+  onAddOption,
   onClose,
 }: PollMessageCardProps) {
   const { isDark } = useThemeStore();
   const [submittingOptionId, setSubmittingOptionId] = useState<string | null>(null);
+  const [newOptionText, setNewOptionText] = useState("");
+  const [addingOption, setAddingOption] = useState(false);
   const [closing, setClosing] = useState(false);
   const pollMeta = message.pollMeta;
 
@@ -51,13 +55,29 @@ export default function PollMessageCard({
     return null;
   }
 
-  const selectedOptionId = pollMeta.options.find((option) => option.voterIds.includes(viewerId || ""))?._id;
   const expiresAt = pollMeta.expiresAt ? new Date(pollMeta.expiresAt) : null;
   const closedAt = pollMeta.closedAt ? new Date(pollMeta.closedAt) : null;
   const isExpired = Boolean(expiresAt && !Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now());
   const isManuallyClosed = Boolean(closedAt && !Number.isNaN(closedAt.getTime()));
   const isClosed = isExpired || isManuallyClosed;
   const isCreator = pollMeta.createdBy === viewerId;
+  const allowMultipleChoices = pollMeta.allowMultipleChoices === true;
+  const allowUserAddedOptions = pollMeta.allowUserAddedOptions !== false;
+  const hideResultsUntilVote = pollMeta.hideResultsUntilVote === true;
+  const selectedOptionIds = new Set(
+    pollMeta.options
+      .filter((option) => option.voterIds.includes(viewerId || ""))
+      .map((option) => option._id)
+  );
+  const hasVoted = selectedOptionIds.size > 0;
+  const canRevealResults = !hideResultsUntilVote || hasVoted || isClosed;
+  const canAddOptions = Boolean(onAddOption) && allowUserAddedOptions && !isClosed && pollMeta.options.length < 10;
+  const pollSettings = [
+    pollMeta.hideVoters ? "Ẩn người bình chọn" : null,
+    hideResultsUntilVote ? "Ẩn kết quả trước khi bình chọn" : null,
+    allowMultipleChoices ? "Chọn nhiều phương án" : null,
+    allowUserAddedOptions ? "Có thể thêm phương án" : null,
+  ].filter((item): item is string => Boolean(item));
   const statusLabel = isManuallyClosed
     ? `Người tạo đã đóng bình chọn lúc ${formatPollDeadline(pollMeta.closedAt)}`
     : pollMeta.expiresAt
@@ -90,6 +110,29 @@ export default function PollMessageCard({
     }
   };
 
+  const handleAddOption = async () => {
+    if (!onAddOption) {
+      return;
+    }
+
+    const normalizedText = newOptionText.trim();
+
+    if (!normalizedText) {
+      toast.error("Nhập lựa chọn mới");
+      return;
+    }
+
+    try {
+      setAddingOption(true);
+      await onAddOption(normalizedText);
+      setNewOptionText("");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Không thể thêm lựa chọn");
+    } finally {
+      setAddingOption(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -104,7 +147,7 @@ export default function PollMessageCard({
 
         <View style={[styles.badge, { backgroundColor: isDark ? "#312e81" : "#ede9fe" }]}>
           <Text style={[styles.badgeText, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}>
-            {totalVotes} votes
+            {canRevealResults ? `${totalVotes} ${allowMultipleChoices ? "lượt chọn" : "votes"}` : "Kết quả ẩn"}
           </Text>
         </View>
       </View>
@@ -112,6 +155,30 @@ export default function PollMessageCard({
       {statusLabel ? (
         <Text style={[styles.deadline, { color: isDark ? "#94a3b8" : "#64748b" }]}>
           {statusLabel}
+        </Text>
+      ) : null}
+
+      {pollSettings.length > 0 ? (
+        <View style={styles.settingChipList}>
+          {pollSettings.map((item) => (
+            <View
+              key={item}
+              style={[
+                styles.settingChip,
+                { backgroundColor: isDark ? "#1f2937" : "#e2e8f0" },
+              ]}
+            >
+              <Text style={[styles.settingChipText, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                {item}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {!canRevealResults ? (
+        <Text style={[styles.deadline, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+          Kết quả sẽ hiển thị sau khi bạn bình chọn hoặc khi poll đã đóng.
         </Text>
       ) : null}
 
@@ -140,7 +207,7 @@ export default function PollMessageCard({
         {pollMeta.options.map((option) => {
           const voteCount = option.voterIds.length;
           const votePercent = totalVotes > 0 ? Math.round((voteCount / totalVotes) * 100) : 0;
-          const isSelected = selectedOptionId === option._id;
+          const isSelected = selectedOptionIds.has(option._id);
 
           return (
             <Pressable
@@ -164,32 +231,97 @@ export default function PollMessageCard({
                 <Text style={[styles.optionText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
                   {option.text}
                 </Text>
-                <Text style={[styles.optionCount, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  {voteCount}
-                </Text>
+                {canRevealResults ? (
+                  <Text style={[styles.optionCount, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                    {voteCount}
+                  </Text>
+                ) : null}
               </View>
 
-              <View style={[styles.progressTrack, { backgroundColor: isDark ? "#1f2937" : "#e2e8f0" }]}>
-                <View
-                  style={[
-                    styles.progressBar,
-                    { width: `${votePercent}%`, backgroundColor: isSelected ? "#8b5cf6" : "#a78bfa" },
-                  ]}
-                />
-              </View>
+              {canRevealResults ? (
+                <View style={[styles.progressTrack, { backgroundColor: isDark ? "#1f2937" : "#e2e8f0" }]}>
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { width: `${votePercent}%`, backgroundColor: isSelected ? "#8b5cf6" : "#a78bfa" },
+                    ]}
+                  />
+                </View>
+              ) : null}
 
               <View style={styles.optionMetaRow}>
                 <Text style={[styles.optionMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  {votePercent}%
+                  {canRevealResults ? `${votePercent}%` : "Kết quả đang ẩn"}
                 </Text>
                 <Text style={[styles.optionMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  {isSelected ? "Bạn đã chọn" : "Nhấn để chọn lựa chọn này"}
+                  {isSelected
+                    ? "Bạn đã chọn"
+                    : allowMultipleChoices
+                      ? "Nhấn để bật hoặc tắt phương án này"
+                      : "Nhấn để chọn lựa chọn này"}
                 </Text>
               </View>
             </Pressable>
           );
         })}
       </View>
+
+      {canAddOptions ? (
+        <View
+          style={[
+            styles.addOptionCard,
+            {
+              backgroundColor: isDark ? "#111827" : "#f8fafc",
+              borderColor: isDark ? "#1f2937" : "#e2e8f0",
+            },
+          ]}
+        >
+          <Text style={[styles.addOptionHint, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+            Mọi thành viên trong nhóm đều có thể thêm lựa chọn mới.
+          </Text>
+
+          <View style={styles.addOptionRow}>
+            <TextInput
+              value={newOptionText}
+              onChangeText={setNewOptionText}
+              placeholder="Nhập lựa chọn mới"
+              placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
+              editable={!addingOption && !submittingOptionId && !closing}
+              style={[
+                styles.addOptionInput,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#ffffff",
+                  borderColor: isDark ? "#334155" : "#cbd5e1",
+                  color: isDark ? "#f8fafc" : "#0f172a",
+                },
+              ]}
+            />
+
+            <Pressable
+              onPress={() => void handleAddOption()}
+              disabled={addingOption || Boolean(submittingOptionId) || closing}
+              style={[
+                styles.addOptionButton,
+                {
+                  backgroundColor: isDark ? "#1e293b" : "#ffffff",
+                  borderColor: isDark ? "#334155" : "#cbd5e1",
+                  opacity: addingOption || submittingOptionId || closing ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.addOptionButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                {addingOption ? "Đang thêm..." : "Thêm"}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
+      {!isClosed && pollMeta.options.length >= 10 ? (
+        <Text style={[styles.maxOptionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+          Đã đạt tối đa 10 lựa chọn.
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -247,8 +379,63 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
   },
+  settingChipList: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  settingChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  settingChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+  },
   optionList: {
     gap: 8,
+  },
+  addOptionCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  addOptionHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
+  },
+  addOptionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  addOptionInput: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    fontSize: 14,
+  },
+  addOptionButton: {
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  addOptionButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  maxOptionText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   optionButton: {
     borderWidth: 1,

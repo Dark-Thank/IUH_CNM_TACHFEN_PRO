@@ -1,5 +1,6 @@
 import express from 'express';
 import {
+  addOptionToGroupPoll,
   closeGroupPoll,
   createGroupAppointment,
   createGroupPoll,
@@ -65,6 +66,11 @@ router.post(
   "/:messageId/poll-vote",
   protectedRoute,
   voteOnGroupPoll
+);
+router.post(
+  "/:messageId/poll-option",
+  protectedRoute,
+  addOptionToGroupPoll
 );
 router.post(
   "/:messageId/poll-close",

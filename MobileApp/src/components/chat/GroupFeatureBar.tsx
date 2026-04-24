@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -175,6 +176,10 @@ export default function GroupFeatureBar({
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(defaultPollOptions);
   const [pollExpiresAt, setPollExpiresAt] = useState<string | null>(null);
+  const [pollHideVoters, setPollHideVoters] = useState(false);
+  const [pollHideResultsUntilVote, setPollHideResultsUntilVote] = useState(false);
+  const [pollAllowMultipleChoices, setPollAllowMultipleChoices] = useState(false);
+  const [pollAllowUserAddedOptions, setPollAllowUserAddedOptions] = useState(true);
 
   const [appointmentTitle, setAppointmentTitle] = useState("");
   const [appointmentDescription, setAppointmentDescription] = useState("");
@@ -195,6 +200,10 @@ export default function GroupFeatureBar({
     setPollQuestion("");
     setPollOptions(defaultPollOptions);
     setPollExpiresAt(null);
+    setPollHideVoters(false);
+    setPollHideResultsUntilVote(false);
+    setPollAllowMultipleChoices(false);
+    setPollAllowUserAddedOptions(true);
     setSubmitting(false);
   };
 
@@ -250,6 +259,10 @@ export default function GroupFeatureBar({
       await createGroupPoll(conversationId, {
         question: normalizedQuestion,
         options: normalizedOptions,
+        hideVoters: pollHideVoters,
+        hideResultsUntilVote: pollHideResultsUntilVote,
+        allowMultipleChoices: pollAllowMultipleChoices,
+        allowUserAddedOptions: pollAllowUserAddedOptions,
         expiresAt: pollExpiresAt,
       });
       setShowPollModal(false);
@@ -454,6 +467,70 @@ export default function GroupFeatureBar({
             minimumDate={new Date()}
             disabled={submitting}
           />
+
+          <View
+            style={[
+              styles.settingsCard,
+              {
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text style={[styles.settingsTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+              Tuy chon nang cao
+            </Text>
+
+            {[
+              {
+                key: "hide-voters",
+                label: "An nguoi binh chon",
+                description: "Khong hien thi danh tinh nguoi da bo phieu.",
+                value: pollHideVoters,
+                onChange: setPollHideVoters,
+              },
+              {
+                key: "hide-results",
+                label: "An ket qua khi chua binh chon",
+                description: "Ket qua chi hien sau khi thanh vien da bo phieu hoac poll da dong.",
+                value: pollHideResultsUntilVote,
+                onChange: setPollHideResultsUntilVote,
+              },
+              {
+                key: "multi-choice",
+                label: "Chon nhieu phuong an",
+                description: "Moi thanh vien co the chon nhieu lua chon trong cung poll.",
+                value: pollAllowMultipleChoices,
+                onChange: setPollAllowMultipleChoices,
+              },
+              {
+                key: "user-added-options",
+                label: "Co the them phuong an",
+                description: "Thanh vien trong nhom co the tu them lua chon moi.",
+                value: pollAllowUserAddedOptions,
+                onChange: setPollAllowUserAddedOptions,
+              },
+            ].map((setting) => (
+              <View key={setting.key} style={styles.settingRow}>
+                <View style={styles.settingTextWrap}>
+                  <Text style={[styles.settingLabel, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                    {setting.label}
+                  </Text>
+                  <Text style={[styles.settingDescription, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                    {setting.description}
+                  </Text>
+                </View>
+
+                <Switch
+                  value={setting.value}
+                  onValueChange={setting.onChange}
+                  disabled={submitting}
+                  trackColor={{ false: isDark ? "#334155" : "#cbd5e1", true: isDark ? "#6d28d9" : "#8b5cf6" }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+            ))}
+          </View>
 
           <Pressable
             onPress={() => void handleSubmitPoll()}
@@ -691,6 +768,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  settingsCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  settingsTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  settingTextWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  settingLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  settingDescription: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   secondaryButton: {
     minHeight: 44,
