@@ -20,7 +20,11 @@ export const ProfileModal = ({
   open, 
   onOpenChange 
 }: ProfileModalProps) => {
-  const { createConversation } = useChatStore();
+ const {
+  createConversation,
+  setActiveConversation,
+  fetchMessages,
+} = useChatStore();
   const { removeFriend } = useFriendStore();
   const [fullUserData, setFullUserData] = useState<Friend | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -47,14 +51,36 @@ export const ProfileModal = ({
 
   const displayUser = fullUserData || friend;
 
-  const handleAddConversation = async (friendId: string) => {
-    if (isBlocked) {
-      toast.error("Bạn không thể nhắn tin với người dùng này vì đã bị chặn");
-      return;
-    }
-    await createConversation("direct", "", [friendId]);
+ const handleAddConversation = async (friendId: string) => {
+  if (isBlocked) {
+    toast.error("Bạn không thể nhắn tin với người dùng này vì đã bị chặn");
+    return;
+  }
+
+  try {
+    // tạo hoặc lấy conversation
+    const conversation = await createConversation(
+      "direct",
+      "",
+      [friendId]
+    );
+
+    if (!conversation) return;
+
+    // active conversation
+    setActiveConversation(conversation._id);
+
+    // load lịch sử chat
+    await fetchMessages(conversation._id);
+
+    // đóng modal
     onOpenChange(false);
-  };
+
+  } catch (error) {
+    console.error("Lỗi khi tạo cuộc trò chuyện:", error);
+    toast.error("Không thể mở cuộc trò chuyện");
+  }
+};
 
   const handleRemoveFriend = async (friendId: string) => {
     if (confirm("Bạn có chắc chắn muốn xóa bạn này?")) {
