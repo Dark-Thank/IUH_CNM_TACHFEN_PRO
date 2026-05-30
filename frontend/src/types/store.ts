@@ -134,7 +134,9 @@ export interface UserState {
   updateProfile: (payload: {
     displayName?: string;
     bio?: string;
+    showOnlineStatus?: boolean;
   }) => Promise<void>;
+  updateOnlineStatusVisibility: (showOnlineStatus: boolean) => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
 

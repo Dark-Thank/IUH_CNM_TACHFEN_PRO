@@ -8,6 +8,7 @@ import { getUserConversationsForSocketIO } from "../controllers/conversationCont
 import { socketAuthMiddleware } from "../middlewares/socketAuthMiddleware.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import User from "../models/User.js";
 import { buildCorsOptions } from "../utils/cors.js";
 import { emitNewMessage, updateConversationAfterCreateMessage } from "../utils/messageHelper.js";
 import { formatMessageForClient } from "../utils/messageHelper.js";
@@ -59,6 +60,10 @@ const getSocketUserId = (socket) => {
     const authUserId = socket?.user?._id;
     return authUserId ? authUserId.toString() : null;
 };
+
+const getSocketOnlineStatusVisible = (socket) => (
+    socket?.data?.showOnlineStatus ?? socket?.user?.showOnlineStatus ?? true
+);
 
 const trackTypingConversation = (socket, conversationId, shouldTrack) => {
     const trackedConversationIds = socket.data.typingConversationIds || new Set();
@@ -469,6 +474,7 @@ const broadcastOnlineUsers = async () => {
         const onlineUserIds = Array.from(
             new Set(
                 sockets
+                    .filter(getSocketOnlineStatusVisible)
                     .map(getSocketUserId)
                     .filter(Boolean)
             )
@@ -478,6 +484,28 @@ const broadcastOnlineUsers = async () => {
     } catch (error) {
         console.error("Khong the dong bo online-users:", error);
     }
+};
+
+export const syncUserOnlineStatusVisibility = async (userId, showOnlineStatus) => {
+    const normalizedUserId = userId?.toString();
+
+    if (!normalizedUserId || typeof showOnlineStatus !== "boolean") {
+        return;
+    }
+
+    getConnectedSockets().forEach((connectedSocket) => {
+        if (getSocketUserId(connectedSocket) !== normalizedUserId) {
+            return;
+        }
+
+        connectedSocket.data.showOnlineStatus = showOnlineStatus;
+
+        if (connectedSocket.user) {
+            connectedSocket.user.showOnlineStatus = showOnlineStatus;
+        }
+    });
+
+    await broadcastOnlineUsers();
 };
 
 export const initializeSocketInfrastructure = async () => {
@@ -528,6 +556,7 @@ io.on("connection", async (socket) => {
     const userId = user._id.toString();
 
     socket.data.userId = userId;
+    socket.data.showOnlineStatus = user.showOnlineStatus !== false;
     console.log(`${user.displayName} online voi socket ${socket.id}`);
 
     const conversationIds = await getUserConversationsForSocketIO(userId);
@@ -545,6 +574,20 @@ io.on("connection", async (socket) => {
 
     socket.on("typing:stop", ({ conversationId } = {}) => {
         emitTypingUpdate(socket, conversationId, false);
+    });
+
+    socket.on("presence:set-visible", async ({ showOnlineStatus } = {}) => {
+        if (typeof showOnlineStatus !== "boolean") {
+            return;
+        }
+
+        try {
+            await User.findByIdAndUpdate(userId, { showOnlineStatus });
+            await syncUserOnlineStatusVisibility(userId, showOnlineStatus);
+            socket.emit("presence:visibility-updated", { showOnlineStatus });
+        } catch (error) {
+            console.error("Khong the cap nhat hien thi trang thai online:", error);
+        }
     });
 
     socket.on("call:invite", async (payload) => {

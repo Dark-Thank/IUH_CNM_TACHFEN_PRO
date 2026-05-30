@@ -15,6 +15,7 @@ export const userService = {
   updateProfile: async (payload: {
     displayName?: string;
     bio?: string;
+    showOnlineStatus?: boolean;
   }) => {
     const res = await api.patch("/users/me", payload);
     return res.data.user;
