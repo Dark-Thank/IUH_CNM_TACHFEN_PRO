@@ -127,6 +127,9 @@ interface MessageItemProps {
   previousMessage?: Message;
   selectedConvo: Conversation;
   isSearchFocused?: boolean;
+  translation?: string;
+  isTranslating?: boolean;
+  onTranslateMessage?: (message: Message) => void;
 }
 
 const MESSAGE_RECEIPT_LABELS = {
@@ -181,7 +184,29 @@ const isGroupNoticeMessage = (message: Message, conversation: Conversation) => (
   && (message.fileUrls?.length ?? 0) === 0
 );
 
-function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused = false }: MessageItemProps) {
+const getSenderId = (message: Message) => {
+  const sender = message.senderId as unknown;
+
+  if (typeof sender === "string") {
+    return sender;
+  }
+
+  if (sender && typeof sender === "object" && "_id" in sender) {
+    return String((sender as { _id?: string })._id ?? "");
+  }
+
+  return "";
+};
+
+function MessageItem({
+  message,
+  previousMessage,
+  selectedConvo,
+  isSearchFocused = false,
+  translation,
+  isTranslating = false,
+  onTranslateMessage,
+}: MessageItemProps) {
   const { isDark } = useThemeStore();
   const { user } = useAuthStore();
   const {
@@ -215,7 +240,7 @@ function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused 
     : 0;
   const currentCreatedAt = new Date(message.createdAt).getTime();
 
-  const isOwn = !!message.isOwn || message.senderId === currentUserId;
+  const isOwn = !!message.isOwn || getSenderId(message) === currentUserId;
   const isLastOwnMessage = isOwn && message._id === selectedConvo.lastMessage?._id;
   const isShowTime = !previous || currentCreatedAt - previousCreatedAt > 300000;
   const isGroupBreak = isShowTime || message.senderId !== previous?.senderId;
@@ -235,6 +260,11 @@ function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused 
   const canForward = !message.isRecalled && !isDeletedForMe && !isStructuredMessage && Boolean(
     message.content || message.imgUrls?.length || message.fileUrls?.length
   );
+  const canTranslate = !isOwn &&
+    !message.isRecalled &&
+    !isDeletedForMe &&
+    typeof message.content === "string" &&
+    Boolean(message.content.trim());
   const canRecall =
     isOwn &&
     !message.isRecalled &&
@@ -670,27 +700,53 @@ function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused 
             />
 
             {message.content ? (
-              <Text
-                style={[
-                  styles.voiceCaption,
-                  { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
-                ]}
-              >
-                {message.content}
-              </Text>
+              <View style={styles.textBlock}>
+                <Text
+                  style={[
+                    styles.voiceCaption,
+                    { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  {message.content}
+                </Text>
+
+                {(translation || isTranslating) && !isOwn ? (
+                  <Text
+                    style={[
+                      styles.translationText,
+                      { color: isDark ? "#94a3b8" : "#64748b" },
+                    ]}
+                  >
+                    {translation || "Dang dich..."}
+                  </Text>
+                ) : null}
+              </View>
             ) : null}
           </View>
         ) : null}
 
         {!isVoice && !isStructuredMessage && message.content ? (
-          <Text
-            style={[
-              styles.messageText,
-              { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
-            ]}
-          >
-            {message.content}
-          </Text>
+          <View style={styles.textBlock}>
+            <Text
+              style={[
+                styles.messageText,
+                { color: useOwnAccentBubble ? "#ffffff" : isDark ? "#f8fafc" : "#0f172a" },
+              ]}
+            >
+              {message.content}
+            </Text>
+
+            {(translation || isTranslating) && !isOwn ? (
+              <Text
+                style={[
+                  styles.translationText,
+                  { color: isDark ? "#94a3b8" : "#64748b" },
+                ]}
+              >
+                {translation || "Dang dich..."}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
 
         {message.imgUrls?.map((url, idx) => (
@@ -987,6 +1043,31 @@ function MessageItem({ message, previousMessage, selectedConvo, isSearchFocused 
                   ]}
                 >
                   Trả lời
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {canTranslate ? (
+              <Pressable
+                onPress={() => {
+                  closeActions();
+                  onTranslateMessage?.(message);
+                }}
+                style={[
+                  styles.actionButton,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.actionButtonText,
+                    { color: isDark ? "#f8fafc" : "#0f172a" },
+                  ]}
+                >
+                  {translation ? "Dich lai tin nhan" : "Dich tin nhan"}
                 </Text>
               </Pressable>
             ) : null}
@@ -1332,7 +1413,9 @@ export default memo(MessageItem, (prevProps, nextProps) => {
     prevProps.message === nextProps.message &&
     prevProps.previousMessage === nextProps.previousMessage &&
     prevProps.selectedConvo === nextProps.selectedConvo &&
-    prevProps.isSearchFocused === nextProps.isSearchFocused
+    prevProps.isSearchFocused === nextProps.isSearchFocused &&
+    prevProps.translation === nextProps.translation &&
+    prevProps.isTranslating === nextProps.isTranslating
   );
 });
 
@@ -1426,7 +1509,17 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     position: "relative",
   },
+  textBlock: {
+    gap: 6,
+  },
   messageText: { fontSize: 15, lineHeight: 21 },
+  translationText: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(148, 163, 184, 0.24)",
+    paddingTop: 6,
+    fontSize: 13,
+    lineHeight: 18,
+  },
   forwardedBadge: {
     marginBottom: 6,
     paddingBottom: 4,

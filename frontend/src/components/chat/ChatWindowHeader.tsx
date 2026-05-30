@@ -19,6 +19,7 @@ type Props = {
   chat?: Conversation;
   panelMode?: "none" | "attachments" | "search";
   searchOpen?: boolean;
+  autoTranslateEnabled?: boolean;
   onToggleAttachmentsPanel?: () => void;
   onToggleSearchPanel?: () => void;
 };
@@ -27,6 +28,7 @@ const ChatWindowHeader = ({
   chat,
   panelMode = "none",
   searchOpen = false,
+  autoTranslateEnabled = false,
   onToggleAttachmentsPanel,
   onToggleSearchPanel,
 }: Props) => {
@@ -120,6 +122,11 @@ const ChatWindowHeader = ({
               <h2 className="truncate font-semibold text-foreground">
                 {chat.type === "direct" ? otherUser?.displayName : chat.group?.name}
               </h2>
+              {autoTranslateEnabled && (
+                <span className="mt-0.5 inline-flex items-center rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:text-sky-300">
+                  Auto Translate ON
+                </span>
+              )}
             </div>
           </button>
 

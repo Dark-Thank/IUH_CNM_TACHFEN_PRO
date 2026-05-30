@@ -97,6 +97,9 @@ interface MessageItemProps {
   selectedConvo: Conversation;
   searchQuery?: string;
   isSearchFocused?: boolean;
+  translation?: string;
+  isTranslating?: boolean;
+  onTranslateMessage?: (message: Message) => void;
 }
 
 const getCallTypeLabel = (callType?: "audio" | "video") =>
@@ -309,6 +312,9 @@ const MessageItem = ({
   selectedConvo,
   searchQuery = "",
   isSearchFocused = false,
+  translation,
+  isTranslating = false,
+  onTranslateMessage,
 }: MessageItemProps) => {
   const { user } = useAuthStore();
   const {
@@ -371,6 +377,11 @@ const MessageItem = ({
     && !isAppointmentMessage
     && Boolean(message.content || message.imgUrls?.length || message.fileUrls?.length);
   const canReply = !message.isRecalled && !isDeletedForCurrentUser;
+  const canTranslate = !isOwn
+    && !message.isRecalled
+    && !isDeletedForCurrentUser
+    && typeof message.content === "string"
+    && Boolean(message.content.trim());
   const availableConversations = conversations.filter(
     (conversation) => conversation._id !== message.conversationId
   );
@@ -683,9 +694,19 @@ const MessageItem = ({
                 )}
                 {/* TEXT */}
                 {message.content && (
-                  <p className="text-sm wrap-break-word">
-                    {renderHighlightedContent(message.content, searchQuery, isSearchFocused)}
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-sm wrap-break-word">
+                      {renderHighlightedContent(message.content, searchQuery, isSearchFocused)}
+                    </p>
+                    {(translation || isTranslating) && !isOwn && (
+                      <p className={cn(
+                        "border-t border-current/10 pt-1 text-xs leading-relaxed wrap-break-word",
+                        isOwn ? "text-primary-foreground/75" : "text-muted-foreground"
+                      )}>
+                        {translation || "Dang dich..."}
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 {downloadableFiles.length > 0 && (
@@ -750,6 +771,12 @@ const MessageItem = ({
               {canReply && (
                 <DropdownMenuItem onClick={handleReply}>
                   ↩ Trả lời
+                </DropdownMenuItem>
+              )}
+
+              {canTranslate && (
+                <DropdownMenuItem onClick={() => onTranslateMessage?.(message)}>
+                  {translation ? "Dich lai tin nhan" : "Dich tin nhan"}
                 </DropdownMenuItem>
               )}
 

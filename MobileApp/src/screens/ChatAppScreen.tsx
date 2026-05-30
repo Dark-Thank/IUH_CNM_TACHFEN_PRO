@@ -17,6 +17,7 @@ import {
 import { CameraView, useCameraPermissions } from "expo-camera";
 import * as ImagePicker from "expo-image-picker";
 import { toast } from "@/lib/toast";
+import { chatAiService } from "@/services/chatAiService";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
 import { chatService } from "@/services/chatServiec";
 import { friendService } from "@/services/friendService";
@@ -75,6 +76,105 @@ type GroupAvatarFile = {
 type GroupAvatarSlot =
   | { type: "friend"; friend: Friend }
   | { type: "count"; count: number };
+type SmartReplyCacheItem = {
+  latestMessageId: string;
+  suggestions: string[];
+};
+type LanguageCacheItem = {
+  language: string;
+  latestOwnMessageId: string;
+};
+
+const normalizeComparableText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+const isUnknownLanguage = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+
+  return !normalized ||
+    normalized === "unknown" ||
+    normalized === "undetermined" ||
+    normalized.includes("cannot determine") ||
+    normalized.includes("khong xac dinh") ||
+    normalized.includes("không xác định");
+};
+
+const looksVietnamese = (value: string) => {
+  const normalized = normalizeComparableText(value);
+  const vietnameseWordPattern = /\b(chao|xin|ban|toi|minh|khong|khoe|dang|hoc|truong|hom|nay|cung|on|lam|gi|the|nao|cam|on|nhe)\b/i;
+
+  return /[ăâđêôơưáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(value) ||
+    vietnameseWordPattern.test(normalized);
+};
+
+const getFallbackTargetLanguage = (sourceText: string) =>
+  looksVietnamese(sourceText) ? "English" : "Vietnamese";
+
+const detectLocalLanguage = (value: string) => {
+  const normalized = normalizeComparableText(value);
+
+  if (/[\u4E00-\u9FFF]/.test(value)) {
+    return "Chinese";
+  }
+
+  if (looksVietnamese(value)) {
+    return "Vietnamese";
+  }
+
+  if (/\b(hello|hi|what|when|where|why|how|can|you|your|are|is|am|i|me|my|doing|feel|about|lesson|today|hear|good|thanks|thank)\b/i.test(normalized)) {
+    return "English";
+  }
+
+  const latinLetters = normalized.match(/[a-z]/g)?.length ?? 0;
+
+  if (latinLetters >= 3) {
+    return "English";
+  }
+
+  return "";
+};
+
+const detectRecentOwnLanguage = (messages: Message[]) => {
+  const scores: Record<string, number> = {};
+
+  messages.slice(-5).forEach((message, index, recentMessages) => {
+    const language = detectLocalLanguage(message.content ?? "");
+
+    if (!language) {
+      return;
+    }
+
+    scores[language] = (scores[language] ?? 0) + index + 1 + recentMessages.length;
+  });
+
+  if (Object.keys(scores).length >= 2) {
+    return "English";
+  }
+
+  return Object.entries(scores).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "";
+};
+
+const getSenderId = (message: Message) => {
+  const sender = message.senderId as unknown;
+
+  if (typeof sender === "string") {
+    return sender;
+  }
+
+  if (sender && typeof sender === "object" && "_id" in sender) {
+    return String((sender as { _id?: string })._id ?? "");
+  }
+
+  return "";
+};
+
+const isOwnMessageForUser = (message: Message, userId?: string) =>
+  Boolean(message.isOwn || (userId && getSenderId(message) === userId));
 
 const resolveAvatarPreviewUri = (avatarUrl?: string) => {
   if (!avatarUrl) {
@@ -427,6 +527,11 @@ export default function ChatAppScreen() {
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [messageSearchLoadingHistory, setMessageSearchLoadingHistory] = useState(false);
+  const [smartReplyCache, setSmartReplyCache] = useState<Record<string, SmartReplyCacheItem>>({});
+  const [smartReplyLoadingConversationId, setSmartReplyLoadingConversationId] = useState<string | null>(null);
+  const [languageByConversation, setLanguageByConversation] = useState<Record<string, LanguageCacheItem>>({});
+  const [translationsByConversation, setTranslationsByConversation] = useState<Record<string, Record<string, string>>>({});
+  const [translatingByConversation, setTranslatingByConversation] = useState<Record<string, string[]>>({});
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const joinScanLockRef = useRef(false);
 
@@ -608,6 +713,31 @@ export default function ChatAppScreen() {
     ),
     [messages, selectedConvo]
   );
+  const latestMessage = messageItems[messageItems.length - 1] ?? null;
+  const activeTranslations = selectedConvo
+    ? translationsByConversation[selectedConvo._id] ?? {}
+    : {};
+  const activeTranslatingIds = useMemo(
+    () => new Set(selectedConvo ? translatingByConversation[selectedConvo._id] ?? [] : []),
+    [selectedConvo, translatingByConversation]
+  );
+  const activeSmartReplyCache = selectedConvo ? smartReplyCache[selectedConvo._id] : undefined;
+  const activeSmartReplies = selectedConvo &&
+    latestMessage &&
+    !isOwnMessageForUser(latestMessage, user?._id) &&
+    activeSmartReplyCache?.latestMessageId === latestMessage._id
+    ? activeSmartReplyCache.suggestions
+    : [];
+  const smartReplyLoading = Boolean(
+    selectedConvo && smartReplyLoadingConversationId === selectedConvo._id
+  );
+  const canRequestSmartReplies = Boolean(
+    selectedConvo &&
+    latestMessage &&
+    !isOwnMessageForUser(latestMessage, user?._id) &&
+    typeof latestMessage.content === "string" &&
+    latestMessage.content.trim()
+  );
 
   const messageSearchResults = useMemo(() => {
     if (!selectedConvo) {
@@ -636,6 +766,164 @@ export default function ChatAppScreen() {
 
   const keyExtractor = useCallback((item: Message) => item._id, []);
 
+  const handleRequestSmartReplies = useCallback(async () => {
+    if (!selectedConvo || !latestMessage || isOwnMessageForUser(latestMessage, user?._id) || !latestMessage.content?.trim()) {
+      return;
+    }
+
+    const cached = smartReplyCache[selectedConvo._id];
+    if (cached?.latestMessageId === latestMessage._id) {
+      return;
+    }
+
+    const contextMessages = messageItems
+      .filter((message) => !message.isRecalled && typeof message.content === "string" && message.content.trim())
+      .slice(-5)
+      .map((message) => ({
+        isOwn: isOwnMessageForUser(message, user?._id),
+        content: message.content!.trim(),
+      }));
+
+    if (contextMessages.length === 0) {
+      toast.error("Khong co noi dung hop le de tao goi y.");
+      return;
+    }
+
+    try {
+      setSmartReplyLoadingConversationId(selectedConvo._id);
+      const suggestions = await chatAiService.getSmartReplies(selectedConvo._id, contextMessages);
+
+      setSmartReplyCache((current) => ({
+        ...current,
+        [selectedConvo._id]: {
+          latestMessageId: latestMessage._id,
+          suggestions,
+        },
+      }));
+    } catch (error: any) {
+      console.error("Khong the tao goi y tra loi AI mobile:", error);
+      toast.error(error.response?.data?.message || "Khong the tao goi y tra loi luc nay.");
+    } finally {
+      setSmartReplyLoadingConversationId(null);
+    }
+  }, [latestMessage, messageItems, selectedConvo, smartReplyCache, user?._id]);
+
+  const handleTranslateMessage = useCallback(async (message: Message) => {
+    if (!selectedConvo || !message.content?.trim() || isOwnMessageForUser(message, user?._id)) {
+      return;
+    }
+
+    if (activeTranslations[message._id]) {
+      return;
+    }
+
+    const currentTranslating = translatingByConversation[selectedConvo._id] ?? [];
+    if (currentTranslating.includes(message._id)) {
+      return;
+    }
+
+    const setMessageTranslating = (isTranslating: boolean) => {
+      setTranslatingByConversation((current) => {
+        const currentIds = current[selectedConvo._id] ?? [];
+
+        return {
+          ...current,
+          [selectedConvo._id]: isTranslating
+            ? Array.from(new Set([...currentIds, message._id]))
+            : currentIds.filter((id) => id !== message._id),
+        };
+      });
+    };
+
+    try {
+      setMessageTranslating(true);
+
+      const ownTextMessages = messageItems
+        .filter((item) =>
+          isOwnMessageForUser(item, user?._id) &&
+          typeof item.content === "string" &&
+          item.content.trim()
+        )
+        .slice(-5);
+      const latestOwnMessageId = ownTextMessages[ownTextMessages.length - 1]?._id ?? "";
+      const cachedLanguage = languageByConversation[selectedConvo._id];
+      const localLanguage = detectRecentOwnLanguage(ownTextMessages);
+      let targetLanguage = localLanguage ||
+        (cachedLanguage?.latestOwnMessageId === latestOwnMessageId
+          ? cachedLanguage.language
+          : "");
+
+      if (!targetLanguage) {
+        const userMessages = ownTextMessages.map((item) => item.content!.trim());
+
+        if (userMessages.length === 0) {
+          toast.error("Chua co tin nhan cua ban de xac dinh ngon ngu dich.");
+          return;
+        }
+
+        targetLanguage = (await chatAiService.detectLanguage(selectedConvo._id, userMessages)).trim();
+
+        if (isUnknownLanguage(targetLanguage)) {
+          targetLanguage = getFallbackTargetLanguage(message.content);
+        }
+      }
+
+      if (isUnknownLanguage(targetLanguage)) {
+        targetLanguage = getFallbackTargetLanguage(message.content);
+      }
+
+      setLanguageByConversation((current) => ({
+        ...current,
+        [selectedConvo._id]: {
+          language: targetLanguage,
+          latestOwnMessageId,
+        },
+      }));
+
+      const translationResult = await chatAiService.translateMessage(
+        selectedConvo._id,
+        message.content.trim(),
+        targetLanguage
+      );
+      const translatedText = translationResult.translatedText?.trim() ?? "";
+
+      if (translationResult.sameLanguage) {
+        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        return;
+      }
+
+      if (normalizeComparableText(translatedText) === normalizeComparableText(message.content)) {
+        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        return;
+      }
+
+      if (!translatedText) {
+        toast.error("AI khong tra ve ban dich.");
+        return;
+      }
+
+      setTranslationsByConversation((current) => ({
+        ...current,
+        [selectedConvo._id]: {
+          ...(current[selectedConvo._id] ?? {}),
+          [message._id]: translatedText,
+        },
+      }));
+    } catch (error: any) {
+      console.error("Khong the dich tin nhan mobile:", error);
+      toast.error(error.response?.data?.message || "Khong the dich tin nhan luc nay.");
+    } finally {
+      setMessageTranslating(false);
+    }
+  }, [
+    activeTranslations,
+    languageByConversation,
+    messageItems,
+    selectedConvo,
+    translatingByConversation,
+    user?._id,
+  ]);
+
   const renderMessageItem = useCallback(
     ({ item, index }: { item: Message; index: number }) => (
       <MessageItem
@@ -643,9 +931,12 @@ export default function ChatAppScreen() {
         previousMessage={index > 0 ? messageItems[index - 1] : undefined}
         selectedConvo={selectedConvo!}
         isSearchFocused={highlightedMessageId === item._id}
+        translation={activeTranslations[item._id]}
+        isTranslating={activeTranslatingIds.has(item._id)}
+        onTranslateMessage={handleTranslateMessage}
       />
     ),
-    [highlightedMessageId, messageItems, selectedConvo]
+    [activeTranslatingIds, activeTranslations, handleTranslateMessage, highlightedMessageId, messageItems, selectedConvo]
   );
 
   const typingLabel = typingUsers.length === 0
@@ -1824,6 +2115,11 @@ export default function ChatAppScreen() {
               </View>
             }
             renderItem={renderMessageItem}
+            extraData={{
+              activeTranslations,
+              activeTranslatingIds,
+              highlightedMessageId,
+            }}
           />
 
           {isConversationBlocked ? (
@@ -1892,6 +2188,10 @@ export default function ChatAppScreen() {
           <MessageInput
             selectedConvo={selectedConvo}
             disabled={isConversationBlocked}
+            smartReplies={activeSmartReplies}
+            smartReplyLoading={smartReplyLoading}
+            canRequestSmartReplies={canRequestSmartReplies}
+            onRequestSmartReplies={() => void handleRequestSmartReplies()}
           />
         </KeyboardAvoidingView>
 

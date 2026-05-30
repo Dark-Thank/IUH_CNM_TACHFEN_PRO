@@ -5,7 +5,7 @@ import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation } from "@/types/chat";
 import { Audio } from "expo-av";
-import { AtSign, FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
+import { AtSign, FileAudio, ImagePlus, Mic, Paperclip, Send, Sparkles, Square, Trash2, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Image,
@@ -69,6 +69,10 @@ interface Props {
   selectedConvo: Conversation;
   disabled?: boolean;
   extraActions?: ReactNode;
+  smartReplies?: string[];
+  smartReplyLoading?: boolean;
+  canRequestSmartReplies?: boolean;
+  onRequestSmartReplies?: () => void;
 }
 
 
@@ -76,7 +80,15 @@ interface Props {
 //   selectedConvo,
 // }: MessageInputProps) {
 
-export default function MessageInput({ selectedConvo, disabled, extraActions }: Props) {
+export default function MessageInput({
+  selectedConvo,
+  disabled,
+  extraActions,
+  smartReplies = [],
+  smartReplyLoading = false,
+  canRequestSmartReplies = false,
+  onRequestSmartReplies,
+}: Props) {
 
   const { user } = useAuthStore();
   const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } =
@@ -349,6 +361,11 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
     setValue(nextValue);
     setSelectionStart(nextCursor);
+  };
+
+  const handleSelectSmartReply = (reply: string) => {
+    setValue(reply);
+    setSelectionStart(reply.length);
   };
 
   const startRecording = async () => {
@@ -676,6 +693,47 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
       </View>
 
+      {(smartReplyLoading || smartReplies.length > 0) && !disabled ? (
+        <View
+          style={[
+            styles.smartReplyBar,
+            {
+              backgroundColor: isDark ? "#111827" : "#f8fafc",
+              borderColor: isDark ? "#334155" : "#e2e8f0",
+            },
+          ]}
+        >
+          {smartReplyLoading ? (
+            <Text style={[styles.smartReplyStatus, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+              Dang tao goi y...
+            </Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              {smartReplies.map((reply) => (
+                <Pressable
+                  key={reply}
+                  onPress={() => handleSelectSmartReply(reply)}
+                  style={[
+                    styles.smartReplyChip,
+                    {
+                      backgroundColor: isDark ? "#312e81" : "#ede9fe",
+                      borderColor: isDark ? "#6d28d9" : "#c4b5fd",
+                    },
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.smartReplyText, { color: isDark ? "#ddd6fe" : "#5b21b6" }]}
+                  >
+                    {reply}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
+        </View>
+      ) : null}
+
       {showMentionPicker ? (
         <View
           style={[
@@ -798,6 +856,22 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
           ]}
         />
       </View>
+
+      {canRequestSmartReplies ? (
+        <Pressable
+          onPress={onRequestSmartReplies}
+          disabled={disabled || smartReplyLoading}
+          style={[
+            styles.iconButton,
+            {
+              backgroundColor: isDark ? "#1f2937" : "#f1f5f9",
+              opacity: disabled || smartReplyLoading ? 0.5 : 1,
+            },
+          ]}
+        >
+          <Sparkles size={18} color={isDark ? "#ddd6fe" : "#7c3aed"} />
+        </Pressable>
+      ) : null}
 
       {isGroupConversation ? (
         <GroupFeatureBar
@@ -941,6 +1015,29 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10,
+  },
+  smartReplyBar: {
+    borderWidth: 1,
+    borderRadius: 16,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  smartReplyStatus: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  smartReplyChip: {
+    maxWidth: 220,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginRight: 8,
+  },
+  smartReplyText: {
+    fontSize: 13,
+    fontWeight: "700",
   },
   previewStack: {
     position: "absolute",

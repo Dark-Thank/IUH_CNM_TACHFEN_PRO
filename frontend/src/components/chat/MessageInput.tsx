@@ -2,7 +2,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useSocketStore } from '@/stores/useSocketStore';
 import type { Conversation } from "@/types/chat";
-import { AtSign, ImagePlus, Mic, Paperclip, Send, Square, Trash2 } from 'lucide-react';
+import { AtSign, ImagePlus, Mic, Paperclip, Send, Sparkles, Square, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
@@ -85,10 +85,18 @@ const MessageInput = ({
     selectedConvo,
     isBlocked: propIsBlocked,
     extraActions,
+    smartReplies = [],
+    smartReplyLoading = false,
+    canRequestSmartReplies = false,
+    onRequestSmartReplies,
 }: {
     selectedConvo: Conversation;
     isBlocked: boolean;
     extraActions?: ReactNode;
+    smartReplies?: string[];
+    smartReplyLoading?: boolean;
+    canRequestSmartReplies?: boolean;
+    onRequestSmartReplies?: () => void;
 }) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
@@ -384,6 +392,16 @@ const MessageInput = ({
         });
     };
 
+    const handleSelectSmartReply = (reply: string) => {
+        setValue(reply);
+        setSelectionStart(reply.length);
+
+        window.requestAnimationFrame(() => {
+            inputRef.current?.focus();
+            inputRef.current?.setSelectionRange(reply.length, reply.length);
+        });
+    };
+
     if (!user) return null;
 
     const sendMessage = async () => {
@@ -464,6 +482,24 @@ const MessageInput = ({
 
     return (
         <div className="flex flex-col gap-2 p-3 bg-background">
+            {(smartReplyLoading || smartReplies.length > 0) && !isBlocked && (
+                <div className="flex flex-wrap gap-2 border-b border-border/70 pb-2">
+                    {smartReplyLoading ? (
+                        <span className="text-xs text-muted-foreground">Dang tao goi y...</span>
+                    ) : (
+                        smartReplies.map((reply) => (
+                            <button
+                                key={reply}
+                                type="button"
+                                onClick={() => handleSelectSmartReply(reply)}
+                                className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm text-foreground transition hover:bg-primary/10"
+                            >
+                                {reply}
+                            </button>
+                        ))
+                    )}
+                </div>
+            )}
 
             {replyingMessage && (
                 <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2">
@@ -606,6 +642,19 @@ const MessageInput = ({
                 </Button>
 
                 {extraActions}
+
+                {canRequestSmartReplies && (
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        disabled={isBlocked || smartReplyLoading}
+                        onClick={onRequestSmartReplies}
+                        title="Goi y tra loi bang AI"
+                    >
+                        <Sparkles className="size-4" />
+                    </Button>
+                )}
 
                 {/* TEXT */}
                 <div className="flex-1 relative">

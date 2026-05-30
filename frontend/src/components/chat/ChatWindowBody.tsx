@@ -5,6 +5,7 @@ import InfiniteScroll from "react-infinite-scroll-component";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import PinnedSection from "./PinnedSection";
+import type { Message } from "@/types/chat";
 
 const SCROLL_TO_LATEST_THRESHOLD = 160;
 
@@ -14,6 +15,9 @@ type Props = {
     focusRequestKey?: number;
     searchQuery?: string;
     highlightedMessageId?: string | null;
+    translations?: Record<string, string>;
+    translatingMessageIds?: Set<string>;
+    onTranslateMessage?: (message: Message) => void;
 };
 
 const ChatWindowBody = ({
@@ -22,6 +26,9 @@ const ChatWindowBody = ({
     focusRequestKey = 0,
     searchQuery = "",
     highlightedMessageId = null,
+    translations = {},
+    translatingMessageIds = new Set<string>(),
+    onTranslateMessage,
 }: Props) => {
     const {
         activeConversationId,
@@ -201,6 +208,9 @@ const ChatWindowBody = ({
                             selectedConvo={selectedConvo}
                             searchQuery={searchQuery}
                             isSearchFocused={highlightedMessageId === message._id}
+                            translation={translations[message._id]}
+                            isTranslating={translatingMessageIds.has(message._id)}
+                            onTranslateMessage={onTranslateMessage}
                         />
                     ))}
                 </InfiniteScroll>
