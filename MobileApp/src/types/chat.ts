@@ -121,6 +121,16 @@ export interface ConversationResponse {
   conversations: Conversation[];
 }
 
+export interface ConversationSummary {
+  provider: string;
+  model?: string;
+  summary: string;
+  bullets: string[];
+  actionItems: string[];
+  messageCount: number;
+  scope?: "recent" | "unread";
+}
+
 export interface Message {
   _id: string;
   conversationId: string;

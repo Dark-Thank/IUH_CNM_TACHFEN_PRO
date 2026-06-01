@@ -672,7 +672,7 @@ export const useChatStore = create<ChatState>()(
           const { activeConversationId } = get();
           if (!activeConversationId) return;
 
-          const data = await chatService.recallMessage(messageId);
+          const message = await chatService.recallMessage(messageId);
 
           set((state) => {
             const convoMessages = state.messages[activeConversationId];
@@ -680,7 +680,7 @@ export const useChatStore = create<ChatState>()(
 
             const updatedItems = convoMessages.items.map((m) =>
               m._id === messageId
-                ? { ...m, ...data }
+                ? { ...m, ...message }
                 : m
             );
 

@@ -1,19 +1,28 @@
-import { useState } from "react";
-import { PanelRightClose, PanelRightOpen, Phone, Search, Video, Link2 } from "lucide-react";
+import { chatService } from "@/services/chatServiec";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, ConversationSummary } from "@/types/chat";
 import type { Friend } from "@/types/user";
+import { Link2, PanelRightClose, PanelRightOpen, Phone, Search, Sparkles, Video } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { ProfileModal } from "../createNewChat/ProfileModal";
 import { Button } from "../ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
 import { Separator } from "../ui/separator";
 import { SidebarTrigger } from "../ui/sidebar";
 import GroupChatManagementDialog from "./GroupChatManagementDialog";
+import { ShareGroupLinkModal } from "./ShareGroupLinkModal";
 import StatusBadge from "./StatusBadge";
 import UserAvatar from "./UserAvatar";
-import { ShareGroupLinkModal } from "./ShareGroupLinkModal";
 
 type Props = {
   chat?: Conversation;
@@ -33,6 +42,9 @@ const ChatWindowHeader = ({
   const [showProfile, setShowProfile] = useState(false);
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [showShareLink, setShowShareLink] = useState(false);
+  const [showSummaryDialog, setShowSummaryDialog] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summary, setSummary] = useState<ConversationSummary | null>(null);
   const { conversations, activeConversationId } = useChatStore();
   const { user } = useAuthStore();
   const { onlineUsers } = useSocketStore();
@@ -68,6 +80,23 @@ const ChatWindowHeader = ({
 
   const canOpenProfile = chat.type === "direct" && !!profileFriend;
   const canOpenGroupManagement = chat.type === "group";
+
+  const handleSummarizeConversation = async () => {
+    try {
+      setShowSummaryDialog(true);
+      setSummaryLoading(true);
+
+      const nextSummary = await chatService.summarizeConversation(chat._id, {
+        scope: "recent",
+      });
+      setSummary(nextSummary);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Không thể tạo tóm tắt bằng Groq");
+      setShowSummaryDialog(false);
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
 
   return (
     <>
@@ -177,6 +206,19 @@ const ChatWindowHeader = ({
 
           <Button
             type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => void handleSummarizeConversation()}
+            className="shrink-0 rounded-full"
+            title="Tóm tắt bằng AI"
+            disabled={summaryLoading}
+          >
+            <Sparkles className="size-4" />
+            <span className="sr-only">Tóm tắt bằng AI</span>
+          </Button>
+
+          <Button
+            type="button"
             variant={searchOpen ? "secondary" : "ghost"}
             size="icon-sm"
             onClick={() => onToggleSearchPanel?.()}
@@ -223,6 +265,90 @@ const ChatWindowHeader = ({
           />
         </>
       ) : null}
+
+      <Dialog open={showSummaryDialog} onOpenChange={setShowSummaryDialog}>
+        <DialogContent className="max-w-xl rounded-3xl border-border/70 bg-background/95 p-0 shadow-2xl backdrop-blur-sm">
+          <DialogHeader className="border-b border-border/60 px-6 py-5">
+            <DialogTitle className="flex items-center gap-2 text-xl">
+              <Sparkles className="size-5 text-primary" />
+              Tóm tắt bằng Groq
+            </DialogTitle>
+            <DialogDescription>
+              Tóm tắt nhanh các tin nhắn gần đây trong cuộc trò chuyện hiện tại.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 px-6 py-5">
+            {summaryLoading ? (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+                Groq đang đọc hội thoại và tạo tóm tắt...
+              </div>
+            ) : summary ? (
+              <>
+                <div className="rounded-2xl bg-muted/40 px-4 py-4">
+                  <p className="text-sm font-medium text-foreground">Tóm tắt</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                    {summary.summary}
+                  </p>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Mô hình: {summary.model || summary.provider} • {summary.messageCount} tin nhắn gần nhất
+                  </p>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <section className="rounded-2xl border border-border/70 px-4 py-4">
+                    <h3 className="text-sm font-semibold text-foreground">Ý chính</h3>
+                    {summary.bullets.length > 0 ? (
+                      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        {summary.bullets.map((bullet) => (
+                          <li key={bullet} className="flex gap-2">
+                            <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-3 text-sm text-muted-foreground">Chưa có ý chính riêng để hiển thị.</p>
+                    )}
+                  </section>
+
+                  <section className="rounded-2xl border border-border/70 px-4 py-4">
+                    <h3 className="text-sm font-semibold text-foreground">Việc cần theo dõi</h3>
+                    {summary.actionItems.length > 0 ? (
+                      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                        {summary.actionItems.map((item) => (
+                          <li key={item} className="flex gap-2">
+                            <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-3 text-sm text-muted-foreground">Không có mục hành động nổi bật.</p>
+                    )}
+                  </section>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/30 px-4 py-8 text-sm text-muted-foreground">
+                Chưa có dữ liệu tóm tắt.
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handleSummarizeConversation()}
+                disabled={summaryLoading}
+                className="rounded-2xl"
+              >
+                Tạo lại tóm tắt
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

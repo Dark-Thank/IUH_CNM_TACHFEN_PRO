@@ -12,6 +12,11 @@ npm run dev
 Nếu cần tạo ACCESS_TOKEN_SECRET, chạy lệnh sau:
 
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+Nếu muốn dùng AI tóm tắt tin nhắn bằng Groq, thêm vào file `.env` của backend:
+
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama-3.1-8b-instant
 ---🌐 Frontend---
 # 1. Cài dependencies
 npm install

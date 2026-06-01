@@ -73,12 +73,14 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       messages: {},
       activeConversationId: null,
+      deferMarkAsSeenConversationId: null,
       replyingMessage: null,
       convoLoading: false,
       messageLoading: false,
       loading: false,
 
       setActiveConversation: (id) => set({ activeConversationId: id, replyingMessage: null }),
+      setDeferMarkAsSeenConversation: (id) => set({ deferMarkAsSeenConversationId: id }),
       setReplyingMessage: (message) => set({ replyingMessage: message }),
       clearReplyingMessage: () => set({ replyingMessage: null }),
 
@@ -87,6 +89,7 @@ export const useChatStore = create<ChatState>()(
           conversations: [],
           messages: {},
           activeConversationId: null,
+          deferMarkAsSeenConversationId: null,
           replyingMessage: null,
           convoLoading: false,
           messageLoading: false,
@@ -561,9 +564,13 @@ export const useChatStore = create<ChatState>()(
       markAsSeen: async () => {
         try {
           const currentUserId = authSession.getCurrentUserId();
-          const { activeConversationId, conversations } = get();
+          const { activeConversationId, conversations, deferMarkAsSeenConversationId } = get();
 
           if (!activeConversationId || !currentUserId) {
+            return;
+          }
+
+          if (deferMarkAsSeenConversationId === activeConversationId) {
             return;
           }
 

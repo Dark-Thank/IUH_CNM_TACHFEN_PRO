@@ -2,7 +2,12 @@ import { authSession } from "@/lib/authSession";
 import api from "@/lib/axios";
 import { getApiBaseUrl } from "@/lib/backendUrl";
 import { toast } from "@/lib/toast";
-import type { AppointmentResponseStatus, ConversationResponse, Message } from "@/types/chat";
+import type {
+  AppointmentResponseStatus,
+  ConversationResponse,
+  ConversationSummary,
+  Message,
+} from "@/types/chat";
 
 import { useBlockStore } from "../stores/useBlockStore";
 
@@ -31,6 +36,11 @@ const ensureAttachmentDirectory = async () => {
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
+}
+
+interface SummarizeConversationOptions {
+  limit?: number;
+  scope?: "recent" | "unread";
 }
 
 const parseJsonSafely = async (response: Response) => {
@@ -106,6 +116,21 @@ export const chatService = {
       messages: res.data.messages,
       cursor: res.data.nextCursor,
     };
+  },
+
+  async summarizeConversation(
+    conversationId: string,
+    options: SummarizeConversationOptions = {}
+  ): Promise<ConversationSummary> {
+    const params = new URLSearchParams();
+    params.set("limit", String(options.limit ?? 40));
+
+    if (options.scope) {
+      params.set("scope", options.scope);
+    }
+
+    const res = await api.get(`/conversations/${conversationId}/summary?${params.toString()}`);
+    return res.data.summary;
   },
 
   async sendDirectMessage(

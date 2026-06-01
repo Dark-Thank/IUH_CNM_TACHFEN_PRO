@@ -1,5 +1,5 @@
 import api from "@/lib/axios";
-import type { AppointmentResponseStatus, ConversationResponse, Message } from "@/types/chat";
+import type { AppointmentResponseStatus, ConversationResponse, ConversationSummary, Message } from "@/types/chat";
 import { toast } from "sonner";
 
 const triggerBrowserDownload = (blob: Blob, fileName: string) => {
@@ -18,6 +18,11 @@ const triggerBrowserDownload = (blob: Blob, fileName: string) => {
 interface FetchMessageProps {
   messages: Message[];
   cursor?: string;
+}
+
+interface SummarizeConversationOptions {
+  limit?: number;
+  scope?: "recent" | "unread";
 }
 
 const pageLimit = 50;
@@ -42,6 +47,20 @@ export const chatService = {
     );
 
     return { messages: res.data.messages, cursor: res.data.nextCursor };
+  },
+  async summarizeConversation(
+    conversationId: string,
+    options: SummarizeConversationOptions = {}
+  ): Promise<ConversationSummary> {
+    const params = new URLSearchParams();
+    params.set("limit", String(options.limit ?? 40));
+
+    if (options.scope) {
+      params.set("scope", options.scope);
+    }
+
+    const res = await api.get(`/conversations/${conversationId}/summary?${params.toString()}`);
+    return res.data.summary;
   },
   async updateGroupAvatar(conversationId: string, file: File) {
   const formData = new FormData();
@@ -200,7 +219,7 @@ export const chatService = {
   },
   async recallMessage(messageId: string) {
     const res = await api.put(`/messages/${messageId}/recall`);
-    return res.data;
+    return res.data.message;
   },
 
   async deleteMessageForMe(messageId: string) {

@@ -1,20 +1,21 @@
+import crypto from "crypto";
+import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 import Block from "../models/Block.js";
 import Conversation from "../models/Conversation.js";
 import Friend from "../models/Friend.js";
 import Message from "../models/Message.js";
 import { io } from "../socket/index.js";
+import { buildConversationSummary } from "../utils/conversationSummaryService.js";
 import {
     emitConversationRemoved,
     emitConversationUpsert,
     emitNewMessage,
+    formatConversationForUser,
     formatMessageForClient,
     formatMessagesForClient,
-    formatConversationForUser,
     getConversationParticipantIds,
     updateConversationAfterCreateMessage,
 } from "../utils/messageHelper.js";
-import crypto from "crypto";
-import { uploadImageFromBuffer } from "../middlewares/uploadMiddleware.js";
 
 const GROUP_ROLES = {
     OWNER: "owner",
@@ -474,6 +475,84 @@ export const getMessages = async (req, res) => {
 
     } catch (error) {
         console.error("Lỗi khi lấy messages:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const summarizeConversation = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user._id;
+        const requestedLimit = Number(req.query.limit);
+        const summaryScope = req.query.scope === "unread" ? "unread" : "recent";
+
+        const conversation = await Conversation.findOne({
+            _id: conversationId,
+            "participants.userId": userId,
+        }).populate({
+            path: "participants.userId",
+            select: "displayName avatarUrl",
+        });
+
+        if (!conversation) {
+            return res.status(404).json({ message: "Không tìm thấy cuộc trò chuyện" });
+        }
+
+        const normalizedLimit = Number.isFinite(requestedLimit) && requestedLimit > 0
+            ? Math.min(requestedLimit, 100)
+            : 40;
+        const messageQuery = summaryScope === "unread"
+            ? {
+                conversationId,
+                senderId: { $ne: userId },
+                seenBy: { $ne: userId },
+            }
+            : { conversationId };
+
+        const messages = await Message.find(messageQuery)
+            .sort({ createdAt: -1 })
+            .limit(normalizedLimit)
+            .populate({
+                path: "senderId",
+                select: "displayName",
+            })
+            .lean();
+
+        if (messages.length === 0) {
+            return res.status(200).json({
+                summary: {
+                    provider: "groq",
+                    summary: summaryScope === "unread"
+                        ? "Hiện không có tin nhắn chưa đọc để tóm tắt."
+                        : "Cuộc trò chuyện hiện chưa có tin nhắn để tóm tắt.",
+                    bullets: [],
+                    actionItems: [],
+                    messageCount: 0,
+                    scope: summaryScope,
+                },
+            });
+        }
+
+        const summary = await buildConversationSummary({
+            conversation,
+            messages: messages.reverse(),
+            userId,
+            limit: requestedLimit,
+            scope: summaryScope,
+        });
+
+        return res.status(200).json({ summary });
+    } catch (error) {
+        console.error("Lỗi khi tóm tắt cuộc trò chuyện:", error);
+
+        if (error.code === "GROQ_API_KEY_MISSING") {
+            return res.status(500).json({ message: "Thiếu cấu hình GROQ_API_KEY ở backend" });
+        }
+
+        if (error.code === "GROQ_REQUEST_FAILED") {
+            return res.status(502).json({ message: "Không thể lấy phản hồi từ Groq", details: error.details });
+        }
+
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };

@@ -1,9 +1,9 @@
 import ChatCard from "@/components/chat/ChatCard";
+import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
 import FriendListModal from "@/components/chat/FriendListModal";
 import MessageInput from "@/components/chat/MessageInput";
 import MessageItem from "@/components/chat/MessageItem";
 import PinnedSection from "@/components/chat/PinnedSection";
-import ConversationAssetsModal from "@/components/chat/ConversationAssetsModal";
 import ProfileModal from "@/components/chat/ProfileModal";
 import UserAvatar from "@/components/chat/UserAvatar";
 import { getApiBaseUrl } from "@/lib/backendUrl";
@@ -14,8 +14,6 @@ import {
   getMessageSenderName,
   normalizeSearchText,
 } from "@/lib/messageSearch";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import * as ImagePicker from "expo-image-picker";
 import { toast } from "@/lib/toast";
 import type { RootTabParamList } from "@/navigation/AppNavigator";
 import { chatService } from "@/services/chatServiec";
@@ -26,11 +24,13 @@ import { useChatStore } from "@/stores/useChatStore";
 import { useFriendStore } from "@/stores/useFriendStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import { useThemeStore } from "@/stores/useThemeStore";
-import type { Conversation, Message } from "@/types/chat";
+import type { Conversation, ConversationSummary, Message } from "@/types/chat";
 import type { Friend, FriendRequest, User } from "@/types/user";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, Phone, Pin, Search, UserPlus, Users, Video, X } from "lucide-react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
+import * as ImagePicker from "expo-image-picker";
+import { Bell, ChevronDown, ChevronLeft, Menu, MessageCircle, Phone, Pin, Search, Sparkles, UserPlus, Users, Video, X } from "lucide-react-native";
 import {
   useCallback,
   useEffect,
@@ -41,8 +41,8 @@ import {
   type ReactNode,
 } from "react";
 import {
-  Alert,
   ActivityIndicator,
+  Alert,
   Animated,
   FlatList,
   Image,
@@ -63,6 +63,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 const TOP_LOAD_THRESHOLD = 72;
 const EMPTY_TYPING_USERS: { userId: string; displayName: string }[] = [];
 const SCROLL_TO_LATEST_DISTANCE = 180;
+const UNREAD_SUMMARY_THRESHOLD = 10;
 
 type ChatNavigation = BottomTabNavigationProp<RootTabParamList, "Chat">;
 type SearchStatus = "idle" | "loading" | "not_found" | "found";
@@ -406,6 +407,7 @@ export default function ChatAppScreen() {
   const [showGroupManagement, setShowGroupManagement] = useState(false);
   const [showConversationAssets, setShowConversationAssets] = useState(false);
   const [showMessageSearch, setShowMessageSearch] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
 
   const [friendUsername, setFriendUsername] = useState("");
   const [conversationSearchQuery, setConversationSearchQuery] = useState("");
@@ -414,6 +416,9 @@ export default function ChatAppScreen() {
   const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
   const [newMessageQuery, setNewMessageQuery] = useState("");
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
+  const [summaryScope, setSummaryScope] = useState<"recent" | "unread">("recent");
   const [groupName, setGroupName] = useState("");
   const [groupQuery, setGroupQuery] = useState("");
   const [joinGroupMode, setJoinGroupMode] = useState<"link" | "camera">("link");
@@ -427,6 +432,10 @@ export default function ChatAppScreen() {
   const [showScrollToLatest, setShowScrollToLatest] = useState(false);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [messageSearchLoadingHistory, setMessageSearchLoadingHistory] = useState(false);
+  const [unreadSummaryPrompt, setUnreadSummaryPrompt] = useState<{
+    conversationId: string;
+    unreadCount: number;
+  } | null>(null);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const joinScanLockRef = useRef(false);
 
@@ -453,6 +462,7 @@ export default function ChatAppScreen() {
     messageLoading,
     loading: chatLoading,
     setActiveConversation,
+    setDeferMarkAsSeenConversation,
     fetchConversations,
     fetchMessages,
     markAsSeen,
@@ -656,6 +666,7 @@ export default function ChatAppScreen() {
   const typingLeadUser = typingUsers.length > 0 && selectedConvo
     ? selectedConvo.participants.find((participant) => participant._id === typingUsers[0].userId) ?? null
     : null;
+  const showTypingBubble = Boolean(typingLabel && typingLeadUser);
   const typingDotAnimations = useRef([
     new Animated.Value(0.4),
     new Animated.Value(0.4),
@@ -1352,6 +1363,29 @@ export default function ChatAppScreen() {
       socket.off("update-message", handler);
     };
   }, [socket]);
+
+  useEffect(() => {
+    if (!selectedConvo || !user?._id) {
+      setUnreadSummaryPrompt(null);
+      setDeferMarkAsSeenConversation(null);
+      return;
+    }
+
+    const unreadCount = selectedConvo.unreadCounts?.[user._id] ?? 0;
+
+    if (unreadCount > UNREAD_SUMMARY_THRESHOLD) {
+      setUnreadSummaryPrompt({
+        conversationId: selectedConvo._id,
+        unreadCount,
+      });
+      setDeferMarkAsSeenConversation(selectedConvo._id);
+      return;
+    }
+
+    setUnreadSummaryPrompt(null);
+    setDeferMarkAsSeenConversation(null);
+  }, [selectedConvo, setDeferMarkAsSeenConversation, user?._id]);
+
   useEffect(() => {
     if (!selectedConversationId) {
       return;
@@ -1367,7 +1401,11 @@ export default function ChatAppScreen() {
     setShowGroupManagement(false);
     setShowConversationAssets(false);
     setShowMessageSearch(false);
+    setShowSummaryModal(false);
     setMessageSearchQuery("");
+    setConversationSummary(null);
+    setSummaryLoading(false);
+    setSummaryScope("recent");
     setHighlightedMessageId(null);
     setMessageSearchLoadingHistory(false);
     resetGroupManagementState();
@@ -1532,6 +1570,62 @@ export default function ChatAppScreen() {
 
     setShowMessageSearch(true);
   }, [selectedConvo]);
+
+  const finalizeUnreadSummaryPrompt = useCallback(async () => {
+    setDeferMarkAsSeenConversation(null);
+
+    try {
+      await markAsSeen();
+    } catch (error) {
+      console.error("Lỗi khi đánh dấu đã xem sau gợi ý tóm tắt:", error);
+    } finally {
+      setUnreadSummaryPrompt(null);
+    }
+  }, [markAsSeen, setDeferMarkAsSeenConversation]);
+
+  const handleSummarizeConversation = useCallback(async (
+    scope: "recent" | "unread",
+    limit?: number
+  ) => {
+    if (!selectedConvo) {
+      return;
+    }
+
+    try {
+      setSummaryScope(scope);
+      setConversationSummary(null);
+      setShowSummaryModal(true);
+      setSummaryLoading(true);
+
+      const summary = await chatService.summarizeConversation(selectedConvo._id, {
+        scope,
+        limit: limit ?? 40,
+      });
+
+      setConversationSummary(summary);
+
+      if (scope === "unread") {
+        await finalizeUnreadSummaryPrompt();
+      }
+    } catch (error: any) {
+      console.error("Lỗi khi tạo tóm tắt trên mobile:", error);
+      toast.error(error?.response?.data?.message || "Không thể tạo tóm tắt bằng Groq");
+
+      if (scope === "unread") {
+        setShowSummaryModal(false);
+      }
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [finalizeUnreadSummaryPrompt, selectedConvo]);
+
+  const handleSummarizeUnreadPrompt = useCallback(() => {
+    if (!unreadSummaryPrompt || unreadSummaryPrompt.conversationId !== selectedConvo?._id) {
+      return;
+    }
+
+    void handleSummarizeConversation("unread", unreadSummaryPrompt.unreadCount);
+  }, [handleSummarizeConversation, selectedConvo?._id, unreadSummaryPrompt]);
 
   const handleSelectMessageSearchResult = useCallback((messageId: string) => {
     const index = messageItems.findIndex((message) => message._id === messageId);
@@ -1699,6 +1793,18 @@ export default function ChatAppScreen() {
             </Pressable>
 
             <Pressable
+              onPress={() => {
+                void handleSummarizeConversation("recent");
+              }}
+              style={[
+                styles.headerIconButton,
+                { backgroundColor: isDark ? "#1f2937" : "#eef2ff" },
+              ]}
+            >
+              <Sparkles size={18} color={isDark ? "#cbd5e1" : "#4f46e5"} />
+            </Pressable>
+
+            <Pressable
               onPress={handleOpenConversationAssets}
               style={[
                 styles.headerIconButton,
@@ -1744,6 +1850,7 @@ export default function ChatAppScreen() {
     handleStartVideoCall,
     isConversationBlocked,
     handleBack,
+    handleSummarizeConversation,
     handleOpenGroupManagement,
     handleOpenConversationAssets,
     handleOpenMessageSearch,
@@ -1785,6 +1892,56 @@ export default function ChatAppScreen() {
             )}
           </View>
 
+          {unreadSummaryPrompt && unreadSummaryPrompt.conversationId === selectedConvo._id ? (
+            <View
+              style={[
+                styles.unreadSummaryBanner,
+                {
+                  backgroundColor: isDark ? "rgba(76, 29, 149, 0.22)" : "#f5f3ff",
+                  borderColor: isDark ? "#6d28d9" : "#c4b5fd",
+                },
+              ]}
+            >
+              <View style={styles.unreadSummaryBannerLead}>
+                <View
+                  style={[
+                    styles.unreadSummaryBadge,
+                    { backgroundColor: isDark ? "rgba(124, 58, 237, 0.22)" : "#ede9fe" },
+                  ]}
+                >
+                  <Sparkles size={16} color={isDark ? "#ddd6fe" : "#7c3aed"} />
+                </View>
+
+                <View style={styles.unreadSummaryTextWrap}>
+                  <Text style={[styles.unreadSummaryTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                    Có {unreadSummaryPrompt.unreadCount} tin nhắn chưa đọc
+                  </Text>
+                  <Text style={[styles.unreadSummaryDescription, { color: isDark ? "#cbd5e1" : "#64748b" }]}>
+                    Tóm tắt nhanh phần chưa đọc trước khi bạn đọc hết đoạn chat.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.unreadSummaryActions}>
+                <Pressable onPress={handleSummarizeUnreadPrompt} style={styles.unreadSummaryPrimaryButton}>
+                  <Text style={styles.unreadSummaryPrimaryText}>Tóm tắt bằng AI</Text>
+                </Pressable>
+
+                <Pressable
+                  onPress={() => {
+                    void finalizeUnreadSummaryPrompt();
+                  }}
+                  style={[
+                    styles.unreadSummarySecondaryButton,
+                    { borderColor: isDark ? "#475569" : "#cbd5e1" },
+                  ]}
+                >
+                  <Text style={[styles.unreadSummarySecondaryText, { color: isDark ? "#e2e8f0" : "#334155" }]}>Bỏ qua</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <FlatList
             ref={flatListRef}
             key={selectedConversationId ?? "chat-empty"}
@@ -1796,7 +1953,10 @@ export default function ChatAppScreen() {
             removeClippedSubviews={Platform.OS === "android"}
             contentContainerStyle={[
               styles.messageListContent,
-              { paddingTop: pinnedMessages.length > 0 ? 120 : 14 },
+              {
+                paddingTop: pinnedMessages.length > 0 ? 120 : 14,
+                paddingBottom: showTypingBubble ? 96 : styles.messageListContent.paddingBottom,
+              },
             ]}
             onLayout={flushPendingScrollToLatest}
             onContentSizeChange={flushPendingScrollToLatest}
@@ -1830,7 +1990,7 @@ export default function ChatAppScreen() {
             <Text style={styles.blockedNotice}>Bạn không thể trả lời cuộc trò chuyện này.</Text>
           ) : null}
 
-          {typingLabel && typingLeadUser ? (
+          {showTypingBubble && typingLeadUser ? (
             <View
               style={[
                 styles.typingBubble,
@@ -1900,6 +2060,94 @@ export default function ChatAppScreen() {
           friend={selectedConversationFriend}
           onClose={() => setShowConversationProfile(false)}
         />
+
+        <OverlayModal
+          visible={showSummaryModal}
+          title={summaryScope === "unread" ? "Tóm tắt tin chưa đọc" : "Tóm tắt đoạn chat"}
+          onClose={() => setShowSummaryModal(false)}
+        >
+          <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+            <View
+              style={[
+                styles.summaryCard,
+                {
+                  backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                  borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                },
+              ]}
+            >
+              {summaryLoading ? (
+                <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Groq đang đọc hội thoại và tạo tóm tắt...
+                </Text>
+              ) : conversationSummary ? (
+                <>
+                  <Text style={[styles.summaryText, { color: isDark ? "#e2e8f0" : "#334155" }]}>
+                    {conversationSummary.summary}
+                  </Text>
+
+                  <Text style={[styles.summaryMeta, { color: isDark ? "#64748b" : "#94a3b8" }]}>
+                    {conversationSummary.model || conversationSummary.provider} • {conversationSummary.messageCount} tin nhắn
+                  </Text>
+                </>
+              ) : (
+                <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                  Chưa có dữ liệu tóm tắt.
+                </Text>
+              )}
+            </View>
+
+            {conversationSummary?.bullets?.length ? (
+              <View
+                style={[
+                  styles.summarySection,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.summarySectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Ý chính</Text>
+                {conversationSummary.bullets.map((bullet) => (
+                  <View key={bullet} style={styles.summaryListItem}>
+                    <View style={styles.summaryListDot} />
+                    <Text style={[styles.summaryListText, { color: isDark ? "#cbd5e1" : "#475569" }]}>{bullet}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {conversationSummary?.actionItems?.length ? (
+              <View
+                style={[
+                  styles.summarySection,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.summarySectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Việc cần theo dõi</Text>
+                {conversationSummary.actionItems.map((item) => (
+                  <View key={item} style={styles.summaryListItem}>
+                    <View style={styles.summaryListDot} />
+                    <Text style={[styles.summaryListText, { color: isDark ? "#cbd5e1" : "#475569" }]}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            <Pressable
+              onPress={() => {
+                void handleSummarizeConversation(summaryScope, unreadSummaryPrompt?.unreadCount);
+              }}
+              disabled={summaryLoading}
+              style={[styles.primaryButton, summaryLoading ? styles.primaryButtonDisabled : null]}
+            >
+              <Text style={styles.primaryButtonText}>Tạo lại tóm tắt</Text>
+            </Pressable>
+          </ScrollView>
+        </OverlayModal>
 
         <OverlayModal
           visible={showMessageSearch}
@@ -3091,6 +3339,69 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     paddingHorizontal: 4,
   },
+  unreadSummaryBanner: {
+    marginHorizontal: 14,
+    marginTop: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    gap: 12,
+  },
+  unreadSummaryBannerLead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  unreadSummaryBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  unreadSummaryTextWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  unreadSummaryTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  unreadSummaryDescription: {
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  unreadSummaryActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  unreadSummaryPrimaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 14,
+    backgroundColor: "#7c3aed",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  unreadSummaryPrimaryText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  unreadSummarySecondaryButton: {
+    minHeight: 42,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  unreadSummarySecondaryText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   messageListContent: { paddingHorizontal: 14, paddingBottom: 24 },
   loadingMore: { paddingVertical: 10, alignItems: "center" },
   emptyMessages: {
@@ -3267,6 +3578,47 @@ const styles = StyleSheet.create({
   modalSectionTitle: { fontSize: 15, fontWeight: "800" },
   modalSecondarySection: { marginTop: 8 },
   emptyModalText: { fontSize: 14, lineHeight: 20 },
+  summaryCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  summaryText: {
+    fontSize: 14,
+    lineHeight: 22,
+  },
+  summaryMeta: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+  summarySection: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16,
+    gap: 10,
+  },
+  summarySectionTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  summaryListItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  summaryListDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "#8b5cf6",
+    marginTop: 7,
+  },
+  summaryListText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 21,
+  },
   joinGroupTabRow: {
     flexDirection: "row",
     borderWidth: 1,
@@ -3326,6 +3678,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   primaryButtonText: { color: "#ffffff", fontSize: 14, fontWeight: "800" },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
   secondaryButton: {
     flex: 1,
     minHeight: 42,

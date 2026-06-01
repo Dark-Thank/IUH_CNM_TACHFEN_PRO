@@ -1,7 +1,9 @@
 import { useChatStore } from "@/stores/useChatStore";
-import { AlertCircle, ChevronDown } from "lucide-react";
+import type { ConversationSummary } from "@/types/chat";
+import { AlertCircle, ChevronDown, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import InfiniteScroll from "react-infinite-scroll-component";
+import { Button } from "../ui/button";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
 import MessageItem from "./MessageItem";
 import PinnedSection from "./PinnedSection";
@@ -14,6 +16,13 @@ type Props = {
     focusRequestKey?: number;
     searchQuery?: string;
     highlightedMessageId?: string | null;
+    unreadSummaryPrompt?: {
+        unreadCount: number;
+        summaryLoading: boolean;
+        summary: ConversationSummary | null;
+        onSummarize: () => void;
+        onDismiss: () => void;
+    } | null;
 };
 
 const ChatWindowBody = ({
@@ -22,6 +31,7 @@ const ChatWindowBody = ({
     focusRequestKey = 0,
     searchQuery = "",
     highlightedMessageId = null,
+    unreadSummaryPrompt = null,
 }: Props) => {
     const {
         activeConversationId,
@@ -166,6 +176,84 @@ const ChatWindowBody = ({
                     pinnedMessages={pinnedMessages}
                     onJump={scrollToMessage}
                 />
+            )}
+            {unreadSummaryPrompt && (
+                <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                                <Sparkles className="size-4 text-primary" />
+                                Có {unreadSummaryPrompt.unreadCount} tin nhắn chưa đọc
+                            </div>
+
+                            {!unreadSummaryPrompt.summary && !unreadSummaryPrompt.summaryLoading && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Bạn có thể tóm tắt nhanh đoạn chat chưa đọc trước khi xem chi tiết.
+                                </p>
+                            )}
+
+                            {unreadSummaryPrompt.summaryLoading && (
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Groq đang tóm tắt phần tin nhắn chưa đọc...
+                                </p>
+                            )}
+
+                            {unreadSummaryPrompt.summary && (
+                                <div className="mt-3 rounded-xl bg-background/70 px-3 py-3">
+                                    <p className="text-sm font-medium text-foreground">Tóm tắt nhanh</p>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                                        {unreadSummaryPrompt.summary.summary}
+                                    </p>
+
+                                    {unreadSummaryPrompt.summary.bullets.length > 0 && (
+                                        <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+                                            {unreadSummaryPrompt.summary.bullets.map((bullet) => (
+                                                <li key={bullet} className="flex gap-2">
+                                                    <span className="mt-1 size-1.5 shrink-0 rounded-full bg-primary" />
+                                                    <span>{bullet}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {!unreadSummaryPrompt.summary && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        className="rounded-2xl"
+                                        onClick={unreadSummaryPrompt.onSummarize}
+                                        disabled={unreadSummaryPrompt.summaryLoading}
+                                    >
+                                        Tóm tắt đoạn chưa đọc
+                                    </Button>
+                                )}
+
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant={unreadSummaryPrompt.summary ? "default" : "outline"}
+                                    className="rounded-2xl"
+                                    onClick={unreadSummaryPrompt.onDismiss}
+                                    disabled={unreadSummaryPrompt.summaryLoading}
+                                >
+                                    {unreadSummaryPrompt.summary ? "Đã hiểu" : "Bỏ qua"}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={unreadSummaryPrompt.onDismiss}
+                            className="inline-flex size-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-background/70 hover:text-foreground"
+                            aria-label="Đóng gợi ý tóm tắt"
+                        >
+                            <X className="size-4" />
+                        </button>
+                    </div>
+                </div>
             )}
             {isBlocked && (
                 <div className="mb-3 px-4 py-2 bg-warning/10 border border-warning/30 rounded text-warning text-sm flex items-center gap-2">
