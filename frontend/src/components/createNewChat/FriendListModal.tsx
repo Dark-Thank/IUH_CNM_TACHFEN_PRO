@@ -23,8 +23,11 @@ interface FriendListModalProps {
 
 const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
   const { friends, removeFriend } = useFriendStore();
-  const { createConversation } = useChatStore();
-  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+const {
+  createConversation,
+  setActiveConversation,
+  fetchMessages,
+} = useChatStore();  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
   const [blockedUsers, setBlockedUsers] = useState<Set<string>>(new Set());
   // const [allBlockedUsers, setAllBlockedUsers] = useState<Friend[]>([]);
   const [activeTab, setActiveTab] = useState("friends");
@@ -49,15 +52,36 @@ const FriendListModal = ({ onSelectFriend, onClose }: FriendListModalProps) => {
   }
 }, [friends]);
 
-  const handleAddConversation = async (friendId: string) => {
-    // Check if friend is blocked before allowing conversation
-    if (blockedUsers.has(friendId)) {
-      alert("Bạn không thể nhắn tin với người dùng này vì đã bị chặn");
-      return;
-    }
-    await createConversation("direct", "", [friendId]);
+const handleAddConversation = async (friendId: string) => {
+  // Check if friend is blocked before allowing conversation
+  if (blockedUsers.has(friendId)) {
+    alert("Bạn không thể nhắn tin với người dùng này vì đã bị chặn");
+    return;
+  }
+
+  try {
+    // tạo hoặc lấy conversation cũ
+    const conversation = await createConversation(
+      "direct",
+      "",
+      [friendId]
+    );
+
+    if (!conversation) return;
+
+    // set conversation active
+    setActiveConversation(conversation._id);
+
+    // load lịch sử tin nhắn
+    await fetchMessages(conversation._id);
+
+    // đóng modal
     onClose?.();
-  };
+
+  } catch (error) {
+    console.error("Lỗi tạo cuộc trò chuyện:", error);
+  }
+};
 
   const handleRemoveFriend = async (friendId: string, displayName: string) => {
     const confirmed = window.confirm(`Xác nhận xóa bạn ${displayName}?`);

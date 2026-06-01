@@ -102,12 +102,15 @@ function AddFriendModal({ trigger, triggerClassName }: AddFriendModalProps) {
         )}
       </DialogTrigger>
 
-      <DialogContent className="sm:max-w-md border-none">
+      <DialogContent
+  className="sm:max-w-md border-none"
+  onClick={(e) => e.stopPropagation()}
+>
         <DialogHeader>
           <DialogTitle>Kết Bạn</DialogTitle>
         </DialogHeader>
 
-        {!isFound && (
+        {isFound !== true && (
           <>
             <SearchForm
               register={register}
@@ -122,7 +125,7 @@ function AddFriendModal({ trigger, triggerClassName }: AddFriendModalProps) {
           </>
         )}
 
-        {isFound && (
+        {isFound === true && (
           <>
             <SendFriendRequestForm
               register={register}

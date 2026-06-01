@@ -146,7 +146,9 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { loading, createConversation, updateConversation } = useChatStore();
   const open = controlledOpen ?? uncontrolledOpen;
-
+  useEffect(() => {
+    void getFriends();
+  }, []);
   const avatarPreviewUrl = useMemo(
     () => (groupAvatarFile ? URL.createObjectURL(groupAvatarFile) : null),
     [groupAvatarFile]
@@ -330,10 +332,6 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (nextOpen) {
-          void getFriends();
-        }
-
         setOpen(nextOpen);
 
         if (!nextOpen) {
