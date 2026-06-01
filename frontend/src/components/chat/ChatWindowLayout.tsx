@@ -1,10 +1,11 @@
 import { chatService } from "@/services/chatServiec";
 import { friendService } from "@/services/friendService";
+import { chatAiService } from "@/services/chatAiService";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
 import type { ConversationSummary } from "@/types/chat";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
@@ -17,6 +18,120 @@ import CreateGroupAppointmentDialog from "./CreateGroupAppointmentDialog";
 import CreateGroupPollDialog from "./CreateGroupPollDialog";
 import MessageInput from "./MessageInput";
 import UserAvatar from "./UserAvatar";
+import type { Message } from "@/types/chat";
+
+const AUTO_TRANSLATE_LANGUAGE_STORAGE_KEY = "chat-ai-translate-language-v4";
+
+type SmartReplyCacheItem = {
+  latestMessageId: string;
+  suggestions: string[];
+};
+
+type LanguageCacheItem = {
+  language: string;
+  latestOwnMessageId: string;
+};
+
+const readStoredRecord = <T,>(key: string): Record<string, T> => {
+  if (typeof window === "undefined") {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const normalizeComparableText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+const isUnknownLanguage = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+
+  return !normalized ||
+    normalized === "unknown" ||
+    normalized === "undetermined" ||
+    normalized.includes("cannot determine") ||
+    normalized.includes("khong xac dinh") ||
+    normalized.includes("không xác định");
+};
+
+const looksVietnamese = (value: string) => {
+  const normalized = normalizeComparableText(value);
+  const vietnameseWordPattern = /\b(chao|xin|ban|toi|minh|khong|khoe|dang|hoc|truong|hom|nay|cung|on|lam|gi|the|nao|cam|on|nhe)\b/i;
+
+  return /[ăâđêôơưáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i.test(value) ||
+    vietnameseWordPattern.test(normalized);
+};
+
+const getFallbackTargetLanguage = (sourceText: string) =>
+  looksVietnamese(sourceText) ? "English" : "Vietnamese";
+
+const detectLocalLanguage = (value: string) => {
+  const normalized = normalizeComparableText(value);
+
+  if (/[\u4E00-\u9FFF]/.test(value)) {
+    return "Chinese";
+  }
+
+  if (looksVietnamese(value)) {
+    return "Vietnamese";
+  }
+
+  if (/\b(hello|hi|what|when|where|why|how|can|you|your|are|is|am|i|me|my|doing|feel|about|lesson|today|hear|good|thanks|thank)\b/i.test(normalized)) {
+    return "English";
+  }
+
+  const latinLetters = normalized.match(/[a-z]/g)?.length ?? 0;
+
+  if (latinLetters >= 3) {
+    return "English";
+  }
+
+  return "";
+};
+
+const detectRecentOwnLanguage = (messages: Message[]) => {
+  const scores: Record<string, number> = {};
+
+  messages.slice(-5).forEach((message, index, recentMessages) => {
+    const language = detectLocalLanguage(message.content ?? "");
+
+    if (!language) {
+      return;
+    }
+
+    scores[language] = (scores[language] ?? 0) + index + 1 + recentMessages.length;
+  });
+
+  if (Object.keys(scores).length >= 2) {
+    return "English";
+  }
+
+  return Object.entries(scores).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "";
+};
+
+const getSenderId = (message: Message) => {
+  const sender = message.senderId as unknown;
+
+  if (typeof sender === "string") {
+    return sender;
+  }
+
+  if (sender && typeof sender === "object" && "_id" in sender) {
+    return String((sender as { _id?: string })._id ?? "");
+  }
+
+  return "";
+};
 
 const TypingIndicatorBubble = ({
   displayName,
@@ -75,6 +190,14 @@ const ChatWindowLayout = () => {
     summaryLoading: boolean;
     summary: ConversationSummary | null;
   } | null>(null);
+  const [smartReplyCache, setSmartReplyCache] = useState<Record<string, SmartReplyCacheItem>>({});
+  const [smartReplyLoadingConversationId, setSmartReplyLoadingConversationId] = useState<string | null>(null);
+  const [languageByConversation, setLanguageByConversation] = useState<Record<string, LanguageCacheItem>>(
+    () => readStoredRecord<LanguageCacheItem>(AUTO_TRANSLATE_LANGUAGE_STORAGE_KEY)
+  );
+  const [translationsByConversation, setTranslationsByConversation] = useState<Record<string, Record<string, string>>>({});
+  const [translatingByConversation, setTranslatingByConversation] = useState<Record<string, string[]>>({});
+  const smartReplyRequestKeyRef = useRef("");
 
   const selectedConvo = conversations.find((c) => c._id === activeConversationId) ?? null;
   const typingUsers = useMemo(
@@ -84,6 +207,31 @@ const ChatWindowLayout = () => {
   const messageItems = useMemo(
     () => messages[activeConversationId ?? ""]?.items ?? [],
     [activeConversationId, messages]
+  );
+  const latestMessage = messageItems[messageItems.length - 1] ?? null;
+  const activeTranslations = activeConversationId
+    ? translationsByConversation[activeConversationId] ?? {}
+    : {};
+  const translatingMessageIds = useMemo(
+    () => new Set(activeConversationId ? translatingByConversation[activeConversationId] ?? [] : []),
+    [activeConversationId, translatingByConversation]
+  );
+  const activeSmartReplyCache = activeConversationId ? smartReplyCache[activeConversationId] : undefined;
+  const activeSmartReplies = activeConversationId &&
+    latestMessage &&
+    !latestMessage.isOwn &&
+    activeSmartReplyCache?.latestMessageId === latestMessage._id
+    ? activeSmartReplyCache.suggestions
+    : [];
+  const smartReplyLoading = Boolean(
+    activeConversationId && smartReplyLoadingConversationId === activeConversationId
+  );
+  const canRequestSmartReplies = Boolean(
+    activeConversationId &&
+    latestMessage &&
+    !latestMessage.isOwn &&
+    typeof latestMessage.content === "string" &&
+    latestMessage.content.trim()
   );
 
   useEffect(() => {
@@ -151,6 +299,13 @@ const ChatWindowLayout = () => {
   }, [activeConversationId]);
 
   useEffect(() => {
+    window.localStorage.setItem(
+      AUTO_TRANSLATE_LANGUAGE_STORAGE_KEY,
+      JSON.stringify(languageByConversation)
+    );
+  }, [languageByConversation]);
+
+  useEffect(() => {
     if (rightPanelMode !== "attachments" || !selectedConvo || loading) {
       return;
     }
@@ -205,6 +360,178 @@ const ChatWindowLayout = () => {
       cancelled = true;
     };
   }, [fetchMessages, rightPanelMode, selectedConvo]);
+
+  const handleRequestSmartReplies = async () => {
+    if (!activeConversationId || !latestMessage || latestMessage.isOwn || !latestMessage.content?.trim()) {
+      return;
+    }
+
+    const cached = smartReplyCache[activeConversationId];
+    if (cached?.latestMessageId === latestMessage._id) {
+      return;
+    }
+
+    const contextMessages = messageItems
+      .filter((message) => !message.isRecalled && typeof message.content === "string" && message.content.trim())
+      .slice(-5)
+      .map((message) => ({
+        isOwn: Boolean(message.isOwn),
+        content: message.content!.trim(),
+      }));
+
+    if (contextMessages.length === 0) {
+      toast.error("Khong co noi dung hop le de tao goi y.");
+      return;
+    }
+
+    const requestKey = `${activeConversationId}:${latestMessage._id}`;
+    smartReplyRequestKeyRef.current = requestKey;
+
+    try {
+      setSmartReplyLoadingConversationId(activeConversationId);
+      const suggestions = await chatAiService.getSmartReplies(activeConversationId, contextMessages);
+
+      if (smartReplyRequestKeyRef.current !== requestKey) {
+        return;
+      }
+
+      setSmartReplyCache((current) => ({
+        ...current,
+        [activeConversationId]: {
+          latestMessageId: latestMessage._id,
+          suggestions,
+        },
+      }));
+    } catch (error: any) {
+      console.error("Khong the tao goi y tra loi AI:", error);
+      toast.error(error.response?.data?.message || "Khong the tao goi y tra loi luc nay.");
+    } finally {
+      if (smartReplyRequestKeyRef.current === requestKey) {
+        setSmartReplyLoadingConversationId(null);
+      }
+    }
+  };
+
+  const handleTranslateMessage = async (message: Message) => {
+    if (!activeConversationId || !message.content?.trim() || message.isOwn) {
+      return;
+    }
+
+    if (activeTranslations[message._id]) {
+      return;
+    }
+
+    const currentTranslating = translatingByConversation[activeConversationId] ?? [];
+    if (currentTranslating.includes(message._id)) {
+      return;
+    }
+
+    const setMessageTranslating = (isTranslating: boolean) => {
+      setTranslatingByConversation((current) => {
+        const currentIds = current[activeConversationId] ?? [];
+
+        return {
+          ...current,
+          [activeConversationId]: isTranslating
+            ? Array.from(new Set([...currentIds, message._id]))
+            : currentIds.filter((id) => id !== message._id),
+        };
+      });
+    };
+
+    try {
+      setMessageTranslating(true);
+
+      const ownTextMessages = messageItems
+        .filter((item) =>
+          (item.isOwn || getSenderId(item) === user?._id) &&
+          typeof item.content === "string" &&
+          item.content.trim()
+        )
+        .slice(-5);
+      const latestOwnMessageId = ownTextMessages[ownTextMessages.length - 1]?._id ?? "";
+      const cachedLanguage = languageByConversation[activeConversationId];
+      const localLanguage = detectRecentOwnLanguage(ownTextMessages);
+      let targetLanguage = localLanguage ||
+        (cachedLanguage?.latestOwnMessageId === latestOwnMessageId
+        ? cachedLanguage.language
+        : "");
+
+      if (!targetLanguage) {
+        const userMessages = ownTextMessages
+          .slice(-10)
+          .map((item) => item.content!.trim());
+
+        if (userMessages.length === 0) {
+          toast.error("Chua co tin nhan cua ban de xac dinh ngon ngu dich.");
+          return;
+        }
+
+        targetLanguage = (await chatAiService.detectLanguage(activeConversationId, userMessages)).trim();
+
+        if (isUnknownLanguage(targetLanguage)) {
+          targetLanguage = getFallbackTargetLanguage(message.content);
+        }
+
+        setLanguageByConversation((current) => ({
+          ...current,
+          [activeConversationId]: {
+            language: targetLanguage,
+            latestOwnMessageId,
+          },
+        }));
+      }
+
+      if (isUnknownLanguage(targetLanguage)) {
+        targetLanguage = getFallbackTargetLanguage(message.content);
+      }
+
+      if (localLanguage && cachedLanguage?.language !== localLanguage) {
+        setLanguageByConversation((current) => ({
+          ...current,
+          [activeConversationId]: {
+            language: localLanguage,
+            latestOwnMessageId,
+          },
+        }));
+      }
+
+      const translationResult = await chatAiService.translateMessage(
+        activeConversationId,
+        message.content.trim(),
+        targetLanguage
+      );
+      const translatedText = translationResult.translatedText?.trim() ?? "";
+
+      if (translationResult.sameLanguage) {
+        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        return;
+      }
+
+      if (normalizeComparableText(translatedText) === normalizeComparableText(message.content)) {
+        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        return;
+      }
+
+      if (!translatedText) {
+        toast.error("Gemini khong tra ve ban dich.");
+        return;
+      }
+
+      setTranslationsByConversation((current) => ({
+        ...current,
+        [activeConversationId]: {
+          ...(current[activeConversationId] ?? {}),
+          [message._id]: translatedText,
+        },
+      }));
+    } catch (error: any) {
+      console.error("Khong the dich tin nhan:", error);
+      toast.error(error.response?.data?.message || "Khong the dich tin nhan luc nay.");
+    } finally {
+      setMessageTranslating(false);
+    }
+  };
 
   if (!selectedConvo) {
     return <ChatWelcomeScreen />;
@@ -300,6 +627,9 @@ const ChatWindowLayout = () => {
                   }
                   : null
               }
+              translations={activeTranslations}
+              translatingMessageIds={translatingMessageIds}
+              onTranslateMessage={(message) => void handleTranslateMessage(message)}
             />
           </div>
 
@@ -321,6 +651,10 @@ const ChatWindowLayout = () => {
                   <CreateGroupAppointmentDialog conversationId={selectedConvo._id} disabled={isBlocked} />
                 </>
               ) : null}
+              smartReplies={activeSmartReplies}
+              smartReplyLoading={smartReplyLoading}
+              canRequestSmartReplies={canRequestSmartReplies}
+              onRequestSmartReplies={() => void handleRequestSmartReplies()}
             />
           </div>
         </div>

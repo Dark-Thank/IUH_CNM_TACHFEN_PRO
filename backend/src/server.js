@@ -9,6 +9,7 @@ import { app, initializeSocketInfrastructure, server } from "./socket/index.js";
 import { connectDB } from "./libs/db.js";
 import { protectedRoute } from "./middlewares/authMiddleware.js";
 import authRoute from "./routes/authRoute.js";
+import chatAiRoute from "./routes/chatAiRoute.js";
 import conversationRoute from "./routes/conversationRoute.js";
 import friendRoute from "./routes/friendRoute.js";
 import messageRoute from "./routes/messageRoute.js";
@@ -49,6 +50,7 @@ app.use("/api/auth", authRoute);
 app.use(protectedRoute);
 app.use("/api/users", userRoute);
 app.use("/api/friends", friendRoute);
+app.use("/api/chat-ai", chatAiRoute);
 app.use("/api/messages", messageRoute);
 app.use("/api/conversations", conversationRoute);
 
