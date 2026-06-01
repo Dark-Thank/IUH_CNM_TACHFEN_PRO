@@ -750,7 +750,7 @@ const MessageInput = ({
 
                 {/* SEND */}
                 <Button
-                    onClick={sendMessage}
+                    onClick={() => void sendMessage()}
                     disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive}
                 >
                     <Send className="size-4 text-white" />

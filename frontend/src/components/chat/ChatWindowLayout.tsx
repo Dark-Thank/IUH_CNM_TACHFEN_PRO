@@ -208,7 +208,6 @@ const ChatWindowLayout = () => {
     () => messages[activeConversationId ?? ""]?.items ?? [],
     [activeConversationId, messages]
   );
-  const latestMessage = messageItems[messageItems.length - 1] ?? null;
   const latestReplyableMessage = useMemo(
     () => [...messageItems].reverse().find((message) => {
       if (message.isOwn || message.isRecalled) {
