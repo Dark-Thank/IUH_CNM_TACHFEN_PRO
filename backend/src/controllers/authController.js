@@ -3,10 +3,138 @@ import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import Session from "../models/Session.js";
+import LoginAttempt from "../models/LoginAttempt.js";
 import { sendEmail } from "../utils/emailService.js";
 
 const ACCESS_TOKEN_TTL = "15m"; // thuờng là dưới 15m
 const REFRESH_TOKEN_TTL = 14 * 24 * 60 * 60 * 1000; // 14 ngày
+const LOGIN_ATTEMPT_POLICY = {
+  1: {
+    maxAttempts: 5,
+    lockMs: 5 * 60 * 1000,
+  },
+  2: {
+    maxAttempts: 3,
+    lockMs: 30 * 60 * 1000,
+  },
+};
+
+const normalizeLoginIdentifier = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
+const getClientIp = (req) => {
+  const forwardedFor = req.headers["x-forwarded-for"];
+
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return req.ip || req.socket?.remoteAddress || "unknown";
+};
+
+const buildLockMessage = (stage, retryAfterSeconds) => {
+  const retryAfterMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+
+  if (stage === 1) {
+    return `Bạn đã nhập sai quá 5 lần. Vui lòng thử lại sau ${retryAfterMinutes} phút.`;
+  }
+
+  return `Bạn đã nhập sai quá 3 lần sau thời gian mở khóa. Vui lòng thử lại sau ${retryAfterMinutes} phút.`;
+};
+
+const clearExpiredLockIfNeeded = async (attempt) => {
+  if (!attempt?.lockedUntil || attempt.lockedUntil > new Date()) {
+    return attempt;
+  }
+
+  if (attempt.stage === 1) {
+    attempt.stage = 2;
+  } else {
+    attempt.stage = 1;
+  }
+
+  attempt.failureCount = 0;
+  attempt.lockedUntil = null;
+  attempt.lastFailedAt = null;
+  await attempt.save();
+  return attempt;
+};
+
+const getActiveLockPayload = (attempt) => {
+  if (!attempt?.lockedUntil) {
+    return null;
+  }
+
+  const retryAfterMs = attempt.lockedUntil.getTime() - Date.now();
+
+  if (retryAfterMs <= 0) {
+    return null;
+  }
+
+  const retryAfterSeconds = Math.ceil(retryAfterMs / 1000);
+  return {
+    retryAfterSeconds,
+    lockedUntil: attempt.lockedUntil,
+    message: buildLockMessage(attempt.stage, retryAfterSeconds),
+  };
+};
+
+const registerFailedSignIn = async ({ identifier, ipAddress }) => {
+  let attempt = await LoginAttempt.findOne({ identifier, ipAddress });
+  attempt = await clearExpiredLockIfNeeded(attempt);
+
+  if (!attempt) {
+    attempt = await LoginAttempt.create({
+      identifier,
+      ipAddress,
+      stage: 1,
+      failureCount: 0,
+    });
+  }
+
+  const stageConfig = LOGIN_ATTEMPT_POLICY[attempt.stage] || LOGIN_ATTEMPT_POLICY[1];
+  attempt.failureCount += 1;
+  attempt.lastFailedAt = new Date();
+
+  if (attempt.failureCount >= stageConfig.maxAttempts) {
+    attempt.lockedUntil = new Date(Date.now() + stageConfig.lockMs);
+    await attempt.save();
+
+    const retryAfterSeconds = Math.ceil(stageConfig.lockMs / 1000);
+    return {
+      status: 429,
+      body: {
+        message: buildLockMessage(attempt.stage, retryAfterSeconds),
+        retryAfterSeconds,
+        lockedUntil: attempt.lockedUntil,
+      },
+    };
+  }
+
+  await attempt.save();
+
+  const remainingAttempts = stageConfig.maxAttempts - attempt.failureCount;
+  const warningMessage = attempt.stage === 1
+    ? `Bạn còn ${remainingAttempts} lần đăng nhập, vui lòng nhập đúng tài khoản và mật khẩu.`
+    : `Bạn còn ${remainingAttempts} lần đăng nhập trước khi bị khóa 30 phút, vui lòng nhập đúng tài khoản và mật khẩu.`;
+
+  return {
+    status: 401,
+    body: {
+      message: warningMessage,
+      remainingAttempts,
+      stage: attempt.stage,
+    },
+  };
+};
+
+const clearSignInAttempts = async ({ identifier, ipAddress }) => {
+  if (!identifier) {
+    return;
+  }
+
+  await LoginAttempt.deleteOne({ identifier, ipAddress });
+};
 
 export const signUp = async (req, res) => {
   try {
@@ -66,28 +194,38 @@ export const signIn = async (req, res) => {
   try {
     // lấy inputs
     const { username, password } = req.body;
+    const identifier = normalizeLoginIdentifier(username);
+    const ipAddress = getClientIp(req);
 
     if (!username || !password) {
       return res.status(400).json({ message: "Thiếu username hoặc password." });
     }
 
+    let existingAttempt = await LoginAttempt.findOne({ identifier, ipAddress });
+    existingAttempt = await clearExpiredLockIfNeeded(existingAttempt);
+
+    const activeLock = getActiveLockPayload(existingAttempt);
+    if (activeLock) {
+      return res.status(429).json(activeLock);
+    }
+
     // lấy hashedPassword trong db để so với password input
-    const user = await User.findOne({ username });
+    const user = await User.findOne({ username: identifier });
 
     if (!user) {
-      return res
-        .status(401)
-        .json({ message: "username hoặc password không chính xác" });
+      const failedAttempt = await registerFailedSignIn({ identifier, ipAddress });
+      return res.status(failedAttempt.status).json(failedAttempt.body);
     }
 
     // kiểm tra password
     const passwordCorrect = await bcrypt.compare(password, user.hashedPassword);
 
     if (!passwordCorrect) {
-      return res
-        .status(401)
-        .json({ message: "username hoặc password không chính xác" });
+      const failedAttempt = await registerFailedSignIn({ identifier, ipAddress });
+      return res.status(failedAttempt.status).json(failedAttempt.body);
     }
+
+    await clearSignInAttempts({ identifier, ipAddress });
 
     // nếu khớp, tạo OTP và gửi qua email — chỉ cấp token sau khi xác thực OTP
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();

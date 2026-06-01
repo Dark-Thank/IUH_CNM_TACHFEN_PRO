@@ -209,6 +209,16 @@ const ChatWindowLayout = () => {
     [activeConversationId, messages]
   );
   const latestMessage = messageItems[messageItems.length - 1] ?? null;
+  const latestReplyableMessage = useMemo(
+    () => [...messageItems].reverse().find((message) => {
+      if (message.isOwn || message.isRecalled) {
+        return false;
+      }
+
+      return typeof message.content === "string" && Boolean(message.content.trim());
+    }) ?? null,
+    [messageItems]
+  );
   const activeTranslations = activeConversationId
     ? translationsByConversation[activeConversationId] ?? {}
     : {};
@@ -218,9 +228,8 @@ const ChatWindowLayout = () => {
   );
   const activeSmartReplyCache = activeConversationId ? smartReplyCache[activeConversationId] : undefined;
   const activeSmartReplies = activeConversationId &&
-    latestMessage &&
-    !latestMessage.isOwn &&
-    activeSmartReplyCache?.latestMessageId === latestMessage._id
+    latestReplyableMessage &&
+    activeSmartReplyCache?.latestMessageId === latestReplyableMessage._id
     ? activeSmartReplyCache.suggestions
     : [];
   const smartReplyLoading = Boolean(
@@ -228,10 +237,7 @@ const ChatWindowLayout = () => {
   );
   const canRequestSmartReplies = Boolean(
     activeConversationId &&
-    latestMessage &&
-    !latestMessage.isOwn &&
-    typeof latestMessage.content === "string" &&
-    latestMessage.content.trim()
+    latestReplyableMessage
   );
 
   useEffect(() => {
@@ -315,7 +321,7 @@ const ChatWindowLayout = () => {
     }
 
     void fetchMessages(selectedConvo._id).catch((error) => {
-      console.error("Khong the tai them attachment trong cuoc tro chuyen:", error);
+      console.error("Không thể tải thêm tệp đính kèm trong cuộc trò chuyện:", error);
     });
   }, [fetchMessages, loading, messages, rightPanelMode, selectedConvo]);
 
@@ -346,7 +352,7 @@ const ChatWindowLayout = () => {
           }
         }
       } catch (error) {
-        console.error("Khong the tai lich su de tim kiem:", error);
+        console.error("Không thể tải lịch sử để tìm kiếm:", error);
       } finally {
         if (!cancelled) {
           setSearchLoadingHistory(false);
@@ -362,12 +368,12 @@ const ChatWindowLayout = () => {
   }, [fetchMessages, rightPanelMode, selectedConvo]);
 
   const handleRequestSmartReplies = async () => {
-    if (!activeConversationId || !latestMessage || latestMessage.isOwn || !latestMessage.content?.trim()) {
+    if (!activeConversationId || !latestReplyableMessage?.content?.trim()) {
       return;
     }
 
     const cached = smartReplyCache[activeConversationId];
-    if (cached?.latestMessageId === latestMessage._id) {
+    if (cached?.latestMessageId === latestReplyableMessage._id) {
       return;
     }
 
@@ -380,11 +386,11 @@ const ChatWindowLayout = () => {
       }));
 
     if (contextMessages.length === 0) {
-      toast.error("Khong co noi dung hop le de tao goi y.");
+      toast.error("Không có nội dung hợp lệ để tạo gợi ý.");
       return;
     }
 
-    const requestKey = `${activeConversationId}:${latestMessage._id}`;
+    const requestKey = `${activeConversationId}:${latestReplyableMessage._id}`;
     smartReplyRequestKeyRef.current = requestKey;
 
     try {
@@ -398,18 +404,34 @@ const ChatWindowLayout = () => {
       setSmartReplyCache((current) => ({
         ...current,
         [activeConversationId]: {
-          latestMessageId: latestMessage._id,
+          latestMessageId: latestReplyableMessage._id,
           suggestions,
         },
       }));
     } catch (error: any) {
-      console.error("Khong the tao goi y tra loi AI:", error);
-      toast.error(error.response?.data?.message || "Khong the tao goi y tra loi luc nay.");
+      console.error("Không thể tạo gợi ý trả lời AI:", error);
+      toast.error(error.response?.data?.message || "Không thể tạo gợi ý trả lời lúc này.");
     } finally {
       if (smartReplyRequestKeyRef.current === requestKey) {
         setSmartReplyLoadingConversationId(null);
       }
     }
+  };
+
+  const handleConsumeSmartReplies = () => {
+    if (!activeConversationId) {
+      return;
+    }
+
+    setSmartReplyCache((current) => {
+      if (!(activeConversationId in current)) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[activeConversationId];
+      return next;
+    });
   };
 
   const handleTranslateMessage = async (message: Message) => {
@@ -463,7 +485,7 @@ const ChatWindowLayout = () => {
           .map((item) => item.content!.trim());
 
         if (userMessages.length === 0) {
-          toast.error("Chua co tin nhan cua ban de xac dinh ngon ngu dich.");
+          toast.error("Chưa có tin nhắn của bạn để xác định ngôn ngữ dịch.");
           return;
         }
 
@@ -504,17 +526,17 @@ const ChatWindowLayout = () => {
       const translatedText = translationResult.translatedText?.trim() ?? "";
 
       if (translationResult.sameLanguage) {
-        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        toast.info("Tin nhắn này đã cùng ngôn ngữ với bạn.");
         return;
       }
 
       if (normalizeComparableText(translatedText) === normalizeComparableText(message.content)) {
-        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        toast.info("Tin nhắn này đã cùng ngôn ngữ với bạn.");
         return;
       }
 
       if (!translatedText) {
-        toast.error("Gemini khong tra ve ban dich.");
+        toast.error("Gemini không trả về bản dịch.");
         return;
       }
 
@@ -526,8 +548,8 @@ const ChatWindowLayout = () => {
         },
       }));
     } catch (error: any) {
-      console.error("Khong the dich tin nhan:", error);
-      toast.error(error.response?.data?.message || "Khong the dich tin nhan luc nay.");
+      console.error("Không thể dịch tin nhắn:", error);
+      toast.error(error.response?.data?.message || "Không thể dịch tin nhắn lúc này.");
     } finally {
       setMessageTranslating(false);
     }
@@ -655,6 +677,7 @@ const ChatWindowLayout = () => {
               smartReplyLoading={smartReplyLoading}
               canRequestSmartReplies={canRequestSmartReplies}
               onRequestSmartReplies={() => void handleRequestSmartReplies()}
+              onSmartReplyConsumed={handleConsumeSmartReplies}
             />
           </div>
         </div>

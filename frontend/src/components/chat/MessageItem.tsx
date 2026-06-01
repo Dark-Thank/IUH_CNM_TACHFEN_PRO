@@ -703,7 +703,7 @@ const MessageItem = ({
                         "border-t border-current/10 pt-1 text-xs leading-relaxed wrap-break-word",
                         isOwn ? "text-primary-foreground/75" : "text-muted-foreground"
                       )}>
-                        {translation || "Dang dich..."}
+                        {translation || "Đang dịch..."}
                       </p>
                     )}
                   </div>
@@ -776,7 +776,7 @@ const MessageItem = ({
 
               {canTranslate && (
                 <DropdownMenuItem onClick={() => onTranslateMessage?.(message)}>
-                  {translation ? "Dich lai tin nhan" : "Dich tin nhan"}
+                  {translation ? "Dịch lại tin nhắn" : "Dịch tin nhắn"}
                 </DropdownMenuItem>
               )}
 

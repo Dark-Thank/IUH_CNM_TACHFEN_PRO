@@ -70,7 +70,8 @@ export const useAuthStore = create<AuthState>()(
         toast.success("Đã gửi mã OTP tới email. Vui lòng kiểm tra email.");
       } catch (error) {
         console.error(error);
-        toast.error("Đăng nhập không thành công!");
+        const msg = (error as ServiceError)?.response?.data?.message || "Đăng nhập không thành công!";
+        toast.error(msg);
         throw error;
       } finally {
         set({ loading: false });

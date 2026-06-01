@@ -203,7 +203,7 @@ export default function ChatCard({
             ]}
           >
             <Text style={[styles.actionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-              Tuy chon cuoc tro chuyen
+              Tùy chọn cuộc trò chuyện
             </Text>
 
             <Pressable
@@ -221,7 +221,7 @@ export default function ChatCard({
             >
               {conversation.isPinned ? <PinOff size={16} color={isDark ? "#f8fafc" : "#0f172a"} /> : <Pin size={16} color={isDark ? "#f8fafc" : "#0f172a"} />}
               <Text style={[styles.actionButtonText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                {conversation.isPinned ? "Bo ghim cuoc hoi thoai" : "Ghim cuoc hoi thoai"}
+                {conversation.isPinned ? "Bỏ ghim cuộc hội thoại" : "Ghim cuộc hội thoại"}
               </Text>
             </Pressable>
 

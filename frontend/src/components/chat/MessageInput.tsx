@@ -2,7 +2,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useChatStore } from '@/stores/useChatStore';
 import { useSocketStore } from '@/stores/useSocketStore';
 import type { Conversation } from "@/types/chat";
-import { AtSign, ImagePlus, Mic, Paperclip, Send, Sparkles, Square, Trash2 } from 'lucide-react';
+import { AtSign, ImagePlus, Mic, Paperclip, Send, Sparkles, Square, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '../ui/button';
@@ -89,6 +89,7 @@ const MessageInput = ({
     smartReplyLoading = false,
     canRequestSmartReplies = false,
     onRequestSmartReplies,
+    onSmartReplyConsumed,
 }: {
     selectedConvo: Conversation;
     isBlocked: boolean;
@@ -97,6 +98,7 @@ const MessageInput = ({
     smartReplyLoading?: boolean;
     canRequestSmartReplies?: boolean;
     onRequestSmartReplies?: () => void;
+    onSmartReplyConsumed?: () => void;
 }) => {
     const { user } = useAuthStore();
     const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
@@ -408,30 +410,22 @@ const MessageInput = ({
         });
     };
 
-    const handleSelectSmartReply = (reply: string) => {
-        setValue(reply);
-        setSelectionStart(reply.length);
-
-        window.requestAnimationFrame(() => {
-            inputRef.current?.focus();
-            inputRef.current?.setSelectionRange(reply.length, reply.length);
-        });
-    };
-
     if (!user) return null;
 
-    const sendMessage = async () => {
+    const sendMessage = async (contentOverride?: string) => {
         if (voiceCaptureBusyRef.current || isRecording) {
             toast.error("Hãy dừng ghi âm trước khi gửi.");
             return;
         }
 
-        if (!value.trim() && files.length === 0 && !voiceDraft) return;
+        const contentToSend = typeof contentOverride === "string" ? contentOverride : value;
+
+        if (!contentToSend.trim() && files.length === 0 && !voiceDraft) return;
 
         stopTypingIndicator();
 
         const formData = new FormData();
-        formData.append("content", value);
+        formData.append("content", contentToSend);
         if (replyingMessage?._id) {
             formData.append("replyToMessageId", replyingMessage._id);
         }
@@ -463,6 +457,10 @@ const MessageInput = ({
             resetVoiceDraft();
             clearReplyingMessage();
 
+            if (contentOverride) {
+                onSmartReplyConsumed?.();
+            }
+
         } catch (error: any) {
             console.error(error);
             const serverMessage = error.response?.data?.message;
@@ -482,6 +480,10 @@ const MessageInput = ({
         }
     };
 
+    const handleSelectSmartReply = async (reply: string) => {
+        await sendMessage(reply);
+    };
+
     const handleKeyPress = (e: React.KeyboardEvent) => {
         if (e.key === "Enter") {
             e.preventDefault();
@@ -499,21 +501,34 @@ const MessageInput = ({
     return (
         <div className="flex flex-col gap-2 p-3 bg-background">
             {(smartReplyLoading || smartReplies.length > 0) && !isBlocked && (
-                <div className="flex flex-wrap gap-2 border-b border-border/70 pb-2">
-                    {smartReplyLoading ? (
-                        <span className="text-xs text-muted-foreground">Dang tao goi y...</span>
-                    ) : (
-                        smartReplies.map((reply) => (
-                            <button
-                                key={reply}
-                                type="button"
-                                onClick={() => handleSelectSmartReply(reply)}
-                                className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm text-foreground transition hover:bg-primary/10"
-                            >
-                                {reply}
-                            </button>
-                        ))
-                    )}
+                <div className="flex items-start justify-between gap-3 border-b border-border/70 pb-2">
+                    <div className="flex flex-wrap gap-2">
+                        {smartReplyLoading ? (
+                            <span className="text-xs text-muted-foreground">Đang tạo gợi ý...</span>
+                        ) : (
+                            smartReplies.map((reply) => (
+                                <button
+                                    key={reply}
+                                    type="button"
+                                    onClick={() => void handleSelectSmartReply(reply)}
+                                    className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1.5 text-sm text-foreground transition hover:bg-primary/10"
+                                >
+                                    {reply}
+                                </button>
+                            ))
+                        )}
+                    </div>
+
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 shrink-0 rounded-full"
+                        onClick={onSmartReplyConsumed}
+                        title="Tắt gợi ý trả lời AI"
+                    >
+                        <X className="size-4" />
+                    </Button>
                 </div>
             )}
 
@@ -666,7 +681,7 @@ const MessageInput = ({
                         size="icon"
                         disabled={isBlocked || smartReplyLoading}
                         onClick={onRequestSmartReplies}
-                        title="Goi y tra loi bang AI"
+                        title="Gợi ý trả lời bằng AI"
                     >
                         <Sparkles className="size-4" />
                     </Button>
@@ -703,7 +718,7 @@ const MessageInput = ({
                                             {option.label}
                                         </span>
                                         <span className="block truncate text-xs text-muted-foreground">
-                                            {option.type === "all" ? "Tag tat ca thanh vien" : "Thanh vien nhom"}
+                                            {option.type === "all" ? "Tag tất cả thành viên" : "Thành viên nhóm"}
                                         </span>
                                     </span>
                                 </button>

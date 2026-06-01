@@ -722,7 +722,7 @@ export default function MessageInput({
         >
           {smartReplyLoading ? (
             <Text style={[styles.smartReplyStatus, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-              Dang tao goi y...
+              Đang tạo gợi ý...
             </Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -802,7 +802,7 @@ export default function MessageInput({
                     numberOfLines={1}
                     style={[styles.mentionMeta, { color: isDark ? "#94a3b8" : "#64748b" }]}
                   >
-                    {option.type === "all" ? "Tag tat ca thanh vien" : "Thanh vien nhom"}
+                    {option.type === "all" ? "Tag tất cả thành viên" : "Thành viên nhóm"}
                   </Text>
                 </View>
               </Pressable>

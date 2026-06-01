@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Image,
   KeyboardAvoidingView,
@@ -14,7 +15,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomSheetModal, BottomSheetView } from "@gorhom/bottom-sheet";
-import { ChevronRight, LogOut, Moon, Sun, UserRound } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import { Camera, ChevronRight, KeyRound, LogOut, Moon, Sun, UserRound } from "lucide-react-native";
+import { authService } from "@/services/authService";
+import { toast } from "@/lib/toast";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import { useUserStore } from "@/stores/useUserStore";
@@ -25,11 +29,18 @@ export default function SettingsScreen() {
   const accountSheetRef = useRef<BottomSheetModal>(null);
   const { isDark, toggleTheme } = useThemeStore();
   const { user, loading, signOut } = useAuthStore();
-  const { updateProfile, deleteAccount } = useUserStore();
+  const { updateAvatarUrl, updateProfile, deleteAccount } = useUserStore();
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordOtp, setPasswordOtp] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [requestingPasswordChange, setRequestingPasswordChange] = useState(false);
+  const [confirmingPasswordChange, setConfirmingPasswordChange] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [awaitingPasswordOtp, setAwaitingPasswordOtp] = useState(false);
 
   const colors = {
     background: isDark ? "#0f172a" : "#f8fafc",
@@ -45,6 +56,10 @@ export default function SettingsScreen() {
   const syncFormWithUser = () => {
     setDisplayName(user?.displayName || "");
     setBio(user?.bio || "");
+    setCurrentPassword("");
+    setNewPassword("");
+    setPasswordOtp("");
+    setAwaitingPasswordOtp(false);
   };
 
   const openAccountSheet = () => {
@@ -83,6 +98,92 @@ export default function SettingsScreen() {
       console.error("Không thể cập nhật hồ sơ", error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePickAvatar = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+    if (!permission.granted) {
+      toast.info("Cần cấp quyền thư viện ảnh để cập nhật ảnh đại diện.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets.length) {
+      return;
+    }
+
+    const asset = result.assets[0];
+    const formData = new FormData();
+
+    formData.append("file", {
+      uri: asset.uri,
+      name: asset.fileName || `avatar-${Date.now()}.jpg`,
+      type: asset.mimeType || "image/jpeg",
+    } as any);
+
+    setUploadingAvatar(true);
+
+    try {
+      await updateAvatarUrl(formData);
+      toast.success("Đã cập nhật ảnh đại diện.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRequestPasswordChange = async () => {
+    if (!currentPassword.trim() || !newPassword.trim()) {
+      toast.info("Nhập mật khẩu hiện tại và mật khẩu mới trước.");
+      return;
+    }
+
+    setRequestingPasswordChange(true);
+
+    try {
+      await authService.requestChangePassword(currentPassword.trim(), newPassword.trim());
+      setAwaitingPasswordOtp(true);
+      toast.success("Mã OTP đã được gửi tới email của bạn.");
+    } catch (error: any) {
+      console.error("Không thể gửi yêu cầu đổi mật khẩu", error);
+      toast.error(error?.response?.data?.message || "Yêu cầu đổi mật khẩu thất bại.");
+    } finally {
+      setRequestingPasswordChange(false);
+    }
+  };
+
+  const handleConfirmPasswordChange = async () => {
+    if (!user?.email) {
+      toast.error("Không tìm thấy email người dùng.");
+      return;
+    }
+
+    if (!passwordOtp.trim() || !newPassword.trim()) {
+      toast.info("Nhập mã OTP và mật khẩu mới để xác nhận.");
+      return;
+    }
+
+    setConfirmingPasswordChange(true);
+
+    try {
+      await authService.resetPassword(user.email, passwordOtp.trim(), newPassword.trim());
+      setCurrentPassword("");
+      setNewPassword("");
+      setPasswordOtp("");
+      setAwaitingPasswordOtp(false);
+      toast.success("Đổi mật khẩu thành công.");
+    } catch (error: any) {
+      console.error("Không thể xác nhận đổi mật khẩu", error);
+      toast.error(error?.response?.data?.message || "Mã OTP không chính xác.");
+    } finally {
+      setConfirmingPasswordChange(false);
     }
   };
 
@@ -254,6 +355,28 @@ export default function SettingsScreen() {
                 {user?.avatarUrl ? "Đã có ảnh đại diện" : "Chưa có ảnh đại diện"}
               </Text>
             </View>
+
+            <Pressable
+              onPress={handlePickAvatar}
+              disabled={uploadingAvatar || saving || deleting}
+              style={[
+                styles.secondaryButton,
+                {
+                  backgroundColor: colors.cardSoft,
+                  borderColor: colors.border,
+                  opacity: uploadingAvatar || saving || deleting ? 0.6 : 1,
+                },
+              ]}
+            >
+              {uploadingAvatar ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <Camera size={18} color={colors.primary} />
+              )}
+              <Text style={[styles.secondaryButtonText, { color: colors.text }]}> 
+                {uploadingAvatar ? "Đang tải ảnh..." : "Đổi ảnh đại diện"}
+              </Text>
+            </Pressable>
           </View>
 
           <KeyboardAvoidingView
@@ -316,6 +439,111 @@ export default function SettingsScreen() {
                   {saving ? "Đang lưu..." : "Lưu thay đổi"}
                 </Text>
               </Pressable>
+
+              <View style={[styles.securityCard, { borderColor: colors.border, backgroundColor: colors.cardSoft }]}> 
+                <View style={styles.securityHeader}>
+                  <View style={[styles.settingIcon, { backgroundColor: colors.card }]}> 
+                    <KeyRound size={18} color={colors.primary} />
+                  </View>
+
+                  <View style={styles.settingText}>
+                    <Text style={[styles.settingTitle, { color: colors.text }]}>Đổi mật khẩu</Text>
+                    <Text style={[styles.settingDesc, { color: colors.muted }]}> 
+                      Xác nhận bằng OTP gửi về email để tăng độ an toàn.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.muted }]}>Mật khẩu hiện tại</Text>
+                  <TextInput
+                    value={currentPassword}
+                    onChangeText={setCurrentPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.inputLabel, { color: colors.muted }]}>Mật khẩu mới</Text>
+                  <TextInput
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    style={[
+                      styles.input,
+                      {
+                        color: colors.text,
+                        borderColor: colors.border,
+                        backgroundColor: colors.card,
+                      },
+                    ]}
+                  />
+                </View>
+
+                {awaitingPasswordOtp ? (
+                  <>
+                    <View style={styles.inputGroup}>
+                      <Text style={[styles.inputLabel, { color: colors.muted }]}>Mã OTP</Text>
+                      <TextInput
+                        value={passwordOtp}
+                        onChangeText={setPasswordOtp}
+                        autoCapitalize="none"
+                        keyboardType="number-pad"
+                        style={[
+                          styles.input,
+                          {
+                            color: colors.text,
+                            borderColor: colors.border,
+                            backgroundColor: colors.card,
+                          },
+                        ]}
+                      />
+                    </View>
+
+                    <Pressable
+                      onPress={handleConfirmPasswordChange}
+                      disabled={confirmingPasswordChange || deleting || saving}
+                      style={[
+                        styles.saveButton,
+                        {
+                          backgroundColor: colors.primary,
+                          opacity: confirmingPasswordChange || deleting || saving ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={styles.saveButtonText}>
+                        {confirmingPasswordChange ? "Đang xác nhận..." : "Xác nhận OTP"}
+                      </Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={handleRequestPasswordChange}
+                    disabled={requestingPasswordChange || deleting || saving}
+                    style={[
+                      styles.saveButton,
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: requestingPasswordChange || deleting || saving ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={styles.saveButtonText}>
+                      {requestingPasswordChange ? "Đang gửi yêu cầu..." : "Gửi yêu cầu đổi mật khẩu"}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
 
               <View style={[styles.dangerZone, { borderColor: colors.border }]}>
                 <Text style={[styles.dangerTitle, { color: colors.danger }]}>
@@ -475,6 +703,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "900",
   },
+  secondaryButton: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
   formContent: {
     gap: 12,
     paddingBottom: 8,
@@ -510,6 +753,18 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "800",
+  },
+  securityCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    marginTop: 8,
+    gap: 12,
+  },
+  securityHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
   },
   dangerZone: {
     borderWidth: 1,

@@ -717,7 +717,7 @@ function MessageItem({
                       { color: isDark ? "#94a3b8" : "#64748b" },
                     ]}
                   >
-                    {translation || "Dang dich..."}
+                    {translation || "Đang dịch..."}
                   </Text>
                 ) : null}
               </View>
@@ -743,7 +743,7 @@ function MessageItem({
                   { color: isDark ? "#94a3b8" : "#64748b" },
                 ]}
               >
-                {translation || "Dang dich..."}
+                  {translation || "Đang dịch..."}
               </Text>
             ) : null}
           </View>
@@ -1067,7 +1067,7 @@ function MessageItem({
                     { color: isDark ? "#f8fafc" : "#0f172a" },
                   ]}
                 >
-                  {translation ? "Dich lai tin nhan" : "Dich tin nhan"}
+                  {translation ? "Dịch lại tin nhắn" : "Dịch tin nhắn"}
                 </Text>
               </Pressable>
             ) : null}

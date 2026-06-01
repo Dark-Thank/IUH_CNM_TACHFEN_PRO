@@ -23,7 +23,7 @@ const buildMediaConstraints = (callType: CallType, includeFacingMode = true): Me
 
 const getBrowserMediaErrorMessage = (error: unknown) => {
   if (!(error instanceof DOMException)) {
-    return "Khong the truy cap microphone/camera tren trinh duyet.";
+    return "Không thể truy cập microphone/camera trên trình duyệt.";
   }
 
   switch (error.name) {
@@ -32,25 +32,25 @@ const getBrowserMediaErrorMessage = (error: unknown) => {
       const isAllowedOrigin = typeof window === "undefined" || window.isSecureContext || isLocalhostHostname(hostname);
 
       if (!isAllowedOrigin) {
-        return "Trinh duyet web chi cho phep camera va microphone tren HTTPS hoac localhost.";
+        return "Trình duyệt web chỉ cho phép camera và microphone trên HTTPS hoặc localhost.";
       }
 
-      return "Trinh duyet da tu choi quyen camera/microphone. Hay cap quyen camera va microphone cho trang web nay.";
+      return "Trình duyệt đã từ chối quyền camera/microphone. Hãy cấp quyền camera và microphone cho trang web này.";
     }
     case "NotFoundError":
-      return "Khong tim thay microphone/camera tren thiet bi nay.";
+      return "Không tìm thấy microphone/camera trên thiết bị này.";
     case "NotReadableError":
-      return "Microphone/camera dang duoc ung dung khac su dung.";
+      return "Microphone/camera đang được ứng dụng khác sử dụng.";
     case "OverconstrainedError":
-      return "Camera hien tai khong phu hop voi cau hinh duoc yeu cau tren web.";
+      return "Camera hiện tại không phù hợp với cấu hình được yêu cầu trên web.";
     default:
-      return `Khong the truy cap microphone/camera: ${error.message || error.name}`;
+      return `Không thể truy cập microphone/camera: ${error.message || error.name}`;
   }
 };
 
 export const getBrowserUserMedia = async (callType: CallType) => {
   if (!navigator.mediaDevices?.getUserMedia) {
-    throw new Error("Trinh duyet hien tai khong ho tro goi WebRTC.");
+    throw new Error("Trình duyệt hiện tại không hỗ trợ gọi WebRTC.");
   }
 
   try {

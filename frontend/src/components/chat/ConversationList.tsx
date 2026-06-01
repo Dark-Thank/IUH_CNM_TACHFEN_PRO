@@ -24,12 +24,12 @@ const getConversationTimestamp = (conversation: Conversation) => {
 
 const getConversationDisplayName = (conversation: Conversation, currentUserId?: string) => {
   if (conversation.type === "group") {
-    return conversation.group?.name || "Nhom chat";
+    return conversation.group?.name || "Nhóm chat";
   }
 
   return (
     conversation.participants.find((participant) => participant._id !== currentUserId)?.displayName ||
-    "Cuoc tro chuyen"
+    "Cuộc trò chuyện"
   );
 };
 
@@ -106,7 +106,7 @@ const ConversationList = () => {
         <Input
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="Tim kiem cuoc hoi thoai"
+          placeholder="Tìm kiếm cuộc hội thoại"
           className="h-11 rounded-2xl border-border/70 bg-background/80 pl-10"
         />
       </div>
@@ -114,8 +114,8 @@ const ConversationList = () => {
       {filteredConversations.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
           {searchQuery.trim()
-            ? "Khong tim thay cuoc hoi thoai phu hop."
-            : "Chua co cuoc hoi thoai nao."}
+            ? "Không tìm thấy cuộc hội thoại phù hợp."
+            : "Chưa có cuộc hội thoại nào."}
         </div>
       ) : (
         <div className="beautiful-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">

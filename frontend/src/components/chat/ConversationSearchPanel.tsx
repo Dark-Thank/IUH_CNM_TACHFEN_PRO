@@ -132,9 +132,9 @@ const ConversationSearchPanel = ({
         <div className="border-b px-4 py-4">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-foreground">Tim kiem trong tro chuyen</h3>
+              <h3 className="text-lg font-semibold text-foreground">Tìm kiếm trong trò chuyện</h3>
               <p className="mt-1 text-xs text-muted-foreground">
-                Loc trong toan bo tin nhan da tai cua cuoc tro chuyen hien tai.
+                Lọc trong toàn bộ tin nhắn đã tải của cuộc trò chuyện hiện tại.
               </p>
             </div>
 
@@ -152,7 +152,7 @@ const ConversationSearchPanel = ({
             <Input
               value={query}
               onChange={(event) => onQueryChange(event.target.value)}
-              placeholder="Nhap tu khoa can tim"
+              placeholder="Nhập từ khóa cần tìm"
               className="h-11 rounded-xl pl-10 pr-16"
             />
 
@@ -162,7 +162,7 @@ const ConversationSearchPanel = ({
                 onClick={() => onQueryChange("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-muted-foreground transition hover:text-foreground"
               >
-                Xoa
+                Xóa
               </button>
             )}
           </div>
@@ -175,10 +175,10 @@ const ConversationSearchPanel = ({
                 onChange={(event) => setSenderFilter(event.target.value)}
                 className="w-full bg-transparent text-sm outline-none"
               >
-                <option value="all">Nguoi gui</option>
+                <option value="all">Người gửi</option>
                 {conversation.participants.map((participant) => (
                   <option key={participant._id} value={participant._id}>
-                    {participant._id === user?._id ? "Ban" : participant.displayName}
+                    {participant._id === user?._id ? "Bạn" : participant.displayName}
                   </option>
                 ))}
               </select>
@@ -204,20 +204,20 @@ const ConversationSearchPanel = ({
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {!query.trim() ? (
             <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
-              Nhap noi dung can tim. Panel nay dang tim tren cac tin nhan da duoc tai ve.
+              Nhập nội dung cần tìm. Bảng này đang tìm trên các tin nhắn đã được tải về.
             </div>
           ) : loadingHistory ? (
             <div className="rounded-2xl border border-border/70 bg-muted/20 px-4 py-6 text-sm text-muted-foreground">
-              Dang tai them lich su de tim kiem day du hon...
+              Đang tải thêm lịch sử để tìm kiếm đầy đủ hơn...
             </div>
           ) : results.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-sm text-muted-foreground">
-              Khong tim thay tin nhan phu hop voi bo loc hien tai.
+              Không tìm thấy tin nhắn phù hợp với bộ lọc hiện tại.
             </div>
           ) : (
             <div className="space-y-2">
               <p className="px-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Tin nhan ({results.length})
+                Tin nhắn ({results.length})
               </p>
 
               {results.map((message) => {
@@ -256,7 +256,7 @@ const ConversationSearchPanel = ({
 
                         <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
                           {highlightText(
-                            snippet || searchableBody || "Tin nhan dinh kem",
+                            snippet || searchableBody || "Tin nhắn đính kèm",
                             query,
                             isActive ? "bg-primary/30" : "bg-amber-300/60"
                           )}

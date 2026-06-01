@@ -44,9 +44,16 @@ const isQuotaError = (error) => {
   const message = parsed.message.toLowerCase();
 
   return parsed.status === 429 ||
+    parsed.status === 503 ||
     message.includes("quota") ||
     message.includes("resource_exhausted") ||
-    message.includes("rate limit");
+    message.includes("rate limit") ||
+    message.includes("high demand") ||
+    message.includes("try again later") ||
+    message.includes("temporar") ||
+    message.includes("unavailable") ||
+    message.includes("overloaded") ||
+    message.includes("busy");
 };
 
 const generateWithGemini = async (prompt) => {

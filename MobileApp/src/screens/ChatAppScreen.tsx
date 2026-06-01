@@ -795,7 +795,7 @@ export default function ChatAppScreen() {
       }));
 
     if (contextMessages.length === 0) {
-      toast.error("Khong co noi dung hop le de tao goi y.");
+      toast.error("Không có nội dung hợp lệ để tạo gợi ý.");
       return;
     }
 
@@ -811,8 +811,8 @@ export default function ChatAppScreen() {
         },
       }));
     } catch (error: any) {
-      console.error("Khong the tao goi y tra loi AI mobile:", error);
-      toast.error(error.response?.data?.message || "Khong the tao goi y tra loi luc nay.");
+      console.error("Không thể tạo gợi ý trả lời AI mobile:", error);
+      toast.error(error.response?.data?.message || "Không thể tạo gợi ý trả lời lúc này.");
     } finally {
       setSmartReplyLoadingConversationId(null);
     }
@@ -867,7 +867,7 @@ export default function ChatAppScreen() {
         const userMessages = ownTextMessages.map((item) => item.content!.trim());
 
         if (userMessages.length === 0) {
-          toast.error("Chua co tin nhan cua ban de xac dinh ngon ngu dich.");
+          toast.error("Chưa có tin nhắn của bạn để xác định ngôn ngữ dịch.");
           return;
         }
 
@@ -898,17 +898,17 @@ export default function ChatAppScreen() {
       const translatedText = translationResult.translatedText?.trim() ?? "";
 
       if (translationResult.sameLanguage) {
-        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        toast.info("Tin nhắn này đã cùng ngôn ngữ với bạn.");
         return;
       }
 
       if (normalizeComparableText(translatedText) === normalizeComparableText(message.content)) {
-        toast.info("Tin nhan nay da cung ngon ngu voi ban.");
+        toast.info("Tin nhắn này đã cùng ngôn ngữ với bạn.");
         return;
       }
 
       if (!translatedText) {
-        toast.error("AI khong tra ve ban dich.");
+        toast.error("AI không trả về bản dịch.");
         return;
       }
 
@@ -920,8 +920,8 @@ export default function ChatAppScreen() {
         },
       }));
     } catch (error: any) {
-      console.error("Khong the dich tin nhan mobile:", error);
-      toast.error(error.response?.data?.message || "Khong the dich tin nhan luc nay.");
+      console.error("Không thể dịch tin nhắn mobile:", error);
+      toast.error(error.response?.data?.message || "Không thể dịch tin nhắn lúc này.");
     } finally {
       setMessageTranslating(false);
     }
@@ -1729,7 +1729,7 @@ export default function ChatAppScreen() {
           }
         }
       } catch (error) {
-        console.error("Loi khi tai lich su de tim tin nhan:", error);
+        console.error("Lỗi khi tải lịch sử để tìm tin nhắn:", error);
       } finally {
         if (!cancelled) {
           setMessageSearchLoadingHistory(false);
@@ -2451,14 +2451,14 @@ export default function ChatAppScreen() {
 
         <OverlayModal
           visible={showMessageSearch}
-          title="Tim tin nhan"
+          title="Tìm tin nhắn"
           onClose={() => setShowMessageSearch(false)}
         >
           <View style={styles.modalContent}>
             <TextInput
               value={messageSearchQuery}
               onChangeText={setMessageSearchQuery}
-              placeholder="Nhap tu khoa can tim"
+              placeholder="Nhập từ khóa cần tìm"
               placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
               style={[
                 styles.textInput,
@@ -2473,15 +2473,15 @@ export default function ChatAppScreen() {
             <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false}>
               {!messageSearchQuery.trim() ? (
                 <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Nhap noi dung can tim trong cuoc tro chuyen hien tai.
+                  Nhập nội dung cần tìm trong cuộc trò chuyện hiện tại.
                 </Text>
               ) : messageSearchLoadingHistory ? (
                 <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Dang tai them lich su de tim kiem day du hon...
+                  Đang tải thêm lịch sử để tìm kiếm đầy đủ hơn...
                 </Text>
               ) : messageSearchResults.length === 0 ? (
                 <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                  Khong tim thay tin nhan phu hop.
+                  Không tìm thấy tin nhắn phù hợp.
                 </Text>
               ) : (
                 messageSearchResults.map((message) => (
@@ -2503,7 +2503,7 @@ export default function ChatAppScreen() {
                       {getMessageSenderName(message, selectedConvo, user?._id)}
                     </Text>
                     <Text style={[styles.messageSearchSnippet, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                      {buildSearchSnippet(getMessageSearchBody(message), messageSearchQuery) || "Tin nhan dinh kem"}
+                      {buildSearchSnippet(getMessageSearchBody(message), messageSearchQuery) || "Tin nhắn đính kèm"}
                     </Text>
                     <Text style={[styles.messageSearchTime, { color: isDark ? "#64748b" : "#94a3b8" }]}>
                       {new Date(message.createdAt).toLocaleString("vi-VN", {
@@ -2862,7 +2862,7 @@ export default function ChatAppScreen() {
               <TextInput
                 value={conversationSearchQuery}
                 onChangeText={setConversationSearchQuery}
-                placeholder="Tim kiem cuoc hoi thoai"
+                placeholder="Tìm kiếm cuộc hội thoại"
                 placeholderTextColor={isDark ? "#64748b" : "#94a3b8"}
                 style={[styles.searchInput, { color: isDark ? "#f8fafc" : "#0f172a" }]}
               />
@@ -2889,7 +2889,7 @@ export default function ChatAppScreen() {
                       ]}
                     >
                       <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                        Chua co cuoc hoi thoai nao duoc ghim.
+                        Chưa có cuộc hội thoại nào được ghim.
                       </Text>
                     </View>
                   ) : (
@@ -2930,7 +2930,7 @@ export default function ChatAppScreen() {
                       ]}
                     >
                       <Text style={[styles.emptySectionText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                        Khong con cuoc hoi thoai nao trong muc nay.
+                        Không còn cuộc hội thoại nào trong mục này.
                       </Text>
                     </View>
                   ) : (

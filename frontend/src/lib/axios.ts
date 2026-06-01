@@ -22,6 +22,14 @@ const isTokenAuthError = (status?: number, message = "") => {
   return normalizedMessage.includes("access token") || normalizedMessage.includes("token không hợp lệ") || normalizedMessage.includes("token đã hết hạn");
 };
 
+const isAuthBypassRequest = (url = "") => {
+  const normalizedUrl = url.startsWith("/") ? url : `/${url}`;
+
+  return normalizedUrl.includes("/auth/signin") ||
+    normalizedUrl.includes("/auth/signup") ||
+    normalizedUrl.includes("/auth/refresh");
+};
+
 // gắn access token vào req header
 api.interceptors.request.use((config) => {
   const { accessToken } = useAuthStore.getState();
@@ -42,11 +50,7 @@ api.interceptors.response.use(
     const message = error.response?.data?.message || "";
 
     // những api không cần check
-    if (
-      originalRequest.url.includes("/auth/signin") ||
-      originalRequest.url.includes("/auth/signup") ||
-      originalRequest.url.includes("/auth/refresh")
-    ) {
+    if (isAuthBypassRequest(originalRequest.url)) {
       return Promise.reject(error);
     }
 

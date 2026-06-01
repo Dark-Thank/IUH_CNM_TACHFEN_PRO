@@ -77,7 +77,7 @@ const postMultipart = async (path: string, formData: FormData) => {
 
   if (!response.ok) {
     const error: any = new Error(
-      data?.message || `Yeu cau that bai voi ma ${response.status}`
+      data?.message || `Yêu cầu thất bại với mã ${response.status}`
     );
     error.response = {
       status: response.status,
