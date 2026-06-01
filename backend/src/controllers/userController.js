@@ -7,6 +7,7 @@ import FriendRequest from "../models/FriendRequest.js";
 import Message from "../models/Message.js";
 import Session from "../models/Session.js";
 import User from "../models/User.js";
+import { syncUserOnlineStatusVisibility } from "../socket/index.js";
 import { getRealtimeConfig as getRealtimeConfigPayload } from "../utils/realtimeConfig.js";
 
 const getUnreadCountEntries = (unreadCounts) => {
@@ -185,7 +186,7 @@ export const uploadAvatar = async (req, res) => {
 export const updateMe = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { displayName, bio } = req.body;
+    const { displayName, bio, showOnlineStatus } = req.body;
     const updates = {};
 
     if (typeof displayName === "string") {
@@ -202,6 +203,10 @@ export const updateMe = async (req, res) => {
       updates.bio = bio.trim();
     }
 
+    if (typeof showOnlineStatus === "boolean") {
+      updates.showOnlineStatus = showOnlineStatus;
+    }
+
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ message: "Khong co truong nao de cap nhat." });
     }
@@ -209,7 +214,11 @@ export const updateMe = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(userId, updates, {
       new: true,
       runValidators: true,
-    }).select("_id username email displayName avatarUrl bio phone createdAt updatedAt");
+    }).select("_id username email displayName avatarUrl bio phone showOnlineStatus createdAt updatedAt");
+
+    if (typeof showOnlineStatus === "boolean") {
+      await syncUserOnlineStatusVisibility(userId, showOnlineStatus);
+    }
 
     return res.status(200).json({ user: updatedUser });
   } catch (error) {

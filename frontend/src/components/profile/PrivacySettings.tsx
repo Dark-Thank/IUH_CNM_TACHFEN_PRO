@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Shield, Bell, ShieldBan } from "lucide-react";
+import { Shield } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -56,21 +56,6 @@ const PrivacySettings = () => {
             <ChangePasswordForm />
           </div>
 
-          <Button
-            variant="outline"
-            className="w-full justify-start glass-light border-border/30 hover:text-info"
-          >
-            <Bell className="h-4 w-4 mr-2" />
-            Cài đặt thông báo
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full justify-start glass-light border-border/30 hover:text-destructive"
-          >
-            <ShieldBan className="size-4 mr-2" />
-            Chặn và báo cáo
-          </Button>
         </div>
 
         <div className="pt-4 border-t border-border/30">

@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { useAuthStore } from "./useAuthStore";
 import { toast } from "sonner";
 import { useChatStore } from "./useChatStore";
+import { useSocketStore } from "./useSocketStore";
 
 export const useUserStore = create<UserState>(() => ({
   updateAvatarUrl: async (formData) => {
@@ -46,6 +47,19 @@ export const useUserStore = create<UserState>(() => ({
     } catch (error: any) {
       console.error("Lỗi khi updateProfile", error);
       toast.error(error.response?.data?.message || "Cập nhật thông tin thất bại.");
+      throw error;
+    }
+  },
+  updateOnlineStatusVisibility: async (showOnlineStatus) => {
+    try {
+      const { setUser } = useAuthStore.getState();
+      const updatedUser = await userService.updateProfile({ showOnlineStatus });
+
+      setUser(updatedUser);
+      useSocketStore.getState().socket?.emit("presence:set-visible", { showOnlineStatus });
+    } catch (error: any) {
+      console.error("Lá»—i khi updateOnlineStatusVisibility", error);
+      toast.error(error.response?.data?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t tráº¡ng thÃ¡i online.");
       throw error;
     }
   },
