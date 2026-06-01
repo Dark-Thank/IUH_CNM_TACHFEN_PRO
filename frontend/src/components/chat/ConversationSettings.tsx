@@ -1,26 +1,39 @@
-import { useRef, useState } from "react";
-import type { Conversation } from "@/types/chat";
-import { chatService } from "@/services/chatServiec";
-import { useChatStore } from "@/stores/useChatStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { chatService } from "@/services/chatServiec";
+import { useAuthStore } from "@/stores/useAuthStore";
+import { useChatStore } from "@/stores/useChatStore";
+import type { Conversation } from "@/types/chat";
+import { useRef, useState } from "react";
+import GroupMembersModal from "./GroupMembersModal";
+import UserAvatar from "./UserAvatar";
 type Props = {
   conversation: Conversation;
 };
-import GroupMembersModal from "./GroupMembersModal";
 const ConversationSettings = ({ conversation }: Props) => {
   if (!conversation) return null
+  const user = useAuthStore((state) => state.user);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [openMembers, setOpenMembers] = useState(false);
   const [openRename, setOpenRename] = useState(false);
   const [newName, setNewName] = useState(conversation.group?.name || "");
   const [loadingRename, setLoadingRename] = useState(false);
+  const isGroupConversation = conversation.type === "group";
+  const directParticipant = isGroupConversation
+    ? null
+    : conversation.participants.find((participant) => participant._id !== user?._id) ?? conversation.participants[0] ?? null;
+
   const handlePickAvatar = () => {
+    if (!isGroupConversation) {
+      return;
+    }
+
     fileInputRef.current?.click();
   };
+
   const handleRenameGroup = async () => {
-    if (!newName.trim()) return;
+    if (!isGroupConversation || !newName.trim()) return;
 
     try {
       setLoadingRename(true);
@@ -48,6 +61,10 @@ const ConversationSettings = ({ conversation }: Props) => {
   const handleChangeAvatar = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
+    if (!isGroupConversation) {
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -81,70 +98,82 @@ const ConversationSettings = ({ conversation }: Props) => {
       </h4>
 
       <div className="flex items-center gap-3">
-        {/* Avatar block */}
-        <div className="flex flex-col items-center gap-1">
-          <div
-            className="relative group cursor-pointer"
-            onClick={handlePickAvatar}
-          >
-            <img
-              src={conversation.group?.avatar || "/default-group-avatar.png"}
-              className="size-12 rounded-full object-cover"
-            />
+        {isGroupConversation ? (
+          <div className="flex flex-col items-center gap-1">
+            <div
+              className="relative group cursor-pointer"
+              onClick={handlePickAvatar}
+            >
+              <img
+                src={conversation.group?.avatar || "/default-group-avatar.png"}
+                className="size-12 rounded-full object-cover"
+              />
 
-            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center">
-              <span className="text-white text-xs">Đổi</span>
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100">
+                <span className="text-white text-xs">Đổi</span>
+              </div>
+
+              {uploading && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                  <span className="text-white text-xs">Đang tải...</span>
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={handleChangeAvatar}
+              />
             </div>
 
-            {uploading && (
-              <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
-                <span className="text-white text-xs">Đang tải...</span>
-              </div>
-            )}
+            <button
+              onClick={() => setOpenMembers(true)}
+              className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+            >
+              Xem thành viên
+            </button>
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={handleChangeAvatar}
-            />
+            <button
+              onClick={() => setOpenRename(true)}
+              className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
+            >
+              Đổi tên nhóm
+            </button>
           </div>
-
-          <button
-            onClick={() => setOpenMembers(true)}
-            className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
-          >
-            Xem thành viên
-          </button>
-
-          <button
-            onClick={() => setOpenRename(true)}
-            className="text-xs font-medium text-primary transition-colors hover:text-primary/80 hover:underline"
-          >
-            Đổi tên nhóm
-          </button>
-        </div>
+        ) : (
+          <UserAvatar
+            type="sidebar"
+            name={directParticipant?.displayName || "Người dùng"}
+            avatarUrl={directParticipant?.avatarUrl ?? undefined}
+            className="size-12 text-base"
+          />
+        )}
 
         {/* Info */}
         <div>
           <p className="text-sm font-medium">
-            {conversation.group?.name || "Nhóm"}
+            {isGroupConversation
+              ? conversation.group?.name || "Nhóm"
+              : directParticipant?.displayName || "Người dùng"}
           </p>
           <p className="text-xs text-muted-foreground">
-            {conversation.participants.length} thành viên
+            {isGroupConversation
+              ? `${conversation.participants.length} thành viên`
+              : "Cuộc trò chuyện cá nhân"}
           </p>
         </div>
       </div>
 
       <GroupMembersModal
-        open={openMembers}
+        open={isGroupConversation && openMembers}
         onClose={() => setOpenMembers(false)}
         conversation={conversation}
       />
 
       {/* ✅ MODAL ĐỔI TÊN ĐẶT ĐÚNG CHỖ */}
-      {openRename && (
+      {isGroupConversation && openRename && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
           <div className="w-full max-w-sm space-y-4 rounded-3xl border border-border/70 bg-background/95 p-5 shadow-[var(--shadow-soft)] backdrop-blur-sm">
             <div className="space-y-1">

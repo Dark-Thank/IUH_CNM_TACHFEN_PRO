@@ -1,17 +1,20 @@
+import { chatService } from "@/services/chatServiec";
 import { friendService } from "@/services/friendService";
-import { useChatStore } from "@/stores/useChatStore";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { useChatStore } from "@/stores/useChatStore";
 import { useSocketStore } from "@/stores/useSocketStore";
+import type { ConversationSummary } from "@/types/chat";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { SidebarInset } from "../ui/sidebar";
 import ChatWelcomeScreen from "./ChatWelcomeScreen";
+import ChatWindowBody from "./ChatWindowBody";
+import ChatWindowHeader from "./ChatWindowHeader";
+import ChatWindowSkeleton from "./ChatWindowSkeleton";
 import ConversationAssetsPanel from "./ConversationAssetsPanel";
 import ConversationSearchPanel from "./ConversationSearchPanel";
 import CreateGroupAppointmentDialog from "./CreateGroupAppointmentDialog";
 import CreateGroupPollDialog from "./CreateGroupPollDialog";
-import ChatWindowBody from "./ChatWindowBody";
-import ChatWindowHeader from "./ChatWindowHeader";
-import ChatWindowSkeleton from "./ChatWindowSkeleton";
 import MessageInput from "./MessageInput";
 import UserAvatar from "./UserAvatar";
 
@@ -24,7 +27,7 @@ const TypingIndicatorBubble = ({
   avatarUrl?: string | null;
   summary: string;
 }) => (
-  <div className="pointer-events-none absolute bottom-full left-4 z-20 mb-2">
+  <div className="pointer-events-none px-4 pb-2 pt-1">
     <div className="inline-flex max-w-[18rem] items-center gap-3 rounded-2xl border border-white/8 bg-slate-950/95 px-3 py-2 shadow-lg backdrop-blur-sm">
       <UserAvatar
         type="chat"
@@ -49,6 +52,7 @@ const TypingIndicatorBubble = ({
 );
 
 const ChatWindowLayout = () => {
+  const unreadSummaryThreshold = 10;
   const {
     activeConversationId,
     conversations,
@@ -65,6 +69,12 @@ const ChatWindowLayout = () => {
   const [focusedSearchMessageId, setFocusedSearchMessageId] = useState<string | null>(null);
   const [focusRequestKey, setFocusRequestKey] = useState(0);
   const [searchLoadingHistory, setSearchLoadingHistory] = useState(false);
+  const [unreadSummaryPrompt, setUnreadSummaryPrompt] = useState<{
+    conversationId: string;
+    unreadCount: number;
+    summaryLoading: boolean;
+    summary: ConversationSummary | null;
+  } | null>(null);
 
   const selectedConvo = conversations.find((c) => c._id === activeConversationId) ?? null;
   const typingUsers = useMemo(
@@ -102,9 +112,24 @@ const ChatWindowLayout = () => {
   }, [activeConversationId, selectedConvo, user]);
 
   useEffect(() => {
-    if (!selectedConvo) {
+    if (!selectedConvo || !user) {
+      setUnreadSummaryPrompt(null);
       return;
     }
+
+    const unreadCount = selectedConvo.unreadCounts?.[user._id] ?? 0;
+
+    if (unreadCount > unreadSummaryThreshold) {
+      setUnreadSummaryPrompt({
+        conversationId: selectedConvo._id,
+        unreadCount,
+        summaryLoading: false,
+        summary: null,
+      });
+      return;
+    }
+
+    setUnreadSummaryPrompt(null);
 
     const markSeen = async () => {
       try {
@@ -115,7 +140,7 @@ const ChatWindowLayout = () => {
     };
 
     void markSeen();
-  }, [markAsSeen, selectedConvo]);
+  }, [markAsSeen, selectedConvo?._id, user?._id]);
 
   useEffect(() => {
     setRightPanelMode("none");
@@ -189,6 +214,49 @@ const ChatWindowLayout = () => {
     return <ChatWindowSkeleton />;
   }
 
+  const finalizeUnreadSummaryPrompt = async () => {
+    try {
+      await markAsSeen();
+    } catch (error) {
+      console.error("Lỗi khi đánh dấu đã xem sau gợi ý tóm tắt:", error);
+    } finally {
+      setUnreadSummaryPrompt(null);
+    }
+  };
+
+  const handleSummarizeUnreadMessages = async () => {
+    if (!selectedConvo || !unreadSummaryPrompt || unreadSummaryPrompt.conversationId !== selectedConvo._id) {
+      return;
+    }
+
+    try {
+      setUnreadSummaryPrompt((current) => (
+        current && current.conversationId === selectedConvo._id
+          ? { ...current, summaryLoading: true }
+          : current
+      ));
+
+      const summary = await chatService.summarizeConversation(selectedConvo._id, {
+        scope: "unread",
+        limit: unreadSummaryPrompt.unreadCount,
+      });
+
+      setUnreadSummaryPrompt((current) => (
+        current && current.conversationId === selectedConvo._id
+          ? { ...current, summaryLoading: false, summary }
+          : current
+      ));
+    } catch (error: any) {
+      console.error("Không thể tóm tắt tin nhắn chưa đọc:", error);
+      toast.error(error?.response?.data?.message || "Không thể tóm tắt phần tin nhắn chưa đọc");
+      setUnreadSummaryPrompt((current) => (
+        current && current.conversationId === selectedConvo._id
+          ? { ...current, summaryLoading: false }
+          : current
+      ));
+    }
+  };
+
   const typingLabel = typingUsers.length === 0
     ? ""
     : typingUsers.length === 1
@@ -221,6 +289,17 @@ const ChatWindowLayout = () => {
               focusRequestKey={focusRequestKey}
               searchQuery={searchQuery}
               highlightedMessageId={focusedSearchMessageId}
+              unreadSummaryPrompt={
+                unreadSummaryPrompt && unreadSummaryPrompt.conversationId === selectedConvo._id
+                  ? {
+                    unreadCount: unreadSummaryPrompt.unreadCount,
+                    summaryLoading: unreadSummaryPrompt.summaryLoading,
+                    summary: unreadSummaryPrompt.summary,
+                    onSummarize: handleSummarizeUnreadMessages,
+                    onDismiss: () => void finalizeUnreadSummaryPrompt(),
+                  }
+                  : null
+              }
             />
           </div>
 

@@ -1,19 +1,20 @@
+import * as ImagePicker from "expo-image-picker";
 import { useState } from "react";
 import {
-    View,
-    Text,
     Image,
-    Pressable,
     Modal,
-    TextInput,
+    Pressable,
     ScrollView,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 
+import { getApiBaseUrl } from "@/lib/backendUrl";
 import { chatService } from "@/services/chatServiec";
+import { useAuthStore } from "@/stores/useAuthStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
-import { getApiBaseUrl } from "@/lib/backendUrl";
 import type { Conversation } from "@/types/chat";
 import UserAvatar from "./UserAvatar";
 
@@ -27,9 +28,20 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     const [newName, setNewName] = useState(conversation.group?.name || "");
     const [loadingRename, setLoadingRename] = useState(false);
     const [openMembers, setOpenMembers] = useState(false);
+    const user = useAuthStore((state) => state.user);
     const { isDark } = useThemeStore();
 
     if (!conversation) return null;
+
+    const isGroupConversation = conversation.type === "group";
+    const directParticipant = isGroupConversation
+        ? null
+        : conversation.participants.find((participant) => participant._id !== user?._id) ?? conversation.participants[0] ?? null;
+    const groupAvatarUri = conversation.group?.avatar
+        ? conversation.group.avatar.startsWith("http")
+            ? conversation.group.avatar
+            : `${getApiBaseUrl()}${conversation.group.avatar}`
+        : null;
 
     // =====================
     // 🎯 ĐỔI AVATAR
@@ -45,6 +57,10 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     const accentSurface = isDark ? "#312e81" : "#ede9fe";
 
     const handleChangeAvatar = async () => {
+        if (!isGroupConversation) {
+            return;
+        }
+
         try {
             const res = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ["images"],
@@ -97,7 +113,7 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     // 🎯 ĐỔI TÊN
     // =====================
     const handleRenameGroup = async () => {
-        if (!newName.trim()) return;
+        if (!isGroupConversation || !newName.trim()) return;
 
         try {
             setLoadingRename(true);
@@ -125,72 +141,81 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
     return (
         <View style={{ gap: 12 }}>
             <Text style={{ fontWeight: "700", fontSize: 15, color: primaryText }}>
-                Cài đặt nhóm
+                {isGroupConversation ? "Cài đặt nhóm" : "Cài đặt chung"}
             </Text>
 
             <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                {/* ================= AVATAR ================= */}
-                <Pressable onPress={handleChangeAvatar}>
-                    <View>
-                        <Image
-                            source={{
-                                uri: conversation.group?.avatar
-                                    ? conversation.group.avatar.startsWith("http")
-                                        ? conversation.group.avatar
-                                        : `${getApiBaseUrl()}${conversation.group.avatar}`
-                                    : "https://cdn-icons-png.flaticon.com/512/847/847969.png",
-                            }}
-                            style={{ width: 50, height: 50, borderRadius: 25 }}
-                            onError={(e) => console.log("IMAGE ERROR:", e.nativeEvent)}
-                        />
-
-                        {uploading && (
-                            <View
-                                style={{
-                                    position: "absolute",
-                                    inset: 0,
-                                    backgroundColor: "rgba(0,0,0,0.5)",
-                                    borderRadius: 25,
-                                    justifyContent: "center",
-                                    alignItems: "center",
+                {isGroupConversation ? (
+                    <Pressable onPress={handleChangeAvatar}>
+                        <View>
+                            <Image
+                                source={{
+                                    uri: groupAvatarUri || "https://cdn-icons-png.flaticon.com/512/847/847969.png",
                                 }}
-                            >
-                                <Text style={{ color: "#fff", fontSize: 10 }}>
-                                    Đang tải...
-                                </Text>
-                            </View>
-                        )}
-                    </View>
-                </Pressable>
+                                style={{ width: 50, height: 50, borderRadius: 25 }}
+                                onError={(e) => console.log("IMAGE ERROR:", e.nativeEvent)}
+                            />
+
+                            {uploading && (
+                                <View
+                                    style={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        backgroundColor: "rgba(0,0,0,0.5)",
+                                        borderRadius: 25,
+                                        justifyContent: "center",
+                                        alignItems: "center",
+                                    }}
+                                >
+                                    <Text style={{ color: "#fff", fontSize: 10 }}>
+                                        Đang tải...
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+                    </Pressable>
+                ) : (
+                    <UserAvatar
+                        name={directParticipant?.displayName || "Người dùng"}
+                        avatarUrl={directParticipant?.avatarUrl}
+                        size={50}
+                    />
+                )}
 
                 {/* ================= INFO ================= */}
                 <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: "600", color: primaryText }}>
-                        {conversation.group?.name || "Nhóm"}
+                        {isGroupConversation
+                            ? conversation.group?.name || "Nhóm"
+                            : directParticipant?.displayName || "Người dùng"}
                     </Text>
 
                     <Text style={{ fontSize: 12, color: secondaryText }}>
-                        {conversation.participants.length} thành viên
+                        {isGroupConversation
+                            ? `${conversation.participants.length} thành viên`
+                            : "Cuộc trò chuyện cá nhân"}
                     </Text>
 
-                    <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
-                        <Pressable onPress={() => setOpenMembers(true)}>
-                            <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
-                                Thành viên
-                            </Text>
-                        </Pressable>
+                    {isGroupConversation ? (
+                        <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
+                            <Pressable onPress={() => setOpenMembers(true)}>
+                                <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
+                                    Thành viên
+                                </Text>
+                            </Pressable>
 
-                        <Pressable onPress={() => setOpenRename(true)}>
-                            <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
-                                Đổi tên
-                            </Text>
-                        </Pressable>
-                    </View>
+                            <Pressable onPress={() => setOpenRename(true)}>
+                                <Text style={{ color: accentColor, fontSize: 12, fontWeight: "600" }}>
+                                    Đổi tên
+                                </Text>
+                            </Pressable>
+                        </View>
+                    ) : null}
                 </View>
             </View>
 
             {/* ================= MODAL ĐỔI TÊN ================= */}
-            <Modal visible={openRename} transparent animationType="fade" onRequestClose={() => setOpenRename(false)}>
+            <Modal visible={isGroupConversation && openRename} transparent animationType="fade" onRequestClose={() => setOpenRename(false)}>
                 <View
                     style={{
                         flex: 1,
@@ -278,7 +303,7 @@ export default function ConversationSettingsMobile({ conversation }: Props) {
             </Modal>
 
             {/* ================= MEMBERS ================= */}
-            <Modal visible={openMembers} transparent onRequestClose={() => setOpenMembers(false)}>
+            <Modal visible={isGroupConversation && openMembers} transparent onRequestClose={() => setOpenMembers(false)}>
                 <View
                     style={{
                         flex: 1,

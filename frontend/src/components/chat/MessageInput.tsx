@@ -111,16 +111,19 @@ const MessageInput = ({
     const [voiceDraft, setVoiceDraft] = useState<VoiceDraft | null>(null);
     const [isRecording, setIsRecording] = useState(false);
     const [recordingSeconds, setRecordingSeconds] = useState(0);
+    const [isVoiceCaptureBusy, setIsVoiceCaptureBusy] = useState(false);
     const recorderRef = useRef<MediaRecorder | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const chunksRef = useRef<Blob[]>([]);
     const recordingStartedAtRef = useRef<number | null>(null);
     const recordingTimerRef = useRef<number | null>(null);
+    const voiceCaptureBusyRef = useRef(false);
     const conversationType = String(selectedConvo.type ?? "").toLowerCase();
     const isGroupConversation =
         conversationType === "group" ||
         Boolean(selectedConvo.group?.name) ||
         selectedConvo.participants.length > 2;
+    const isVoiceCaptureActive = isVoiceCaptureBusy || isRecording;
     const mentionSearch = useMemo(() => {
         if (!isGroupConversation) {
             return null;
@@ -227,6 +230,11 @@ const MessageInput = ({
         }
     };
 
+    const setVoiceCaptureBusyState = (nextValue: boolean) => {
+        voiceCaptureBusyRef.current = nextValue;
+        setIsVoiceCaptureBusy(nextValue);
+    };
+
     const clearRecorderResources = () => {
         stopRecordingTimer();
 
@@ -269,6 +277,7 @@ const MessageInput = ({
         setFiles([]);
         clearReplyingMessage();
         setIsRecording(false);
+        setVoiceCaptureBusyState(false);
         setRecordingSeconds(0);
 
         if (recorderRef.current?.state === "recording") {
@@ -290,12 +299,17 @@ const MessageInput = ({
             return;
         }
 
+        if (voiceCaptureBusyRef.current) {
+            return;
+        }
+
         if (files.length > 0) {
             toast.error("Hãy bỏ file đính kèm trước khi ghi âm.");
             return;
         }
 
         try {
+            setVoiceCaptureBusyState(true);
             resetVoiceDraft();
 
             const mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -336,6 +350,7 @@ const MessageInput = ({
 
                 setIsRecording(false);
                 setRecordingSeconds(0);
+                setVoiceCaptureBusyState(false);
                 clearRecorderResources();
             };
 
@@ -350,6 +365,7 @@ const MessageInput = ({
             toast.error("Không thể truy cập microphone.");
             clearRecorderResources();
             setIsRecording(false);
+            setVoiceCaptureBusyState(false);
         }
     };
 
@@ -387,7 +403,7 @@ const MessageInput = ({
     if (!user) return null;
 
     const sendMessage = async () => {
-        if (isRecording) {
+        if (voiceCaptureBusyRef.current || isRecording) {
             toast.error("Hãy dừng ghi âm trước khi gửi.");
             return;
         }
@@ -567,13 +583,13 @@ const MessageInput = ({
                         accept="image/*"
                         multiple
                         hidden
-                        disabled={isRecording || Boolean(voiceDraft)}
+                        disabled={isVoiceCaptureActive || Boolean(voiceDraft)}
                         onChange={(e) => {
                             const selected = Array.from(e.target.files || []);
                             setFiles((prev) => [...prev, ...selected]);
                         }}
                     />
-                    <Button variant="ghost" size="icon" asChild disabled={isRecording || Boolean(voiceDraft)}>
+                    <Button variant="ghost" size="icon" asChild disabled={isVoiceCaptureActive || Boolean(voiceDraft)}>
                         <span><ImagePlus className="size-4" /></span>
                     </Button>
                 </label>
@@ -584,13 +600,13 @@ const MessageInput = ({
                         type="file"
                         multiple
                         hidden
-                        disabled={isRecording || Boolean(voiceDraft)}
+                        disabled={isVoiceCaptureActive || Boolean(voiceDraft)}
                         onChange={(e) => {
                             const selected = Array.from(e.target.files || []);
                             setFiles((prev) => [...prev, ...selected]);
                         }}
                     />
-                    <Button variant="ghost" size="icon" asChild disabled={isRecording || Boolean(voiceDraft)}>
+                    <Button variant="ghost" size="icon" asChild disabled={isVoiceCaptureActive || Boolean(voiceDraft)}>
                         <span><Paperclip className="size-4" /></span>
                     </Button>
                 </label>
@@ -599,7 +615,7 @@ const MessageInput = ({
                     type="button"
                     variant={isRecording ? "destructive" : "ghost"}
                     size="icon"
-                    disabled={Boolean(voiceDraft) || isBlocked}
+                    disabled={Boolean(voiceDraft) || isBlocked || (isVoiceCaptureBusy && !isRecording)}
                     onClick={isRecording ? stopRecording : () => void startRecording()}
                 >
                     {isRecording ? <Square className="size-4" /> : <Mic className="size-4" />}
@@ -671,7 +687,7 @@ const MessageInput = ({
                 {/* SEND */}
                 <Button
                     onClick={sendMessage}
-                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isRecording}
+                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive}
                 >
                     <Send className="size-4 text-white" />
                 </Button>

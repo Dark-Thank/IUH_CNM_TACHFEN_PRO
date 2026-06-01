@@ -10,15 +10,16 @@ import {
   leaveGroup,
   markAsSeen,
   removeGroupMember,
+  renameGroup,
+  summarizeConversation,
   toggleConversationPin,
   transferGroupOwnership,
-  renameGroup,
   updateGroupAvatar,
   updateGroupMemberRole,
 } from '../controllers/conversationController.js';
 
-import { checkFriendship } from '../middlewares/friendMiddleware.js';
 import { protectedRoute } from '../middlewares/authMiddleware.js';
+import { checkFriendship } from '../middlewares/friendMiddleware.js';
 import { upload, withUploadErrorHandling } from '../middlewares/uploadMiddleware.js';
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.post('/', checkFriendship, createConversation);
 router.post('/join-by-token', joinGroupByToken);
 router.get('/', getConversations);
 router.get('/:conversationId/messages', getMessages);
+router.get('/:conversationId/summary', summarizeConversation);
 
 router.put(
   "/:id/avatar",

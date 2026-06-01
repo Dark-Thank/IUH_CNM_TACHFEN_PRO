@@ -8,18 +8,18 @@ import { Audio } from "expo-av";
 import { AtSign, FileAudio, ImagePlus, Mic, Paperclip, Send, Square, Trash2, X } from "lucide-react-native";
 import React, { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 
-import VoiceMessagePlayer from "./VoiceMessagePlayer";
 import GroupFeatureBar from "./GroupFeatureBar";
 import UserAvatar from "./UserAvatar";
+import VoiceMessagePlayer from "./VoiceMessagePlayer";
 
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
@@ -93,10 +93,12 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
   const typingConversationIdRef = useRef(selectedConvo._id);
   const isTypingRef = useRef(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isVoiceCaptureBusy, setIsVoiceCaptureBusy] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartedAtRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const voiceCaptureBusyRef = useRef(false);
 
   const placeholderColor = isDark
     ? "#94a3b8"
@@ -107,6 +109,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
     Boolean(selectedConvo.group?.name) ||
     selectedConvo.participants.length > 2;
   const hasComposerContent = value.trim().length > 0 || files.length > 0 || !!voiceDraft;
+  const isVoiceCaptureActive = isVoiceCaptureBusy || isRecording;
   const mentionSearch = useMemo(() => {
     if (!isGroupConversation) {
       return null;
@@ -193,6 +196,11 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
     }
   };
 
+  const setVoiceCaptureBusyState = (nextValue: boolean) => {
+    voiceCaptureBusyRef.current = nextValue;
+    setIsVoiceCaptureBusy(nextValue);
+  };
+
   useEffect(() => {
     return () => {
       stopRecordingTimer();
@@ -224,6 +232,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
     setVoiceDraft(null);
     clearReplyingMessage();
     setIsRecording(false);
+    setVoiceCaptureBusyState(false);
     setRecordingSeconds(0);
   }, [clearReplyingMessage, selectedConvo._id]);
 
@@ -357,15 +366,21 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
       return;
     }
 
+    if (voiceCaptureBusyRef.current) {
+      return;
+    }
+
     if (files.length > 0) {
       toast.error("Hãy bỏ file đính kèm trước khi ghi âm");
       return;
     }
 
     try {
+      setVoiceCaptureBusyState(true);
       const permission = await Audio.requestPermissionsAsync();
 
       if (!permission.granted) {
+        setVoiceCaptureBusyState(false);
         toast.error("Bạn cần cấp quyền microphone để ghi âm");
         return;
       }
@@ -396,6 +411,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
       toast.error("Không thể bắt đầu ghi âm");
       stopRecordingTimer();
       setIsRecording(false);
+      setVoiceCaptureBusyState(false);
     }
   };
 
@@ -435,6 +451,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
       recordingRef.current = null;
       recordingStartedAtRef.current = null;
       setIsRecording(false);
+      setVoiceCaptureBusyState(false);
       setRecordingSeconds(0);
     }
   };
@@ -452,7 +469,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
     const trimmed = value.trim();
 
-    if (isRecording) {
+    if (voiceCaptureBusyRef.current || isRecording) {
       toast.error("Hãy dừng ghi âm trước khi gửi");
       return;
     }
@@ -741,14 +758,14 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
       {/* IMAGE BUTTON */}
       <Pressable
         onPress={pickImage}
-        disabled={disabled || isRecording || !!voiceDraft}
+        disabled={disabled || isVoiceCaptureActive || !!voiceDraft}
         style={[
           styles.iconButton,
           {
             backgroundColor: isDark
               ? "#1f2937"
               : "#f1f5f9",
-            opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
+            opacity: disabled || isVoiceCaptureActive || !!voiceDraft ? 0.5 : 1,
           },
         ]}
       >
@@ -836,14 +853,14 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
         <>
           <Pressable
             onPress={pickFile}
-            disabled={disabled || isRecording || !!voiceDraft}
+            disabled={disabled || isVoiceCaptureActive || !!voiceDraft}
             style={[
               styles.iconButton,
               {
                 backgroundColor: isDark
                   ? "#1f2937"
                   : "#f1f5f9",
-                opacity: disabled || isRecording || !!voiceDraft ? 0.5 : 1,
+                opacity: disabled || isVoiceCaptureActive || !!voiceDraft ? 0.5 : 1,
               },
             ]}
           >
@@ -859,7 +876,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
 
           <Pressable
             onPress={isRecording ? () => void stopRecording() : () => void startRecording()}
-            disabled={disabled || !!voiceDraft}
+            disabled={disabled || !!voiceDraft || (isVoiceCaptureBusy && !isRecording)}
             style={[
               styles.iconButton,
               {
@@ -868,7 +885,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
                   : isDark
                     ? "#1f2937"
                     : "#f1f5f9",
-                opacity: disabled || !!voiceDraft ? 0.5 : 1,
+                opacity: disabled || !!voiceDraft || (isVoiceCaptureBusy && !isRecording) ? 0.5 : 1,
               },
             ]}
           >
@@ -897,7 +914,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
           disabled={
             disabled ||
             sending ||
-            isRecording ||
+            isVoiceCaptureActive ||
             !hasComposerContent
           }
           style={[
@@ -906,7 +923,7 @@ export default function MessageInput({ selectedConvo, disabled, extraActions }: 
               backgroundColor:
                 !disabled &&
                   !sending &&
-                  !isRecording &&
+                  !isVoiceCaptureActive &&
                   hasComposerContent
                   ? isDark
                     ? "#a855f7"
