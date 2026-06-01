@@ -1,60 +1,102 @@
-🚀 Hướng dẫn chạy chương trình
----🖥️ Backend---
-# 1. Thêm file .env vào thư mục BE
+# IUH CNM TachFen Pro
 
-# 2. Cài dependencies
+## Maintainability
+
+Repository được tách theo 3 lớp rõ ràng:
+
+- `backend/`: Express API, Socket.IO, MongoDB, Redis.
+- `frontend/`: React + Vite cho web client.
+- `MobileApp/`: Expo/React Native cho mobile client.
+
+Các điểm hỗ trợ bảo trì đã được chuẩn hóa:
+
+- File ví dụ môi trường: `backend/.env.example`, `frontend/.env.example`.
+- Script kiểm tra backend: `npm run check:syntax` trong `backend/`.
+- Frontend có sẵn `lint` và `build` để dùng trong CI.
+- Docker tách riêng theo service, tránh phụ thuộc cài đặt máy cá nhân.
+
+## Chạy Local
+
+### Backend
+
+1. Tạo file `.env` từ `backend/.env.example`.
+2. Cài dependencies:
+
+```bash
+cd backend
 npm install
+```
 
-# 3. Chạy server
+3. Chạy server:
+
+```bash
 npm run dev
+```
 
-🔐 Lưu ý:
-Nếu cần tạo ACCESS_TOKEN_SECRET, chạy lệnh sau:
+Tạo `ACCESS_TOKEN_SECRET` nhanh bằng:
 
+```bash
 node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+```
 
-Nếu muốn dùng AI tóm tắt tin nhắn bằng Groq, thêm vào file `.env` của backend:
+### Frontend
 
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=llama-3.1-8b-instant
----🌐 Frontend---
-# 1. Cài dependencies
+1. Tạo file `.env` từ `frontend/.env.example` nếu chạy ngoài Docker.
+2. Cài dependencies và chạy:
+
+```bash
+cd frontend
 npm install
-
-# 2. Chạy project
 npm run dev
-📱 Mobile (Expo)
-# 1. Cài dependencies
+```
+
+### MobileApp
+
+```bash
+cd MobileApp
 npm install
-
-# 2. Chạy ứng dụng
 npx expo start
+```
 
-🌍 Cấu hình để gọi được khác mạng
-Backend cần được public ra cùng một địa chỉ chung cho tất cả client. Nếu mỗi máy chạy frontend/mobile tự trỏ về backend cục bộ của chính máy đó thì chỉ nhắn/gọi trong cùng mạng hoặc cùng máy mới hoạt động đúng.
+## Chạy Bằng Docker Compose
 
-Biến môi trường backend nên có:
-PUBLIC_API_URL=https://your-public-domain/api
-PUBLIC_SOCKET_URL=https://your-public-domain
-CLIENT_URL=https://your-web-domain,http://localhost:5173
+Stack Docker gồm 4 service: `frontend`, `backend`, `mongo`, `redis`.
 
-Biến môi trường frontend nên có:
-VITE_API_URL=https://your-public-domain/api
-VITE_SOCKET_URL=https://your-public-domain
+```bash
+docker compose up --build -d
+```
 
-Biến môi trường mobile nên có:
-EXPO_PUBLIC_API_URL=https://your-public-domain/api
-EXPO_PUBLIC_SOCKET_URL=https://your-public-domain
+Sau khi chạy:
 
-Để WebRTC hoạt động ổn định khi hai thiết bị khác mạng, cần TURN server công khai. Có thể cấu hình trực tiếp bằng các biến sau:
-WEBRTC_TURN_URLS=turn:your-turn-server:3478,turns:your-turn-server:5349?transport=tcp
-WEBRTC_TURN_USERNAME=your-username
-WEBRTC_TURN_CREDENTIAL=your-password
+- Web app: `http://localhost:8080`
+- Backend health: `http://localhost:5001/api/health`
+- Swagger: `http://localhost:8080/api-docs`
 
-Frontend web cũng hỗ trợ đọc cấu hình TURN/STUN từ:
-VITE_WEBRTC_TURN_URLS
-VITE_WEBRTC_TURN_USERNAME
-VITE_WEBRTC_TURN_CREDENTIAL
-VITE_WEBRTC_STUN_URLS
+Lưu ý:
 
-Mobile networking hiện cũng ưu tiên EXPO_PUBLIC_API_URL và EXPO_PUBLIC_SOCKET_URL để mọi thiết bị cùng nói chuyện với một backend chung.
+- MobileApp không nằm trong Docker Compose; mobile dùng chung backend đang chạy từ stack này qua `EXPO_PUBLIC_API_URL` và `EXPO_PUBLIC_SOCKET_URL`.
+- Cấu hình compose đang dùng giá trị demo an toàn cho môi trường báo cáo. Với production, thay `ACCESS_TOKEN_SECRET`, Cloudinary, SMTP và TURN server bằng giá trị thật.
+
+## CI/CD
+
+Workflow GitHub Actions nằm tại `.github/workflows/ci-cd.yml`.
+
+Pipeline hiện tại tự động:
+
+- Cài dependency và kiểm tra cú pháp backend.
+- Lint và build frontend.
+- Validate `docker compose` và build Docker images.
+- Khi push lên nhánh `main`, tự động publish 2 image lên GitHub Container Registry (`ghcr.io`).
+
+## Cấu Hình Khác Mạng
+
+Khi triển khai ra domain công khai, cần cấu hình các biến sau để web/mobile cùng nói chuyện với một backend chung:
+
+- Backend: `PUBLIC_API_URL`, `PUBLIC_SOCKET_URL`, `CLIENT_URL`
+- Frontend: `VITE_API_URL`, `VITE_SOCKET_URL`, `VITE_PUBLIC_ORIGIN`
+- Mobile: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SOCKET_URL`
+
+Để WebRTC ổn định khi khác mạng, nên khai báo TURN server:
+
+- Backend: `WEBRTC_TURN_URLS`, `WEBRTC_TURN_USERNAME`, `WEBRTC_TURN_CREDENTIAL`
+- Frontend: `VITE_WEBRTC_TURN_URLS`, `VITE_WEBRTC_TURN_USERNAME`, `VITE_WEBRTC_TURN_CREDENTIAL`
