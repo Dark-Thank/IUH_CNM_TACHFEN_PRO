@@ -14,11 +14,15 @@
         "buildType": "apk"
       }
     },
-    "production": {
-      "autoIncrement": true,
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
       }
+    },
+    "production": {
+      "autoIncrement": true
     }
   },
   "submit": {
