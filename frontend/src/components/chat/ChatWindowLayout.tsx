@@ -325,27 +325,28 @@ const ChatWindowLayout = () => {
   }, [fetchMessages, loading, messages, rightPanelMode, selectedConvo]);
 
   useEffect(() => {
-    if (rightPanelMode !== "search" || !selectedConvo) {
+    if (rightPanelMode !== "search" || !activeConversationId) {
       return;
     }
 
     let cancelled = false;
+    const conversationId = activeConversationId;
 
     const loadConversationHistory = async () => {
       try {
         setSearchLoadingHistory(true);
 
         while (!cancelled) {
-          const currentState = useChatStore.getState().messages[selectedConvo._id];
+          const currentState = useChatStore.getState().messages[conversationId];
           const nextCursor = currentState?.nextCursor;
 
           if (nextCursor === null) {
             break;
           }
 
-          await fetchMessages(selectedConvo._id);
+          await fetchMessages(conversationId);
 
-          const refreshedState = useChatStore.getState().messages[selectedConvo._id];
+          const refreshedState = useChatStore.getState().messages[conversationId];
           if (refreshedState?.nextCursor === nextCursor) {
             break;
           }
@@ -364,7 +365,7 @@ const ChatWindowLayout = () => {
     return () => {
       cancelled = true;
     };
-  }, [fetchMessages, rightPanelMode, selectedConvo]);
+  }, [activeConversationId, fetchMessages, rightPanelMode]);
 
   const handleRequestSmartReplies = async () => {
     if (!activeConversationId || !latestReplyableMessage?.content?.trim()) {

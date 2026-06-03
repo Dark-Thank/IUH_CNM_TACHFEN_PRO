@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type SyntheticEvent } from "react";
 import { normalizeSearchText } from "@/lib/messageSearch";
 import { cn, formatMessageTime } from "@/lib/utils";
 import { chatService } from "@/services/chatServiec";
@@ -6,11 +6,13 @@ import { useAuthStore } from "@/stores/useAuthStore";
 import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import type { Conversation, Message, Participant, ReactionUser } from "@/types/chat";
-import { MoreVertical, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play, Send, Trash2, Video } from "lucide-react";
+import { Check, MoreVertical, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Play, Send, Trash2, Users, Video, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -305,6 +307,33 @@ const renderHighlightedContent = (text: string, query: string, isFocused: boolea
   );
 };
 
+const updateStoredMessage = (updatedMessage?: Message | null) => {
+  if (!updatedMessage?.conversationId) {
+    return;
+  }
+
+  useChatStore.setState((state) => {
+    const convoMessages = state.messages[updatedMessage.conversationId];
+
+    if (!convoMessages) {
+      return state;
+    }
+
+    return {
+      ...state,
+      messages: {
+        ...state.messages,
+        [updatedMessage.conversationId]: {
+          ...convoMessages,
+          items: convoMessages.items.map((item) =>
+            item._id === updatedMessage._id ? { ...item, ...updatedMessage } : item
+          ),
+        },
+      },
+    };
+  });
+};
+
 const MessageItem = ({
   message,
   index,
@@ -329,12 +358,15 @@ const MessageItem = ({
     closeGroupPoll,
     respondToGroupAppointment,
     deleteGroupAppointment,
+    upsertConversation,
   } = useChatStore();
   const [forwardDialogOpen, setForwardDialogOpen] = useState(false);
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [reactionDialogEmoji, setReactionDialogEmoji] = useState<string | null>(null);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
   const [selectedImageUrl, setSelectedImageUrl] = useState<string | null>(null);
+  const [selectedImageSize, setSelectedImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [groupInviteAction, setGroupInviteAction] = useState<"joining" | "declining" | null>(null);
   const { currentCall, startOutgoingCall } = useCallStore();
 
   const handleDownloadFile = async (fileIndex: number, fileName: string) => {
@@ -362,19 +394,23 @@ const MessageItem = ({
   );
 
   const isOwn = Boolean(message.isOwn);
-  const isLastOwnMessage = isOwn && message._id === selectedConvo.lastMessage?._id;
+  const latestOwnMessageId = messages.find((item) => item.isOwn)?._id;
+  const isLastOwnMessage = isOwn && message._id === latestOwnMessageId;
   const isDeletedForCurrentUser = message.deletedForUsers?.includes(user?._id || "") ?? false;
   const isCallMessage = message.messageType === "call" && Boolean(message.callMeta);
   const isVoice = isVoiceMessage(message);
   const isPollMessage = message.messageType === "poll" && Boolean(message.pollMeta);
   const isAppointmentMessage = message.messageType === "appointment" && Boolean(message.appointmentMeta);
+  const isGroupInviteMessage = message.messageType === "group_invite" && Boolean(message.groupInviteMeta);
+  const groupInviteResponseStatus = message.groupInviteMeta?.responseStatus ?? null;
   const voiceAttachment = getVoiceAttachment(message);
   const downloadableFiles = (message.fileUrls || []).filter((file) => file.url !== voiceAttachment?.url);
-  const hasCardContent = message.content || message.replyTo || message.forwardedFrom || downloadableFiles.length > 0 || message.isRecalled || isDeletedForCurrentUser || isCallMessage || isPollMessage || isAppointmentMessage || isVoice;
+  const hasCardContent = message.content || message.replyTo || message.forwardedFrom || downloadableFiles.length > 0 || message.isRecalled || isDeletedForCurrentUser || isCallMessage || isPollMessage || isAppointmentMessage || isGroupInviteMessage || isVoice;
   const canForward = !message.isRecalled
     && !isDeletedForCurrentUser
     && !isPollMessage
     && !isAppointmentMessage
+    && !isGroupInviteMessage
     && Boolean(message.content || message.imgUrls?.length || message.fileUrls?.length);
   const canReply = !message.isRecalled && !isDeletedForCurrentUser;
   const canTranslate = !isOwn
@@ -412,7 +448,7 @@ const MessageItem = ({
   const canViewReceiptDetails = isOwn && selectedConvo.type === "group";
   const reactionEntries = Object.entries(message.reactions || {}).filter(([, users]) => users.length > 0);
   const activeReactionUsers = reactionDialogEmoji ? message.reactions?.[reactionDialogEmoji] || [] : [];
-  const showTimeSeparator = isShowTime && !isLastOwnMessage;
+  const showTimeSeparator = isShowTime && !isLastOwnMessage && index !== 0;
   const messageFooterTime = formatMessageTime(new Date(message.createdAt));
   const receiptTone = MESSAGE_RECEIPT_STYLES[receiptStatus];
   const isGroupNotice = isGroupNoticeMessage(message, selectedConvo);
@@ -493,13 +529,68 @@ const MessageItem = ({
     await deleteGroupAppointment(message._id);
   };
 
+  const handleSelectedImageLoad = (event: SyntheticEvent<HTMLImageElement>) => {
+    const image = event.currentTarget;
+    const maxWidth = window.innerWidth * 0.8;
+    const maxHeight = window.innerHeight * 0.8;
+    const scale = Math.min(
+      1.2,
+      maxWidth / image.naturalWidth,
+      maxHeight / image.naturalHeight
+    );
+
+    setSelectedImageSize({
+      width: Math.round(image.naturalWidth * scale),
+      height: Math.round(image.naturalHeight * scale),
+    });
+  };
+
+  const handleJoinGroupInvite = async () => {
+    const invitationToken = message.groupInviteMeta?.invitationToken;
+
+    if (!invitationToken) {
+      toast.error("Lời mời không hợp lệ");
+      return;
+    }
+
+    try {
+      setGroupInviteAction("joining");
+      const data = await chatService.respondToGroupInvitation(message._id, "accept");
+
+      if (data.conversation) {
+        upsertConversation(data.conversation);
+      }
+
+      updateStoredMessage(data.inviteMessage);
+
+      toast.success(data.message || "Tham gia nhóm thành công");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Không thể tham gia nhóm");
+    } finally {
+      setGroupInviteAction(null);
+    }
+  };
+
+  const handleDeclineGroupInvite = async () => {
+    try {
+      setGroupInviteAction("declining");
+      const data = await chatService.respondToGroupInvitation(message._id, "decline");
+      updateStoredMessage(data.inviteMessage);
+      toast.success("Đã từ chối lời mời");
+    } catch (error) {
+      toast.error("Không thể từ chối lời mời");
+    } finally {
+      setGroupInviteAction(null);
+    }
+  };
+
   const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡"];
 
   if (isGroupNotice) {
     return (
       <>
         {showTimeSeparator && (
-          <span className="flex justify-center px-1 text-xs text-muted-foreground">
+          <span className="my-1 flex justify-center px-1 text-xs leading-none text-muted-foreground">
             {formatMessageTime(new Date(message.createdAt))}
           </span>
         )}
@@ -517,7 +608,7 @@ const MessageItem = ({
     <>
       {/* TIME */}
       {showTimeSeparator && (
-        <span className="flex justify-center text-xs text-muted-foreground px-1">
+        <span className="my-1 flex justify-center px-1 text-xs leading-none text-muted-foreground">
           {formatMessageTime(new Date(message.createdAt))}
         </span>
       )}
@@ -562,7 +653,7 @@ const MessageItem = ({
                 ? "p-3 border rounded-lg bg-muted/50 text-muted-foreground"
                 : isCallMessage
                   ? "w-[min(22rem,70vw)] border bg-card text-card-foreground shadow-sm"
-                  : isPollMessage || isAppointmentMessage
+                  : isPollMessage || isAppointmentMessage || isGroupInviteMessage
                     ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
                     : isVoice
                       ? "w-[min(24rem,72vw)] border bg-card text-card-foreground shadow-sm"
@@ -679,6 +770,61 @@ const MessageItem = ({
                 onRespond={handleAppointmentResponse}
                 onDelete={handleDeleteAppointment}
               />
+            ) : isGroupInviteMessage && message.groupInviteMeta ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Users className="size-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-tight">
+                      Lời mời tham gia nhóm
+                    </p>
+                    <p className="mt-1 text-base font-semibold wrap-break-word">
+                      {message.groupInviteMeta.groupName}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground wrap-break-word">
+                      {message.groupInviteMeta.invitationUrl}
+                    </p>
+                  </div>
+                </div>
+
+                {groupInviteResponseStatus && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm font-medium text-primary">
+                    {groupInviteResponseStatus === "accepted"
+                      ? "Lời mời đã được chấp nhận"
+                      : groupInviteResponseStatus === "pending"
+                        ? "Đang chờ chủ nhóm hoặc phó nhóm duyệt"
+                      : "Lời mời đã bị từ chối"}
+                  </div>
+                )}
+
+                {!isOwn && !groupInviteResponseStatus && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2"
+                      disabled={Boolean(groupInviteAction)}
+                      onClick={() => void handleJoinGroupInvite()}
+                    >
+                      <Check className="size-4" />
+                      {groupInviteAction === "joining" ? "Đang tham gia..." : "Tham gia"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={Boolean(groupInviteAction)}
+                      onClick={() => void handleDeclineGroupInvite()}
+                    >
+                      <X className="size-4" />
+                      {groupInviteAction === "declining" ? "Đang từ chối..." : "Từ chối"}
+                    </Button>
+                  </div>
+                )}
+              </div>
             ) : (
               <>
                 {message.replyTo && (
@@ -1024,18 +1170,35 @@ const MessageItem = ({
       <Dialog open={Boolean(selectedImageUrl)} onOpenChange={(open) => {
         if (!open) {
           setSelectedImageUrl(null);
+          setSelectedImageSize(null);
         }
       }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] p-0 border-0 bg-black/90">
-          <div className="relative w-full h-full flex items-center justify-center">
-            {selectedImageUrl && (
-              <img
-                src={selectedImageUrl}
-                alt="Xem chi tiết ảnh"
-                className="w-full h-full object-contain max-w-full max-h-[85vh] rounded-lg"
-              />
-            )}
-          </div>
+        <DialogContent
+          overlayClassName="bg-black/75"
+          showCloseButton={false}
+          className="w-auto max-w-[80vw] border-0 bg-transparent p-0 shadow-none duration-200 sm:max-w-[80vw]"
+        >
+          <DialogClose asChild>
+            <button
+              type="button"
+              aria-label="Đóng ảnh"
+              className="fixed right-6 top-6 z-[60] inline-flex size-10 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70 focus:outline-none focus:ring-2 focus:ring-white/80"
+            >
+              <X className="size-5" />
+            </button>
+          </DialogClose>
+
+          {selectedImageUrl && (
+            <img
+              src={selectedImageUrl}
+              alt="Xem chi tiết ảnh"
+              className="block max-h-[80vh] max-w-[80vw] object-contain"
+              style={selectedImageSize ?? undefined}
+              onLoad={handleSelectedImageLoad}
+              loading="eager"
+              decoding="sync"
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>

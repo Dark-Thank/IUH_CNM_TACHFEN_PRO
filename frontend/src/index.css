@@ -304,6 +304,12 @@
     animation: messageSlideIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
   }
 
+  .dark select,
+  .dark option {
+    background-color: rgb(15 23 42);
+    color: rgb(241 245 249);
+  }
+
   @keyframes messageSlideIn {
     0% {
       opacity  : 0;

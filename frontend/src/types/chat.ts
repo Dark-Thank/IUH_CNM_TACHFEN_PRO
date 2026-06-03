@@ -16,6 +16,22 @@ export interface Group {
   name: string;
   createdBy: string;
   avatar?: string | null;
+  privacy?: "public" | "private";
+}
+
+export interface JoinRequestUser {
+  _id: string;
+  displayName: string;
+  username?: string;
+  avatarUrl?: string | null;
+}
+
+export interface JoinRequest {
+  user: JoinRequestUser;
+  requestedBy: JoinRequestUser;
+  addedBy?: JoinRequestUser | null;
+  source: "invite" | "add";
+  requestedAt: string;
 }
 
 export interface LastMessage {
@@ -91,11 +107,23 @@ export interface AppointmentMeta {
   responses: AppointmentResponse[];
 }
 
+export interface GroupInviteMeta {
+  conversationId: string;
+  groupName: string;
+  invitationToken: string;
+  invitationUrl: string;
+  invitedBy: string;
+  responseStatus?: "pending" | "accepted" | "declined" | null;
+  respondedBy?: string | null;
+  respondedAt?: string | null;
+  expiresAt?: string | null;
+}
+
 export interface ReplyToMessage {
   messageId: string;
   senderId: string;
   content: string | null;
-  messageType?: "text" | "call" | "voice" | "poll" | "appointment";
+  messageType?: "text" | "call" | "voice" | "poll" | "appointment" | "group_invite";
   imgUrls?: string[];
   fileUrls?: {
     url: string;
@@ -111,6 +139,7 @@ export interface Conversation {
   type: "direct" | "group";
   group: Group;
   participants: Participant[];
+  joinRequests?: JoinRequest[];
   lastMessageAt: string;
   seenBy: SeenUser[];
   lastMessage: LastMessage | null;
@@ -146,11 +175,12 @@ export interface Message {
   content: string | null;
   deliveredTo?: string[];
   seenBy?: string[];
-  messageType?: "text" | "call" | "voice" | "poll" | "appointment";
+  messageType?: "text" | "call" | "voice" | "poll" | "appointment" | "group_invite";
   callMeta?: CallMeta | null;
   voiceMeta?: VoiceMeta | null;
   pollMeta?: PollMeta | null;
   appointmentMeta?: AppointmentMeta | null;
+  groupInviteMeta?: GroupInviteMeta | null;
 
   forwardedFrom?: {
     messageId: string;

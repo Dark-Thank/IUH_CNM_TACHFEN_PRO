@@ -11,6 +11,9 @@ import {
   markAsSeen,
   removeGroupMember,
   renameGroup,
+  respondToGroupInvitation,
+  reviewGroupJoinRequest,
+  shareGroupInvitation,
   summarizeConversation,
   toggleConversationPin,
   transferGroupOwnership,
@@ -55,5 +58,8 @@ router.patch('/:conversationId/owner', transferGroupOwnership);
 router.post('/:conversationId/leave', leaveGroup);
 router.delete('/:conversationId', disbandGroup);
 router.post('/:conversationId/generate-invite', generateInvitationLink);
+router.post('/:conversationId/share-invite', shareGroupInvitation);
+router.post('/:conversationId/join-requests/:userId/review', protectedRoute, reviewGroupJoinRequest);
+router.post('/group-invites/:messageId/respond', protectedRoute, respondToGroupInvitation);
 
 export default router;

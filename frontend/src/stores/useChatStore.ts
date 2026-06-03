@@ -105,7 +105,13 @@ export const useChatStore = create<ChatState>()(
 
           set((state) => {
             const prev = state.messages[convoId]?.items ?? [];
-            const merged = prev.length > 0 ? [...processed, ...prev] : processed;
+            const mergedMap = new Map(
+              (prev.length > 0 ? [...processed, ...prev] : processed)
+                .map((message) => [message._id, message])
+            );
+            const merged = Array.from(mergedMap.values()).sort(
+              (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime()
+            );
 
             return {
               messages: {
@@ -136,7 +142,13 @@ export const useChatStore = create<ChatState>()(
             data.append("conversationId", activeConversationId);
           }
 
-          await chatService.sendDirectMessage(data);
+          const message = await chatService.sendDirectMessage(data);
+
+          if (message) {
+            await get().addMessage(message);
+          }
+
+          return message;
 
         } catch (error) {
           console.error("Lỗi xảy ra khi gửi direct message", error);
@@ -149,7 +161,13 @@ export const useChatStore = create<ChatState>()(
 
           data.append("conversationId", conversationId);
 
-          await chatService.sendGroupMessage(data);
+          const message = await chatService.sendGroupMessage(data);
+
+          if (message) {
+            await get().addMessage(message);
+          }
+
+          return message;
 
         } catch (error) {
           console.error("Lỗi xảy ra gửi group message", error);
@@ -487,10 +505,6 @@ export const useChatStore = create<ChatState>()(
             return;
           }
 
-          if ((convo.unreadCounts?.[user._id] ?? 0) === 0) {
-            return;
-          }
-
           await chatService.markAsSeen(activeConversationId);
 
           set((state) => ({
@@ -524,13 +538,14 @@ export const useChatStore = create<ChatState>()(
           activeConversationId: convo._id,
         }));
       },
-      createConversation: async (type, name, memberIds) => {
+      createConversation: async (type, name, memberIds, privacy = "public") => {
         try {
           set({ loading: true });
           const conversation = await chatService.createConversation(
             type,
             name,
-            memberIds
+            memberIds,
+            privacy
           );
 
           get().addConvo(conversation);
@@ -551,10 +566,23 @@ export const useChatStore = create<ChatState>()(
       addGroupMembers: async (conversationId, memberIds) => {
         try {
           set({ loading: true });
-          const conversation = await chatService.addGroupMembers(conversationId, memberIds);
-          get().upsertConversation(conversation);
+          const data = await chatService.addGroupMembers(conversationId, memberIds);
+          get().upsertConversation(data.conversation);
         } catch (error) {
           console.error("Lỗi khi thêm thành viên nhóm:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      reviewGroupJoinRequest: async (conversationId, userId, action) => {
+        try {
+          set({ loading: true });
+          const data = await chatService.reviewGroupJoinRequest(conversationId, userId, action);
+          get().upsertConversation(data.conversation);
+        } catch (error) {
+          console.error("Loi khi duyet thanh vien nhom:", error);
           throw error;
         } finally {
           set({ loading: false });

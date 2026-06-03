@@ -76,6 +76,14 @@ export const JoinGroupModal = ({
       const data = await chatService.joinGroupByToken(token);
 
       toast.success("Tham gia nhóm thành công!");
+      if (data.pendingApproval) {
+        toast.success(data.message || "Đã gửi yêu cầu chờ duyệt");
+        onClose();
+        setToken("");
+        setTab("link");
+        return;
+      }
+
       await fetchConversations();
       setActiveConversation(data.conversation._id);
 

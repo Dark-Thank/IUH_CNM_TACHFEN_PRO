@@ -121,12 +121,13 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     });
 
     // new message
-    socket.on("new-message", ({ message, conversation, unreadCounts }) => {
+    socket.on("new-message", async ({ message, conversation, unreadCounts }) => {
       const currentUserId = useAuthStore.getState().user?._id;
+      const isActiveConversation = useChatStore.getState().activeConversationId === message.conversationId;
 
-      useChatStore.getState().addMessage(message);
+      await useChatStore.getState().addMessage(message);
 
-      if (currentUserId && message.senderId !== currentUserId) {
+      if (currentUserId && message.senderId !== currentUserId && !isActiveConversation) {
         void chatService.markMessageDelivered(message._id).catch((error) => {
           console.error("Lỗi khi cập nhật trạng thái đã nhận:", error);
         });
@@ -134,14 +135,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       const updatedConversation = {
         ...conversation,
-        unreadCounts,
+        unreadCounts: isActiveConversation && currentUserId
+          ? {
+            ...unreadCounts,
+            [currentUserId]: 0,
+          }
+          : unreadCounts,
       };
 
-      if (useChatStore.getState().activeConversationId === message.conversationId) {
-        useChatStore.getState().markAsSeen();
-      }
-
       useChatStore.getState().updateConversation(updatedConversation);
+
+      if (isActiveConversation) {
+        void useChatStore.getState().markAsSeen();
+      }
     });
 
     // read message
@@ -225,13 +231,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       });
     });
 
-    // update message (for pin/recall realtime)
+    // update message (for pin/recall/invite realtime)
     socket.on("update-message", ({ message }) => {
       useChatStore.setState((state) => {
-        const { activeConversationId, messages } = state;
-        if (!activeConversationId || !message.conversationId || message.conversationId.toString() !== activeConversationId) return state;
+        const { messages } = state;
+        const convoKey = message?.conversationId?.toString?.() || message?.conversationId;
 
-        const convoKey = activeConversationId;
+        if (!convoKey) return state;
+
         const convoMessages = messages[convoKey];
         if (!convoMessages) return state;
 

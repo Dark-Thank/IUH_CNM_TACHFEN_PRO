@@ -56,8 +56,8 @@ export interface ChatState {
   fetchConversations: () => Promise<void>;
   fetchMessages: (conversationId?: string) => Promise<void>;
 
-  sendDirectMessage: (userId: string, formData: FormData) => Promise<void>;
-  sendGroupMessage: (conversationId: string, formData: FormData) => Promise<void>;
+  sendDirectMessage: (userId: string, formData: FormData) => Promise<Message | undefined>;
+  sendGroupMessage: (conversationId: string, formData: FormData) => Promise<Message | undefined>;
   createGroupPoll: (conversationId: string, payload: {
     question: string;
     options: string[];
@@ -98,9 +98,11 @@ export interface ChatState {
   createConversation: (
     type: "group" | "direct",
     name: string,
-    memberIds: string[]
+    memberIds: string[],
+    privacy?: "public" | "private"
   ) => Promise<Conversation | undefined>;
   addGroupMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
+  reviewGroupJoinRequest: (conversationId: string, userId: string, action: "accept" | "decline") => Promise<void>;
   removeGroupMember: (conversationId: string, memberId: string) => Promise<void>;
   updateGroupMemberRole: (
     conversationId: string,

@@ -188,6 +188,50 @@ const appointmentMetaSchema = new mongoose.Schema({
     },
 }, { _id: false });
 
+const groupInviteMetaSchema = new mongoose.Schema({
+    conversationId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Conversation",
+        required: true,
+    },
+    groupName: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    invitationToken: {
+        type: String,
+        required: true,
+    },
+    invitationUrl: {
+        type: String,
+        required: true,
+    },
+    invitedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    responseStatus: {
+        type: String,
+        enum: ["pending", "accepted", "declined"],
+        default: null,
+    },
+    respondedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+    respondedAt: {
+        type: Date,
+        default: null,
+    },
+    expiresAt: {
+        type: Date,
+        default: null,
+    },
+}, { _id: false });
+
 const replyToSchema = new mongoose.Schema({
     messageId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -205,7 +249,7 @@ const replyToSchema = new mongoose.Schema({
     },
     messageType: {
         type: String,
-        enum: ["text", "call", "voice", "poll", "appointment"],
+        enum: ["text", "call", "voice", "poll", "appointment", "group_invite"],
         default: "text",
     },
     imgUrls: {
@@ -245,7 +289,7 @@ const messageSchema = new mongoose.Schema({
     },
     messageType: {
         type: String,
-        enum: ["text", "call", "voice", "poll", "appointment"],
+        enum: ["text", "call", "voice", "poll", "appointment", "group_invite"],
         default: "text",
     },
     callMeta: {
@@ -262,6 +306,10 @@ const messageSchema = new mongoose.Schema({
     },
     appointmentMeta: {
         type: appointmentMetaSchema,
+        default: null,
+    },
+    groupInviteMeta: {
+        type: groupInviteMetaSchema,
         default: null,
     },
 

@@ -43,6 +43,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
         loading: chatLoading,
         addGroupMembers,
         removeGroupMember,
+        reviewGroupJoinRequest,
         updateGroupMemberRole,
         transferGroupOwnership,
         leaveGroup,
@@ -74,11 +75,16 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
         () => new Set(conversation.participants.map((participant) => participant._id)),
         [conversation.participants]
     );
+    const joinRequests = conversation.joinRequests ?? [];
+    const pendingMemberIds = useMemo(
+        () => new Set(joinRequests.map((request) => request.user._id)),
+        [joinRequests]
+    );
 
     const availableFriends = useMemo(
         () =>
             friends.filter((friend) => {
-                if (memberIds.has(friend._id)) {
+                if (memberIds.has(friend._id) || pendingMemberIds.has(friend._id)) {
                     return false;
                 }
 
@@ -88,7 +94,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
 
                 return matchesQuery(friend.displayName, search) || matchesQuery(friend.username, search);
             }),
-        [friends, memberIds, search]
+        [friends, memberIds, pendingMemberIds, search]
     );
 
     useEffect(() => {
@@ -105,6 +111,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
     const canAddMembers = Boolean(me);
     const isOwner = me?.role === "owner";
     const isDeputy = me?.role === "deputy";
+    const canReviewJoinRequests = isOwner || isDeputy;
 
     const canRemoveParticipant = (participant: Participant) => {
         if (!me || participant._id === me._id) {
@@ -150,6 +157,13 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
             setSelectedFriendIds([]);
             setSearch("");
         }, "Đã thêm thành viên vào nhóm");
+    };
+
+    const handleReviewJoinRequest = async (requestUserId: string, action: "accept" | "decline") => {
+        await runAction(
+            () => reviewGroupJoinRequest(conversation._id, requestUserId, action),
+            action === "accept" ? "Đã duyệt thành viên" : "Đã từ chối yêu cầu"
+        );
     };
 
     const handleSendFriendRequest = async (participant: Participant) => {
@@ -346,6 +360,68 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
 
                         <section className="min-h-0 lg:overflow-y-auto lg:pl-1 lg:pr-1">
                             <div className="space-y-5 pb-1">
+                                {canReviewJoinRequests && conversation.group?.privacy === "private" ? (
+                                    <div className="rounded-2xl border border-border/70 p-4">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <h3 className="text-sm font-semibold text-foreground">Duyệt thành viên</h3>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {joinRequests.length} yêu cầu đang chờ duyệt
+                                                </p>
+                                            </div>
+                                            {joinRequests.length > 0 ? <Badge>{joinRequests.length}</Badge> : null}
+                                        </div>
+
+                                        <div className="mt-4 space-y-2">
+                                            {joinRequests.length === 0 ? (
+                                                <div className="rounded-xl border border-dashed px-3 py-5 text-center text-sm text-muted-foreground">
+                                                    Hiện không có thành viên nào đang chờ duyệt.
+                                                </div>
+                                            ) : (
+                                                joinRequests.map((request) => (
+                                                    <div key={request.user._id} className="rounded-xl border border-border/70 p-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <UserAvatar
+                                                                type="chat"
+                                                                name={request.user.displayName}
+                                                                avatarUrl={request.user.avatarUrl ?? undefined}
+                                                            />
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="truncate text-sm font-medium text-foreground">
+                                                                    {request.user.displayName}
+                                                                </p>
+                                                                <p className="truncate text-xs text-muted-foreground">
+                                                                    {request.source === "add" ? "Được đề xuất thêm bởi" : "Đã chấp nhận lời mời từ"} {request.requestedBy.displayName || "thành viên"}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="mt-3 grid grid-cols-2 gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                disabled={chatLoading}
+                                                                onClick={() => void handleReviewJoinRequest(request.user._id, "accept")}
+                                                            >
+                                                                Chấp nhận
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant="outline"
+                                                                disabled={chatLoading}
+                                                                onClick={() => void handleReviewJoinRequest(request.user._id, "decline")}
+                                                            >
+                                                                Từ chối
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                ) : null}
+
                                 <div className="rounded-2xl border border-border/70 p-4">
                                     <h3 className="text-sm font-semibold text-foreground">Thêm thành viên</h3>
                                     <p className="mt-1 text-sm text-muted-foreground">

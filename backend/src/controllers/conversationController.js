@@ -23,8 +23,16 @@ const GROUP_ROLES = {
     MEMBER: "member",
 };
 
+const GROUP_PRIVACY = {
+    PUBLIC: "public",
+    PRIVATE: "private",
+};
+
 const conversationPopulate = [
     { path: "participants.userId", select: "displayName avatarUrl" },
+    { path: "joinRequests.userId", select: "displayName avatarUrl username" },
+    { path: "joinRequests.requestedBy", select: "displayName avatarUrl username" },
+    { path: "joinRequests.addedBy", select: "displayName avatarUrl username" },
     { path: "seenBy", select: "displayName avatarUrl" },
     { path: "lastMessage.senderId", select: "displayName avatarUrl" },
 ];
@@ -69,6 +77,12 @@ const getParticipant = (conversation, userId) => (
 );
 
 const isGroupConversation = (conversation) => conversation?.type === "group";
+
+const isPrivateGroup = (conversation) => conversation?.group?.privacy === GROUP_PRIVACY.PRIVATE;
+
+const canApproveJoinRequests = (participant) => (
+    participant?.role === GROUP_ROLES.OWNER || participant?.role === GROUP_ROLES.DEPUTY
+);
 
 const canRemoveTarget = (actor, target) => {
     if (!actor || !target) {
@@ -178,6 +192,39 @@ const createGroupNoticeMessage = async (conversation, actorId, content, extraRoo
     return formattedMessage;
 };
 
+const getInvitationUrl = (invitationToken) => {
+    const frontendUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
+    return `${frontendUrl}/join-group/${invitationToken}`;
+};
+
+const ensureGroupInvitation = async (conversation) => {
+    const now = new Date();
+    const hasValidToken = conversation.invitationToken
+        && conversation.invitationExpiry
+        && now <= conversation.invitationExpiry;
+
+    if (hasValidToken) {
+        return {
+            invitationToken: conversation.invitationToken,
+            invitationExpiry: conversation.invitationExpiry,
+            invitationUrl: getInvitationUrl(conversation.invitationToken),
+        };
+    }
+
+    const invitationToken = crypto.randomBytes(18).toString("hex");
+    const invitationExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    conversation.invitationToken = invitationToken;
+    conversation.invitationExpiry = invitationExpiry;
+    await conversation.save();
+
+    return {
+        invitationToken,
+        invitationExpiry,
+        invitationUrl: getInvitationUrl(invitationToken),
+    };
+};
+
 const ensureFriendsWithActor = async (actorId, memberIds = []) => {
     const checks = await Promise.all(
         memberIds.map(async (memberId) => {
@@ -215,6 +262,34 @@ const seedUnreadCountsForParticipants = (conversation) => {
     });
 };
 
+const addPendingJoinRequests = (conversation, userIds = [], requestedBy, source = "invite", addedBy = null) => {
+    const participantIds = new Set(
+        (conversation.participants || []).map((participant) => normalizeId(participant.userId)).filter(Boolean)
+    );
+    const pendingIds = new Set(
+        (conversation.joinRequests || []).map((request) => normalizeId(request.userId)).filter(Boolean)
+    );
+    const createdIds = [];
+
+    dedupeIds(userIds).forEach((userId) => {
+        if (!userId || participantIds.has(userId) || pendingIds.has(userId)) {
+            return;
+        }
+
+        conversation.joinRequests.push({
+            userId,
+            requestedBy,
+            addedBy,
+            source,
+            requestedAt: new Date(),
+        });
+        pendingIds.add(userId);
+        createdIds.push(userId);
+    });
+
+    return createdIds;
+};
+
 const removeParticipantState = (conversation, removedUserId) => {
     const removedId = normalizeId(removedUserId);
 
@@ -243,9 +318,10 @@ const respondWithConversation = async (res, conversation, statusCode = 200) => {
 };
 export const createConversation = async (req, res) => {
     try {
-        const { type, name, memberIds } = req.body;
+        const { type, name, memberIds, privacy } = req.body;
         const userId = req.user._id;
         const uniqueMemberIds = dedupeIds(memberIds, [userId]);
+        const groupPrivacy = privacy === GROUP_PRIVACY.PRIVATE ? GROUP_PRIVACY.PRIVATE : GROUP_PRIVACY.PUBLIC;
 
         if (!type ||
             (type === 'group' && !name) ||
@@ -291,6 +367,9 @@ export const createConversation = async (req, res) => {
         }
 
         if (type === 'group') {
+            const invitationToken = crypto.randomBytes(18).toString("hex");
+            const invitationExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
             conversation = new Conversation({
                 type: 'group',
                 participants: [
@@ -300,9 +379,11 @@ export const createConversation = async (req, res) => {
                 group: {
                     name,
                     createdBy: userId,
-
+                    privacy: groupPrivacy,
                 },
                 lastMessageAt: new Date(),
+                invitationToken,
+                invitationExpiry,
             });
 
             await conversation.save();
@@ -425,6 +506,18 @@ export const getConversations = async (req, res) => {
             .populate({
                 path: 'participants.userId',
                 select: 'displayName avatarUrl',
+            })
+            .populate({
+                path: 'joinRequests.userId',
+                select: 'displayName avatarUrl username',
+            })
+            .populate({
+                path: 'joinRequests.requestedBy',
+                select: 'displayName avatarUrl username',
+            })
+            .populate({
+                path: 'joinRequests.addedBy',
+                select: 'displayName avatarUrl username',
             })
             .populate({
                 path: 'lastMessage.senderId',
@@ -737,6 +830,27 @@ export const addGroupMembers = async (req, res) => {
             return res.status(403).json({ message: "Bạn chỉ có thể thêm bạn bè vào nhóm", notFriends });
         }
 
+        const actorName = getParticipantDisplayName(conversation, actorId);
+        const requiresApproval = isPrivateGroup(conversation) && !canApproveJoinRequests(actor);
+
+        if (requiresApproval) {
+            const pendingIds = addPendingJoinRequests(conversation, nextMemberIds, actorId, "add", actorId);
+
+            if (pendingIds.length === 0) {
+                return res.status(400).json({ message: "Những người dùng này đã ở trong nhóm hoặc đang chờ duyệt" });
+            }
+
+            await conversation.save();
+            await populateConversation(conversation);
+            emitConversationUpsert(io, conversation);
+
+            return res.status(200).json({
+                conversation: formatConversationForUser(conversation, actorId),
+                pendingApproval: true,
+                message: "Đã gửi yêu cầu chờ chủ nhóm hoặc phó nhóm duyệt",
+            });
+        }
+
         conversation.participants.push(
             ...nextMemberIds.map((memberId) => ({
                 userId: memberId,
@@ -748,7 +862,6 @@ export const addGroupMembers = async (req, res) => {
         await conversation.save();
         await populateConversation(conversation);
 
-        const actorName = getParticipantDisplayName(conversation, actorId);
         const addedMemberNames = nextMemberIds.map((memberId) => getParticipantDisplayName(conversation, memberId));
 
         await createGroupNoticeMessage(
@@ -782,19 +895,17 @@ export const generateInvitationLink = async (req, res) => {
             return res.status(400).json({ message: "Chỉ nhóm chat mới có thể mời" });
         }
 
-        if (conversation.group?.createdBy.toString() !== userId.toString()) {
+        const actor = getParticipant(conversation, userId);
+
+        if (!actor) {
+            return res.status(403).json({ message: "Bạn không phải là thành viên của nhóm" });
+        }
+
+        if (false && conversation.group?.createdBy.toString() !== userId.toString()) {
             return res.status(403).json({ message: "Chỉ người tạo nhóm mới có thể tạo link mời" });
         }
 
-        const invitationToken = crypto.randomBytes(18).toString("hex");
-        const invitationExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-
-        conversation.invitationToken = invitationToken;
-        conversation.invitationExpiry = invitationExpiry;
-        await conversation.save();
-
-        const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-        const invitationUrl = `${frontendUrl}/join-group/${invitationToken}`;
+        const { invitationToken, invitationExpiry, invitationUrl } = await ensureGroupInvitation(conversation);
 
         return res.status(200).json({
             invitationUrl,
@@ -804,6 +915,119 @@ export const generateInvitationLink = async (req, res) => {
         });
     } catch (error) {
         console.error("Lỗi khi tạo link mời:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const shareGroupInvitation = async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { recipientId } = req.body;
+        const actorId = req.user._id;
+
+        if (!recipientId) {
+            return res.status(400).json({ message: "Thiếu người nhận lời mời" });
+        }
+
+        const groupConversation = await Conversation.findById(conversationId);
+
+        if (!ensureGroupConversation(groupConversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(groupConversation, actorId);
+
+        if (!actor) {
+            return res.status(403).json({ message: "Bạn không phải là thành viên của nhóm" });
+        }
+
+        const isRecipientInGroup = groupConversation.participants.some(
+            (participant) => normalizeId(participant.userId) === normalizeId(recipientId)
+        );
+
+        if (isRecipientInGroup) {
+            return res.status(400).json({ message: "Người này đã là thành viên của nhóm" });
+        }
+
+        const [userA, userB] = pair(normalizeId(actorId), normalizeId(recipientId));
+        const friendship = await Friend.findOne({ userA, userB }).lean();
+
+        if (!friendship) {
+            return res.status(403).json({ message: "Bạn chỉ có thể gửi lời mời cho bạn bè" });
+        }
+
+        const blocked = await Block.findOne({
+            $or: [
+                { blocker: recipientId, blocked: actorId },
+                { blocker: actorId, blocked: recipientId },
+            ],
+        }).lean();
+
+        if (blocked) {
+            return res.status(403).json({ message: "Không thể gửi lời mời vì đã có chặn giữa hai người dùng" });
+        }
+
+        const { invitationToken, invitationExpiry, invitationUrl } = await ensureGroupInvitation(groupConversation);
+        let directConversation = await Conversation.findOne({
+            type: "direct",
+            participants: {
+                $all: [
+                    { $elemMatch: { userId: actorId } },
+                    { $elemMatch: { userId: recipientId } },
+                ],
+            },
+        });
+        const isFirstMessageInConversation = !directConversation?.lastMessage?._id;
+
+        if (!directConversation) {
+            directConversation = await Conversation.create({
+                type: "direct",
+                participants: [
+                    { userId: actorId, joinedAt: new Date() },
+                    { userId: recipientId, joinedAt: new Date() },
+                ],
+                lastMessageAt: new Date(),
+                unreadCounts: new Map(),
+            });
+        }
+
+        const groupName = groupConversation.group?.name?.trim() || "Nhóm chat";
+        const message = await Message.create({
+            conversationId: directConversation._id,
+            senderId: actorId,
+            content: `Mời bạn tham gia nhóm "${groupName}"`,
+            messageType: "group_invite",
+            groupInviteMeta: {
+                conversationId: groupConversation._id,
+                groupName,
+                invitationToken,
+                invitationUrl,
+                invitedBy: actorId,
+                expiresAt: invitationExpiry,
+            },
+        });
+
+        updateConversationAfterCreateMessage(directConversation, message, actorId);
+        await directConversation.save();
+        await populateConversation(directConversation);
+
+        const formattedMessage = await formatMessageForClient(message);
+        const extraRooms = isFirstMessageInConversation
+            ? getConversationParticipantIds(directConversation)
+            : [];
+
+        if (isFirstMessageInConversation) {
+            emitConversationUpsert(io, directConversation);
+        }
+
+        emitNewMessage(io, directConversation, formattedMessage, extraRooms);
+
+        return res.status(201).json({
+            message: formattedMessage,
+            conversation: formatConversationForUser(directConversation, actorId),
+        });
+    } catch (error) {
+        console.error("Lỗi khi chia sẻ lời mời nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };
@@ -1041,6 +1265,23 @@ export const joinGroupByToken = async (req, res) => {
             return res.status(400).json({ message: "Bạn đã là thành viên của nhóm này" });
         }
 
+        if (isPrivateGroup(conversation)) {
+            const pendingIds = addPendingJoinRequests(conversation, [userId], userId, "invite", null);
+
+            if (pendingIds.length === 0) {
+                return res.status(400).json({ message: "Yêu cầu tham gia đã được gửi hoặc bạn đã là thành viên" });
+            }
+
+            await conversation.save();
+            await populateConversation(conversation);
+            emitConversationUpsert(io, conversation);
+
+            return res.status(200).json({
+                pendingApproval: true,
+                message: "Đã gửi yêu cầu chờ chủ nhóm hoặc phó nhóm duyệt",
+            });
+        }
+
         conversation.participants.push({ userId, role: GROUP_ROLES.MEMBER });
         seedUnreadCountsForParticipants(conversation);
         await conversation.save();
@@ -1064,6 +1305,195 @@ export const joinGroupByToken = async (req, res) => {
         });
     } catch (error) {
         console.error("Lỗi khi tham gia nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
+    }
+};
+
+export const respondToGroupInvitation = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { action } = req.body;
+        const userId = req.user._id;
+
+        if (!["accept", "decline"].includes(action)) {
+            return res.status(400).json({ message: "Hanh dong khong hop le" });
+        }
+
+        const inviteMessage = await Message.findById(messageId);
+
+        if (!inviteMessage || inviteMessage.messageType !== "group_invite" || !inviteMessage.groupInviteMeta) {
+            return res.status(404).json({ message: "Loi moi khong ton tai" });
+        }
+
+        const directConversation = await loadConversation(inviteMessage.conversationId);
+
+        if (!directConversation) {
+            return res.status(404).json({ message: "Cuoc tro chuyen khong ton tai" });
+        }
+
+        const isDirectParticipant = directConversation.participants.some(
+            (participant) => normalizeId(participant.userId) === normalizeId(userId)
+        );
+
+        if (!isDirectParticipant || normalizeId(inviteMessage.senderId) === normalizeId(userId)) {
+            return res.status(403).json({ message: "Ban khong co quyen phan hoi loi moi nay" });
+        }
+
+        if (inviteMessage.groupInviteMeta.responseStatus) {
+            return res.status(400).json({ message: "Loi moi nay da duoc phan hoi" });
+        }
+
+        const groupConversation = await Conversation.findById(inviteMessage.groupInviteMeta.conversationId);
+
+        if (!groupConversation || groupConversation.type !== "group") {
+            return res.status(404).json({ message: "Nhom khong ton tai" });
+        }
+
+        if (action === "accept") {
+            if (groupConversation.invitationExpiry && new Date() > groupConversation.invitationExpiry) {
+                return res.status(400).json({ message: "Link moi da het han" });
+            }
+
+            const isAlreadyMember = groupConversation.participants.some(
+                (participant) => normalizeId(participant.userId) === normalizeId(userId)
+            );
+
+            if (!isAlreadyMember && isPrivateGroup(groupConversation)) {
+                const pendingIds = addPendingJoinRequests(groupConversation, [userId], userId, "invite", inviteMessage.groupInviteMeta.invitedBy);
+
+                if (pendingIds.length === 0) {
+                    return res.status(400).json({ message: "Yêu cầu tham gia đã được gửi hoặc bạn đã là thành viên" });
+                }
+
+                await groupConversation.save();
+                await populateConversation(groupConversation);
+                emitConversationUpsert(io, groupConversation);
+            } else if (!isAlreadyMember) {
+                groupConversation.participants.push({ userId, role: GROUP_ROLES.MEMBER });
+                seedUnreadCountsForParticipants(groupConversation);
+                await groupConversation.save();
+                await populateConversation(groupConversation);
+
+                const actorName = getParticipantDisplayName(groupConversation, userId);
+
+                await createGroupNoticeMessage(
+                    groupConversation,
+                    userId,
+                    `${actorName} đã tham gia nhóm`,
+                    [userId.toString()]
+                );
+
+                io.to(userId.toString()).emit("new-group", formatConversationForUser(groupConversation, userId));
+            } else {
+                await populateConversation(groupConversation);
+            }
+        }
+
+        const responseStatus = action === "accept" && isPrivateGroup(groupConversation) ? "pending" : action === "accept" ? "accepted" : "declined";
+        inviteMessage.groupInviteMeta.responseStatus = responseStatus;
+        inviteMessage.groupInviteMeta.respondedBy = userId;
+        inviteMessage.groupInviteMeta.respondedAt = new Date();
+        inviteMessage.markModified("groupInviteMeta");
+        await inviteMessage.save();
+
+        const formattedInviteMessage = await formatMessageForClient(inviteMessage);
+        io.to(inviteMessage.conversationId.toString()).emit("update-message", { message: formattedInviteMessage });
+
+        return res.status(200).json({
+            message: action === "accept" ? "Đã chấp nhận lời mời" : "Đã từ chối lời mời",
+            inviteMessage: formattedInviteMessage,
+            conversation: responseStatus === "accepted" ? formatConversationForUser(groupConversation, userId) : null,
+            status: responseStatus,
+        });
+    } catch (error) {
+        console.error("Loi khi phan hoi loi moi nhom:", error);
+        return res.status(500).json({ message: "Loi he thong" });
+    }
+};
+
+export const reviewGroupJoinRequest = async (req, res) => {
+    try {
+        const { conversationId, userId: requestUserId } = req.params;
+        const { action } = req.body;
+        const actorId = req.user._id;
+
+        if (!["accept", "decline"].includes(action)) {
+            return res.status(400).json({ message: "Hành động không hợp lệ" });
+        }
+
+        const conversation = await loadConversation(conversationId);
+
+        if (!ensureGroupConversation(conversation, res)) {
+            return;
+        }
+
+        const actor = getParticipant(conversation, actorId);
+
+        if (!canApproveJoinRequests(actor)) {
+            return res.status(403).json({ message: "Chỉ chủ nhóm hoặc phó nhóm có thể duyệt thành viên" });
+        }
+
+        const requestIndex = (conversation.joinRequests || []).findIndex(
+            (request) => normalizeId(request.userId) === normalizeId(requestUserId)
+        );
+
+        if (requestIndex < 0) {
+            return res.status(404).json({ message: "Không tìm thấy yêu cầu chờ duyệt" });
+        }
+
+        const [joinRequest] = conversation.joinRequests.splice(requestIndex, 1);
+        const isAlreadyMember = conversation.participants.some(
+            (participant) => normalizeId(participant.userId) === normalizeId(requestUserId)
+        );
+
+        if (action === "accept" && !isAlreadyMember) {
+            conversation.participants.push({ userId: requestUserId, role: GROUP_ROLES.MEMBER });
+            seedUnreadCountsForParticipants(conversation);
+        }
+
+        await conversation.save();
+        await populateConversation(conversation);
+
+        if (action === "accept") {
+            const actorName = getParticipantDisplayName(conversation, actorId);
+            const memberName = getParticipantDisplayName(conversation, requestUserId);
+
+            await createGroupNoticeMessage(
+                conversation,
+                actorId,
+                `${actorName} đã duyệt ${memberName} tham gia nhóm`
+            );
+
+            io.to(requestUserId.toString()).emit("new-group", formatConversationForUser(conversation, requestUserId));
+        } else {
+            emitConversationUpsert(io, conversation);
+        }
+
+        const inviteStatus = action === "accept" ? "accepted" : "declined";
+        const inviteMessages = await Message.find({
+            messageType: "group_invite",
+            "groupInviteMeta.conversationId": conversation._id,
+            "groupInviteMeta.respondedBy": requestUserId,
+            "groupInviteMeta.responseStatus": "pending",
+        });
+
+        await Promise.all(inviteMessages.map(async (inviteMessage) => {
+            inviteMessage.groupInviteMeta.responseStatus = inviteStatus;
+            inviteMessage.groupInviteMeta.respondedAt = new Date();
+            inviteMessage.markModified("groupInviteMeta");
+            await inviteMessage.save();
+
+            const formattedInviteMessage = await formatMessageForClient(inviteMessage);
+            io.to(inviteMessage.conversationId.toString()).emit("update-message", { message: formattedInviteMessage });
+        }));
+
+        return res.status(200).json({
+            conversation: formatConversationForUser(conversation, actorId),
+            request: joinRequest,
+            status: inviteStatus,
+        });
+    } catch (error) {
+        console.error("Lỗi khi duyệt yêu cầu tham gia nhóm:", error);
         return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };

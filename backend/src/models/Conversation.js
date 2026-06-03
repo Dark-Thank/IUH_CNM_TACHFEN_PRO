@@ -19,6 +19,35 @@ const participantSchema = new mongoose.Schema({
     { _id: false, }
 );
 
+const joinRequestSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    addedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+    source: {
+        type: String,
+        enum: ["invite", "add"],
+        default: "invite",
+    },
+    requestedAt: {
+        type: Date,
+        default: Date.now,
+    },
+},
+    { _id: false, }
+);
+
 const groupSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -31,6 +60,11 @@ const groupSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
+    },
+    privacy: {
+        type: String,
+        enum: ["public", "private"],
+        default: "public",
     },
 }, { _id: false, });
 
@@ -60,6 +94,10 @@ const ConversationSchema = new mongoose.Schema({
     participants: {
         type: [participantSchema],
         required: true,
+    },
+    joinRequests: {
+        type: [joinRequestSchema],
+        default: [],
     },
     group: {
         type: groupSchema,

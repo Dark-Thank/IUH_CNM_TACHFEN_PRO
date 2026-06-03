@@ -215,6 +215,15 @@ const buildVoiceMessageMeta = ({ content, uploadedFiles, voiceDurationSeconds })
 
 const POLL_MAX_OPTIONS = 10;
 const APPOINTMENT_RESPONSE_STATUSES = ["going", "maybe", "declined"];
+const MESSAGE_IMAGE_TRANSFORMATION = [
+  {
+    width: 2400,
+    height: 2400,
+    crop: "limit",
+    quality: "auto:best",
+    fetch_format: "auto",
+  },
+];
 
 const parseStringArray = (value) => {
   if (Array.isArray(value)) {
@@ -624,7 +633,7 @@ export const sendDirectMessage = async (req, res) => {
         if (file.mimetype.startsWith("image/")) {
           return uploadImageFromBuffer(file.buffer, {
             folder: "moji_chat/messages",
-            transformation: [{ width: 800, crop: "limit" }],
+            transformation: MESSAGE_IMAGE_TRANSFORMATION,
           });
         } else {
           return uploadFileFromBuffer(file.buffer, {
@@ -840,6 +849,7 @@ export const sendGroupMessage = async (req, res) => {
         if (file.mimetype.startsWith("image/")) {
           return uploadImageFromBuffer(file.buffer, {
             folder: "moji_chat/messages",
+            transformation: MESSAGE_IMAGE_TRANSFORMATION,
           });
         } else {
           return uploadFileFromBuffer(file.buffer, {

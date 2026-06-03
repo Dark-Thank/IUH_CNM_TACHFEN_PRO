@@ -8,10 +8,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Share2, Download, Loader } from "lucide-react";
+import { Copy, Download, Loader, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { chatService } from "@/services/chatServiec";
+import { useFriendStore } from "@/stores/useFriendStore";
 import type { Conversation } from "@/types/chat";
+import UserAvatar from "./UserAvatar";
 
 interface ShareGroupLinkModalProps {
   isOpen: boolean;
@@ -25,17 +27,29 @@ export const ShareGroupLinkModal = ({
   conversation,
 }: ShareGroupLinkModalProps) => {
   const [loading, setLoading] = useState(false);
-  const [invitationUrl, setInvitationUrl] = useState<string>("");
+  const [invitationUrl, setInvitationUrl] = useState("");
+  const [showFriendList, setShowFriendList] = useState(false);
+  const [sharingFriendId, setSharingFriendId] = useState<string | null>(null);
   const qrRef = useRef<HTMLDivElement>(null);
+  const { friends, loading: friendsLoading, getFriends } = useFriendStore();
+
+  const memberIds = new Set(
+    conversation?.participants.map((participant) => participant._id) ?? []
+  );
+  const inviteableFriends = friends.filter((friend) => !memberIds.has(friend._id));
 
   useEffect(() => {
-    if (isOpen && conversation && conversation.type === "group") {
-      generateInvitationLink();
+    if (isOpen && conversation?.type === "group") {
+      void generateInvitationLink();
+      void getFriends();
+      setShowFriendList(false);
     }
-  }, [isOpen, conversation]);
+  }, [isOpen, conversation?._id]);
 
   const generateInvitationLink = async () => {
-    if (!conversation) return;
+    if (!conversation) {
+      return;
+    }
 
     try {
       setLoading(true);
@@ -59,34 +73,70 @@ export const ShareGroupLinkModal = ({
     }
   };
 
-  const handleShareLink = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Tham gia nhóm "${conversation?.group?.name}"`,
-          text: `Mời bạn tham gia nhóm chat: ${conversation?.group?.name}`,
-          url: invitationUrl,
-        });
-      } catch (error) {
-        console.error("Error sharing:", error);
-      }
-    } else {
-      await handleCopyLink();
-      toast.info("Link đã được sao chép");
+  const handleSendInvite = async (friendId: string) => {
+    if (!conversation) {
+      return;
+    }
+
+    try {
+      setSharingFriendId(friendId);
+      await chatService.shareGroupInvitation(conversation._id, friendId);
+      toast.success("Đã gửi lời mời tham gia nhóm");
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Không thể gửi lời mời");
+      console.error("Error sending group invitation:", error);
+    } finally {
+      setSharingFriendId(null);
     }
   };
 
   const handleDownloadQR = () => {
-    if (qrRef.current) {
-      const canvas = qrRef.current.querySelector("canvas");
-      if (canvas) {
-        const link = document.createElement("a");
-        link.href = canvas.toDataURL("image/png");
-        link.download = `${conversation?.group?.name || "group"}-qr.png`;
-        link.click();
-        toast.success("Đã tải xuống mã QR");
-      }
+    const svg = qrRef.current?.querySelector("svg");
+
+    if (!svg) {
+      toast.error("Không tìm thấy mã QR để lưu");
+      return;
     }
+
+    const svgText = new XMLSerializer().serializeToString(svg);
+    const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const svgUrl = URL.createObjectURL(svgBlob);
+    const image = new Image();
+
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      const size = Math.max(image.width, image.height, 240);
+      const context = canvas.getContext("2d");
+
+      canvas.width = size;
+      canvas.height = size;
+
+      if (!context) {
+        URL.revokeObjectURL(svgUrl);
+        toast.error("Không thể lưu mã QR");
+        return;
+      }
+
+      context.fillStyle = "#ffffff";
+      context.fillRect(0, 0, size, size);
+      context.drawImage(image, 0, 0, size, size);
+
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `${conversation?.group?.name || "group"}-qr.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(svgUrl);
+      toast.success("Đã tải xuống mã QR");
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(svgUrl);
+      toast.error("Không thể lưu mã QR");
+    };
+
+    image.src = svgUrl;
   };
 
   if (!conversation || conversation.type !== "group") {
@@ -104,38 +154,34 @@ export const ShareGroupLinkModal = ({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Group Name */}
           <div className="text-center">
             <h3 className="text-lg font-semibold">{conversation.group?.name}</h3>
           </div>
 
-          {/* QR Code */}
           <div className="flex justify-center" ref={qrRef}>
             {loading ? (
-              <div className="flex items-center justify-center w-40 h-40 bg-muted rounded">
-                <Loader className="w-8 h-8 animate-spin text-muted-foreground" />
+              <div className="flex h-40 w-40 items-center justify-center rounded bg-muted">
+                <Loader className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : invitationUrl ? (
               <QRCode
                 value={invitationUrl}
                 size={200}
                 level="H"
-                includeMargin={true}
+                includeMargin
               />
             ) : null}
           </div>
 
-          {/* Link */}
           <div className="space-y-2">
-            <p className="text-sm text-muted-foreground text-center">Link mời:</p>
-            <div className="p-3 bg-muted rounded-lg break-all">
-              <code className="text-sm font-mono text-foreground">
+            <p className="text-center text-sm text-muted-foreground">Link mời:</p>
+            <div className="break-all rounded-lg bg-muted p-3">
+              <code className="font-mono text-sm text-foreground">
                 {invitationUrl}
               </code>
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-3 gap-2">
             <Button
               type="button"
@@ -143,9 +189,9 @@ export const ShareGroupLinkModal = ({
               size="sm"
               onClick={handleCopyLink}
               disabled={loading || !invitationUrl}
-              className="flex flex-col items-center gap-1 h-auto py-2"
+              className="flex h-auto flex-col items-center gap-1 py-2"
             >
-              <Copy className="w-4 h-4" />
+              <Copy className="h-4 w-4" />
               <span className="text-xs">Sao chép link</span>
             </Button>
 
@@ -153,11 +199,11 @@ export const ShareGroupLinkModal = ({
               type="button"
               variant="outline"
               size="sm"
-              onClick={handleShareLink}
+              onClick={() => setShowFriendList((current) => !current)}
               disabled={loading || !invitationUrl}
-              className="flex flex-col items-center gap-1 h-auto py-2"
+              className="flex h-auto flex-col items-center gap-1 py-2"
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="h-4 w-4" />
               <span className="text-xs">Chia sẻ link</span>
             </Button>
 
@@ -167,15 +213,63 @@ export const ShareGroupLinkModal = ({
               size="sm"
               onClick={handleDownloadQR}
               disabled={loading || !invitationUrl}
-              className="flex flex-col items-center gap-1 h-auto py-2"
+              className="flex h-auto flex-col items-center gap-1 py-2"
             >
-              <Download className="w-4 h-4" />
+              <Download className="h-4 w-4" />
               <span className="text-xs">Lưu mã QR</span>
             </Button>
           </div>
 
-          {/* Expiry Info */}
-          <div className="text-xs text-muted-foreground text-center p-2 bg-muted rounded">
+          {showFriendList && (
+            <div className="space-y-2 rounded-lg border border-border/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium">Chọn bạn bè để gửi lời mời</p>
+                {friendsLoading && (
+                  <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {inviteableFriends.length === 0 ? (
+                  <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    Không có bạn bè nào bên ngoài nhóm để mời.
+                  </p>
+                ) : (
+                  inviteableFriends.map((friend) => (
+                    <button
+                      key={friend._id}
+                      type="button"
+                      onClick={() => void handleSendInvite(friend._id)}
+                      disabled={sharingFriendId === friend._id}
+                      className="flex w-full items-center justify-between rounded-lg border border-border/70 px-3 py-2 text-left transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <UserAvatar
+                          type="chat"
+                          name={friend.displayName}
+                          avatarUrl={friend.avatarUrl}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {friend.displayName}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            @{friend.username}
+                          </span>
+                        </span>
+                      </span>
+
+                      <span className="text-xs text-muted-foreground">
+                        {sharingFriendId === friend._id ? "Đang gửi..." : "Gửi"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded bg-muted p-2 text-center text-xs text-muted-foreground">
             Link này có hiệu lực trong 30 ngày. Bạn có thể tạo link mới bất kỳ lúc nào.
           </div>
         </div>

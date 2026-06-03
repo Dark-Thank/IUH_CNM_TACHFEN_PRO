@@ -33,6 +33,14 @@ export const getMessagePreviewContent = (message) => {
         return title ? `Lich hen: ${title}` : "Lich hen moi";
     }
 
+    if (message?.messageType === "group_invite") {
+        const groupName = typeof message?.groupInviteMeta?.groupName === "string"
+            ? message.groupInviteMeta.groupName.trim()
+            : "";
+
+        return groupName ? `Moi tham gia nhom: ${groupName}` : "Loi moi tham gia nhom";
+    }
+
     if (Array.isArray(message?.imgUrls) && message.imgUrls.length > 0) {
         return message.imgUrls.length > 1 ? "Da gui nhieu anh" : "Da gui mot anh";
     }
@@ -233,6 +241,13 @@ const buildFormattedMessage = (message, reactionUsers = new Map()) => {
                 recipientId: getEntityId(rawMessage.callMeta.recipientId),
             }
             : rawMessage.callMeta,
+        groupInviteMeta: rawMessage.groupInviteMeta
+            ? {
+                ...rawMessage.groupInviteMeta,
+                conversationId: getEntityId(rawMessage.groupInviteMeta.conversationId),
+                invitedBy: getEntityId(rawMessage.groupInviteMeta.invitedBy),
+            }
+            : rawMessage.groupInviteMeta,
         forwardedFrom: rawMessage.forwardedFrom
             ? {
                 ...rawMessage.forwardedFrom,
@@ -287,6 +302,34 @@ export const formatConversationForSocket = (conversation) => {
                 joinedAt: participant?.joinedAt,
             };
         }),
+        joinRequests: (rawConversation.joinRequests || []).map((request) => {
+            const user = request?.userId || {};
+            const requestedBy = request?.requestedBy || {};
+            const addedBy = request?.addedBy || null;
+
+            return {
+                user: {
+                    _id: getEntityId(user),
+                    displayName: user?.displayName || "",
+                    username: user?.username || "",
+                    avatarUrl: user?.avatarUrl ?? null,
+                },
+                requestedBy: {
+                    _id: getEntityId(requestedBy),
+                    displayName: requestedBy?.displayName || "",
+                    username: requestedBy?.username || "",
+                    avatarUrl: requestedBy?.avatarUrl ?? null,
+                },
+                addedBy: addedBy ? {
+                    _id: getEntityId(addedBy),
+                    displayName: addedBy?.displayName || "",
+                    username: addedBy?.username || "",
+                    avatarUrl: addedBy?.avatarUrl ?? null,
+                } : null,
+                source: request?.source || "invite",
+                requestedAt: request?.requestedAt,
+            };
+        }).filter((request) => request.user._id),
         seenBy: (rawConversation.seenBy || []).map((user) => ({
             _id: getEntityId(user),
             displayName: user?.displayName || "",

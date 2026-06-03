@@ -101,7 +101,7 @@ const MessageInput = ({
     onSmartReplyConsumed?: () => void;
 }) => {
     const { user } = useAuthStore();
-    const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
+    const { sendDirectMessage, sendGroupMessage, replyingMessage, setReplyingMessage, clearReplyingMessage } = useChatStore();
     const { startTyping, stopTyping } = useSocketStore();
 
     const [isBlocked, setIsBlocked] = useState(false);
@@ -122,6 +122,7 @@ const MessageInput = ({
     const [isRecording, setIsRecording] = useState(false);
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [isVoiceCaptureBusy, setIsVoiceCaptureBusy] = useState(false);
+    const [isSending, setIsSending] = useState(false);
     const recorderRef = useRef<MediaRecorder | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -413,6 +414,10 @@ const MessageInput = ({
     if (!user) return null;
 
     const sendMessage = async (contentOverride?: string) => {
+        if (isSending) {
+            return;
+        }
+
         if (voiceCaptureBusyRef.current || isRecording) {
             toast.error("Hãy dừng ghi âm trước khi gửi.");
             return;
@@ -423,6 +428,11 @@ const MessageInput = ({
         if (!contentToSend.trim() && files.length === 0 && !voiceDraft) return;
 
         stopTypingIndicator();
+
+        const previousValue = value;
+        const previousFiles = files;
+        const previousReplyingMessage = replyingMessage;
+        const shouldClearComposerImmediately = !voiceDraft;
 
         const formData = new FormData();
         formData.append("content", contentToSend);
@@ -441,6 +451,15 @@ const MessageInput = ({
         }
 
         try {
+            setIsSending(true);
+
+            if (shouldClearComposerImmediately) {
+                setValue("");
+                setSelectionStart(0);
+                setFiles([]);
+                clearReplyingMessage();
+            }
+
             if (selectedConvo.type === "direct") {
                 const otherUser = selectedConvo.participants.find(
                     (p) => p._id !== user._id
@@ -477,6 +496,15 @@ const MessageInput = ({
             } else {
                 toast.error(serverMessage || "Gửi tin nhắn thất bại!");
             }
+
+            if (shouldClearComposerImmediately) {
+                setValue(previousValue);
+                setSelectionStart(previousValue.length);
+                setFiles(previousFiles);
+                setReplyingMessage(previousReplyingMessage);
+            }
+        } finally {
+            setIsSending(false);
         }
     };
 
@@ -735,7 +763,7 @@ const MessageInput = ({
                         }}
                         onKeyDown={handleKeyPress}
                         placeholder={isBlocked ? "Bạn không thể nhắn tin..." : "Soạn tin nhắn..."}
-                        disabled={isBlocked}
+                        disabled={isBlocked || isSending}
                         className="pr-20 h-9 bg-white"
                     />
 
@@ -751,7 +779,7 @@ const MessageInput = ({
                 {/* SEND */}
                 <Button
                     onClick={() => void sendMessage()}
-                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive}
+                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive || isSending}
                 >
                     <Send className="size-4 text-white" />
                 </Button>

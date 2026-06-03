@@ -140,6 +140,7 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [search, setSearch] = useState("");
+  const [privacy, setPrivacy] = useState<"public" | "private">("public");
   const { friends, getFriends } = useFriendStore();
   const [invitedUsers, setInvitedUsers] = useState<Friend[]>([]);
   const [groupAvatarFile, setGroupAvatarFile] = useState<File | null>(null);
@@ -173,6 +174,7 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
   const resetForm = () => {
     setGroupName("");
     setSearch("");
+    setPrivacy("public");
     setInvitedUsers([]);
     setGroupAvatarFile(null);
   };
@@ -235,7 +237,8 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
       const createdConversation = await createConversation(
         "group",
         groupName.trim(),
-        invitedUsers.map((u) => u._id)
+        invitedUsers.map((u) => u._id),
+        privacy
       );
 
       if (!createdConversation) {
@@ -429,6 +432,38 @@ const NewGroupChatModal = ({ trigger, open: controlledOpen, onOpenChange }: NewG
               className="hidden"
               onChange={handleAvatarChange}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Quyền tham gia</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPrivacy("public")}
+                className={cn(
+                  "rounded-2xl border px-4 py-3 text-left transition-smooth",
+                  privacy === "public"
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border/60 bg-background hover:bg-muted/40"
+                )}
+              >
+                <span className="block text-sm font-semibold">Nhóm công khai</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Có lời mời hoặc được thêm là tham gia ngay.</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrivacy("private")}
+                className={cn(
+                  "rounded-2xl border px-4 py-3 text-left transition-smooth",
+                  privacy === "private"
+                    ? "border-primary/50 bg-primary/10"
+                    : "border-border/60 bg-background hover:bg-muted/40"
+                )}
+              >
+                <span className="block text-sm font-semibold">Nhóm riêng tư</span>
+                <span className="mt-1 block text-xs text-muted-foreground">Thành viên mới cần chủ/phó nhóm duyệt.</span>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">

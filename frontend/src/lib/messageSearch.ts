@@ -2,6 +2,38 @@ import type { Conversation, Message } from "@/types/chat";
 
 export type MessageSearchDateFilter = "all" | "1d" | "7d" | "30d" | "year";
 
+export const getSearchEntityId = (value: unknown) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "object") {
+    const record = value as { _id?: unknown; id?: unknown; toString?: () => string };
+    const nestedId = record._id ?? record.id;
+
+    if (typeof nestedId === "string") {
+      return nestedId;
+    }
+
+    if (nestedId && typeof nestedId === "object" && typeof nestedId.toString === "function") {
+      return nestedId.toString();
+    }
+
+    if (typeof record.toString === "function") {
+      const stringValue = record.toString();
+      return stringValue === "[object Object]" ? "" : stringValue;
+    }
+  }
+
+  return "";
+};
+
+export const getMessageSenderId = (message: Message) => getSearchEntityId(message.senderId);
+
 export const normalizeSearchText = (value: string) =>
   value
     .normalize("NFD")
@@ -61,12 +93,14 @@ export const getMessageSenderName = (
   conversation: Conversation,
   currentUserId?: string
 ) => {
-  if (message.senderId === currentUserId) {
+  const senderId = getMessageSenderId(message);
+
+  if (senderId === currentUserId) {
     return "Bạn";
   }
 
   return (
-    conversation.participants.find((participant) => participant._id === message.senderId)?.displayName ||
+    conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
     "Thành viên"
   );
 };
@@ -80,6 +114,11 @@ export const matchesDateFilter = (
   }
 
   const createdTime = new Date(createdAt).getTime();
+
+  if (!Number.isFinite(createdTime)) {
+    return false;
+  }
+
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
