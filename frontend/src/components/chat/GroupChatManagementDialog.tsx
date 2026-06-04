@@ -174,7 +174,7 @@ const GroupChatManagementDialog = ({ conversation, open, onOpenChange }: Props) 
             return;
         }
 
-        if (/lỗi|that bai|thất bại/i.test(resultMessage)) {
+        if (/lỗi|thất bại/i.test(resultMessage)) {
             toast.error(resultMessage);
             return;
         }

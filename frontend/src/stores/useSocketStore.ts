@@ -46,7 +46,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     }
 
     if (!baseURL) {
-      console.error("Khong the ket noi socket vi chua xac dinh duoc socket base URL.");
+      console.error("Không thể kết nối socket vì chưa xác định được socket base URL.");
       return;
     }
 

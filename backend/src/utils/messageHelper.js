@@ -10,11 +10,11 @@ export const getMessagePreviewContent = (message) => {
     }
 
     if (message?.messageType === "voice") {
-        return "Tin nhan thoai";
+        return "Tin nhắn thoại";
     }
 
     if (message?.messageType === "call") {
-        return message?.content || "Cuoc goi";
+        return message?.content || "Cuộc gọi";
     }
 
     if (message?.messageType === "poll") {
@@ -22,7 +22,7 @@ export const getMessagePreviewContent = (message) => {
             ? message.pollMeta.question.trim()
             : "";
 
-        return question ? `Binh chon: ${question}` : "Binh chon moi";
+        return question ? `Bình chọn: ${question}` : "Bình chọn mới";
     }
 
     if (message?.messageType === "appointment") {
@@ -30,7 +30,7 @@ export const getMessagePreviewContent = (message) => {
             ? message.appointmentMeta.title.trim()
             : "";
 
-        return title ? `Lich hen: ${title}` : "Lich hen moi";
+        return title ? `Lịch hẹn: ${title}` : "Lịch hẹn mới";
     }
 
     if (message?.messageType === "group_invite") {
@@ -38,18 +38,18 @@ export const getMessagePreviewContent = (message) => {
             ? message.groupInviteMeta.groupName.trim()
             : "";
 
-        return groupName ? `Moi tham gia nhom: ${groupName}` : "Loi moi tham gia nhom";
+        return groupName ? `Mời tham gia nhóm: ${groupName}` : "Lời mời tham gia nhóm";
     }
 
     if (Array.isArray(message?.imgUrls) && message.imgUrls.length > 0) {
-        return message.imgUrls.length > 1 ? "Da gui nhieu anh" : "Da gui mot anh";
+        return message.imgUrls.length > 1 ? "Đã gửi nhiều ảnh" : "Đã gửi một ảnh";
     }
 
     if (Array.isArray(message?.fileUrls) && message.fileUrls.length > 0) {
-        return message.fileUrls.length > 1 ? "Da gui nhieu tep" : "Da gui mot tep";
+        return message.fileUrls.length > 1 ? "Đã gửi nhiều tệp" : "Đã gửi một tệp";
     }
 
-    return "Tin nhan moi";
+    return "Tin nhắn mới";
 };
 
 export const updateConversationAfterCreateMessage = (conversation, message,

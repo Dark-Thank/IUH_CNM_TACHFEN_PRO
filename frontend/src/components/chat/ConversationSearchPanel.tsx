@@ -27,11 +27,11 @@ type Props = {
 };
 
 const dateFilterOptions: { value: MessageSearchDateFilter; label: string }[] = [
-  { value: "all", label: "Tat ca" },
-  { value: "1d", label: "24 gio qua" },
-  { value: "7d", label: "7 ngay qua" },
-  { value: "30d", label: "30 ngay qua" },
-  { value: "year", label: "Nam nay" },
+  { value: "all", label: "Tất cả" },
+  { value: "1d", label: "24 giờ qua" },
+  { value: "7d", label: "7 ngày qua" },
+  { value: "30d", label: "30 ngày qua" },
+  { value: "year", label: "Năm nay" },
 ];
 
 const highlightText = (text: string, query: string, activeClassName: string) => {
@@ -228,7 +228,7 @@ const ConversationSearchPanel = ({
 
               {loadingHistory && (
                 <p className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground dark:bg-slate-900 dark:text-slate-400">
-                  Dang tai them lich su, ket qua co the duoc cap nhat them...
+                  Đang tải thêm lịch sử, kết quả có thể được cập nhật thêm...
                 </p>
               )}
 

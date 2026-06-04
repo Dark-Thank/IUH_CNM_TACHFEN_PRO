@@ -58,8 +58,8 @@ export const useUserStore = create<UserState>(() => ({
       setUser(updatedUser);
       useSocketStore.getState().socket?.emit("presence:set-visible", { showOnlineStatus });
     } catch (error: any) {
-      console.error("Lá»—i khi updateOnlineStatusVisibility", error);
-      toast.error(error.response?.data?.message || "KhÃ´ng thá»ƒ cáº­p nháº­t tráº¡ng thÃ¡i online.");
+      console.error("Lỗi khi updateOnlineStatusVisibility", error);
+      toast.error(error.response?.data?.message || "Không thể cập nhật trạng thái online.");
       throw error;
     }
   },

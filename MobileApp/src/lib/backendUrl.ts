@@ -158,7 +158,7 @@ export const warnIfLocalOnlyRealtimeConfig = () => {
         hasWarnedAboutLocalOnlyRealtimeConfig = true;
 
         console.warn(
-            "[MobileApp][Realtime] API/Socket dang tro toi host local/private. De goi khac mang, hay cau hinh EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SOCKET_URL hoac EXPO_PUBLIC_PUBLIC_ORIGIN tro toi backend cong khai chung."
+            "[MobileApp][Realtime] API/Socket đang trỏ tới host local/private. Để gọi khác mạng, hãy cấu hình EXPO_PUBLIC_API_URL, EXPO_PUBLIC_SOCKET_URL hoặc EXPO_PUBLIC_PUBLIC_ORIGIN trỏ tới backend công khai chung."
         );
     }
 };

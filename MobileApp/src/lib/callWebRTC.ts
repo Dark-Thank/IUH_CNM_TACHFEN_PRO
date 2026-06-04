@@ -37,8 +37,8 @@ const requestAndroidPermissions = async (callType: CallType) => {
 	if (deniedPermission) {
 		throw new Error(
 			callType === "video"
-				? "Can cap quyen camera va microphone de bat dau cuoc goi video."
-				: "Can cap quyen microphone de bat dau cuoc goi thoai."
+				? "Cần cấp quyền camera và microphone để bắt đầu cuộc gọi video."
+				: "Cần cấp quyền microphone để bắt đầu cuộc gọi thoại."
 		);
 	}
 };

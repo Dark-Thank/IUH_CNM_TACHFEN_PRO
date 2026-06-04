@@ -97,7 +97,7 @@ export const warnIfLocalOnlyRealtimeConfig = () => {
     if (isPrivateHost(apiHost) || isPrivateHost(socketHost)) {
         hasWarnedAboutLocalOnlyConfig = true;
         console.warn(
-            "[Realtime] API/Socket dang tro toi host local/private. Goi giua cac mang khac nhau can VITE_API_URL, VITE_SOCKET_URL hoac VITE_PUBLIC_ORIGIN tro toi backend cong khai."
+            "[Realtime] API/Socket đang trỏ tới host local/private. Gọi giữa các mạng khác nhau cần VITE_API_URL, VITE_SOCKET_URL hoặc VITE_PUBLIC_ORIGIN trỏ tới backend công khai."
         );
     }
 };
@@ -113,7 +113,7 @@ export const getRtcConfiguration = (): RTCConfiguration => {
                 return { iceServers: parsed };
             }
         } catch (error) {
-            console.warn("[WebRTC] Khong the parse VITE_WEBRTC_ICE_SERVERS:", error);
+            console.warn("[WebRTC] Không thể parse VITE_WEBRTC_ICE_SERVERS:", error);
         }
     }
 

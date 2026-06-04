@@ -85,9 +85,11 @@ const ChatWindowBody = ({
 
     }, [activeConversationId])
 
+    const latestMessageScrollKey = messages[messages.length - 1]?.clientTempId ?? messages[messages.length - 1]?._id;
+
     useEffect(() => {
         setShowScrollToLatest(false);
-    }, [messages[messages.length - 1]?._id]);
+    }, [latestMessageScrollKey]);
 
     useEffect(() => {
         if (!focusMessageId) {

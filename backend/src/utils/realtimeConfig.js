@@ -56,7 +56,7 @@ const buildIceServers = () => {
                 return parsed;
             }
         } catch (error) {
-            console.warn("Khong the parse WEBRTC_ICE_SERVERS:", error);
+            console.warn("Không thể parse WEBRTC_ICE_SERVERS:", error);
         }
     }
 
@@ -92,25 +92,25 @@ export const getRealtimeConfig = () => {
     const warnings = [];
 
     if (!apiBaseUrl) {
-        warnings.push("PUBLIC_API_URL chua duoc cau hinh. Client dev o mang khac se de bi tro ve backend cuc bo.");
+        warnings.push("PUBLIC_API_URL chưa được cấu hình. Client dev ở mạng khác sẽ dễ bị trỏ về backend cục bộ.");
     }
 
     if (!socketUrl) {
-        warnings.push("PUBLIC_SOCKET_URL chua duoc cau hinh. Socket client can mot dia chi cong khai chung de goi xuyen mang.");
+        warnings.push("PUBLIC_SOCKET_URL chưa được cấu hình. Socket client cần một địa chỉ công khai chung để gọi xuyên mạng.");
     }
 
     if (apiBaseUrl && isPrivateHost(getHostname(apiBaseUrl))) {
-        warnings.push("PUBLIC_API_URL dang tro toi dia chi private/local. Goi khac mang se khong hoat dong on dinh.");
+        warnings.push("PUBLIC_API_URL đang trỏ tới địa chỉ private/local. Gọi khác mạng sẽ không hoạt động ổn định.");
     }
 
     if (socketUrl && isPrivateHost(getHostname(socketUrl))) {
-        warnings.push("PUBLIC_SOCKET_URL dang tro toi dia chi private/local. Socket giua cac mang khac nhau se khong gap nhau.");
+        warnings.push("PUBLIC_SOCKET_URL đang trỏ tới địa chỉ private/local. Socket giữa các mạng khác nhau sẽ không gặp nhau.");
     }
 
     const iceServers = buildIceServers();
 
     if (!iceServers.some((server) => String(server.urls).includes("turn:"))) {
-        warnings.push("Chua co TURN server rieng. WebRTC chi STUN thuong chi hoat dong tot khi cung mang hoac NAT de.");
+        warnings.push("Chưa có TURN server riêng. WebRTC chỉ dùng STUN thường chỉ hoạt động tốt khi cùng mạng hoặc NAT dễ.");
     }
 
     return {

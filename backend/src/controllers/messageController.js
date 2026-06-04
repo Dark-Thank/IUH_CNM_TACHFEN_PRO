@@ -78,7 +78,7 @@ const resolveForwardedMessage = async (forwardedFromMessageId, userId) => {
     return {
       error: {
         status: 400,
-        payload: { message: "Khong the chuyen tiep loai tin nhan nay" },
+        payload: { message: "Không thể chuyển tiếp loại tin nhắn này" },
       },
     };
   }
@@ -250,7 +250,7 @@ const parseDateValue = (value, { required = false } = {}) => {
   const parsed = new Date(value);
 
   if (Number.isNaN(parsed.getTime())) {
-    return { error: "Ngay gio khong hop le" };
+    return { error: "Ngày giờ không hợp lệ" };
   }
 
   return { value: parsed };
@@ -277,7 +277,7 @@ const parseBooleanFlag = (value, defaultValue = false) => {
     }
   }
 
-  return { error: "Gia tri tuy chon khong hop le" };
+  return { error: "Giá trị tùy chọn không hợp lệ" };
 };
 
 const parsePollPayload = ({
@@ -292,13 +292,13 @@ const parsePollPayload = ({
   const normalizedQuestion = normalizeOptionalText(question);
 
   if (!normalizedQuestion) {
-    return { error: "Noi dung binh chon khong duoc de trong" };
+    return { error: "Nội dung bình chọn không được để trống" };
   }
 
   const parsedOptions = parseStringArray(options);
 
   if (!parsedOptions) {
-    return { error: "Danh sach lua chon khong hop le" };
+    return { error: "Danh sách lựa chọn không hợp lệ" };
   }
 
   const normalizedOptions = parsedOptions
@@ -306,11 +306,11 @@ const parsePollPayload = ({
     .filter(Boolean);
 
   if (normalizedOptions.length < 2) {
-    return { error: "Can it nhat 2 lua chon" };
+    return { error: "Cần ít nhất 2 lựa chọn" };
   }
 
   if (normalizedOptions.length > POLL_MAX_OPTIONS) {
-    return { error: `Chi ho tro toi da ${POLL_MAX_OPTIONS} lua chon` };
+    return { error: `Chỉ hỗ trợ tối đa ${POLL_MAX_OPTIONS} lựa chọn` };
   }
 
   const loweredSet = new Set();
@@ -319,7 +319,7 @@ const parsePollPayload = ({
     const lowered = optionText.toLowerCase();
 
     if (loweredSet.has(lowered)) {
-      return { error: "Cac lua chon khong duoc trung nhau" };
+      return { error: "Các lựa chọn không được trùng nhau" };
     }
 
     loweredSet.add(lowered);
@@ -376,7 +376,7 @@ const parsePollOptionText = (value) => {
   const normalizedText = normalizeOptionalText(value);
 
   if (!normalizedText) {
-    return { error: "Noi dung lua chon khong duoc de trong" };
+    return { error: "Nội dung lựa chọn không được để trống" };
   }
 
   return { value: normalizedText };
@@ -388,7 +388,7 @@ const parseAppointmentPayload = ({ title, description, location, scheduledAt }) 
   const normalizedTitle = normalizeOptionalText(title);
 
   if (!normalizedTitle) {
-    return { error: "Tieu de lich hen khong duoc de trong" };
+    return { error: "Tiêu đề lịch hẹn không được để trống" };
   }
 
   const scheduledAtResult = parseDateValue(scheduledAt, { required: true });
@@ -443,7 +443,7 @@ const ensureGroupConversation = (conversation) => {
   if (!conversation || conversation.type !== "group") {
     return {
       status: 400,
-      payload: { message: "Tinh nang nay chi dung cho nhom chat" },
+      payload: { message: "Tinh nang nay chi dung cho nhóm chat" },
     };
   }
 
@@ -457,7 +457,7 @@ const loadAuthorizedGroupMessage = async (messageId, userId) => {
     return {
       error: {
         status: 404,
-        payload: { message: "Tin nhan khong ton tai" },
+        payload: { message: "Tin nhắn không tồn tại" },
       },
     };
   }
@@ -468,7 +468,7 @@ const loadAuthorizedGroupMessage = async (messageId, userId) => {
     return {
       error: {
         status: 404,
-        payload: { message: "Cuoc tro chuyen khong ton tai" },
+        payload: { message: "Cuộc trò chuyện không tồn tại" },
       },
     };
   }
@@ -487,7 +487,7 @@ const loadAuthorizedGroupMessage = async (messageId, userId) => {
     return {
       error: {
         status: 403,
-        payload: { message: "Ban khong phai thanh vien cua nhom nay" },
+        payload: { message: "Bạn không phải thành viên của nhóm này" },
       },
     };
   }
@@ -980,8 +980,8 @@ export const createGroupPoll = async (req, res) => {
 
     return res.status(201).json({ message });
   } catch (error) {
-    console.error("Loi khi tao binh chon nhom:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi tạo bình chọn nhóm:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -992,7 +992,7 @@ export const voteOnGroupPoll = async (req, res) => {
     const userId = req.user._id;
 
     if (!optionId) {
-      return res.status(400).json({ message: "Thieu lua chon can binh chon" });
+      return res.status(400).json({ message: "Thiếu lựa chọn cần bình chọn" });
     }
 
     const result = await loadAuthorizedGroupMessage(messageId, userId);
@@ -1004,11 +1004,11 @@ export const voteOnGroupPoll = async (req, res) => {
     const { message } = result;
 
     if (message.messageType !== "poll" || !message.pollMeta) {
-      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+      return res.status(400).json({ message: "Tin nhắn này không phải bình chọn" });
     }
 
     if (isPollClosed(message.pollMeta)) {
-      return res.status(400).json({ message: "Binh chon da dong" });
+      return res.status(400).json({ message: "Bình chọn đã đóng" });
     }
 
     const selectedOption = message.pollMeta.options.find(
@@ -1016,7 +1016,7 @@ export const voteOnGroupPoll = async (req, res) => {
     );
 
     if (!selectedOption) {
-      return res.status(404).json({ message: "Khong tim thay lua chon" });
+      return res.status(404).json({ message: "Không tìm thấy lựa chọn" });
     }
 
     const alreadySelected = selectedOption.voterIds.some(
@@ -1048,8 +1048,8 @@ export const voteOnGroupPoll = async (req, res) => {
 
     return res.status(200).json({ message });
   } catch (error) {
-    console.error("Loi khi vote binh chon:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi vote bình chọn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -1073,19 +1073,19 @@ export const addOptionToGroupPoll = async (req, res) => {
     const { message } = result;
 
     if (message.messageType !== "poll" || !message.pollMeta) {
-      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+      return res.status(400).json({ message: "Tin nhắn này không phải bình chọn" });
     }
 
     if (isPollClosed(message.pollMeta)) {
-      return res.status(400).json({ message: "Binh chon da dong" });
+      return res.status(400).json({ message: "Bình chọn đã đóng" });
     }
 
     if (!pollAllowsUserAddedOptions(message.pollMeta)) {
-      return res.status(400).json({ message: "Binh chon nay khong cho phep them lua chon" });
+      return res.status(400).json({ message: "Bình chọn này không cho phép thêm lựa chọn" });
     }
 
     if (message.pollMeta.options.length >= POLL_MAX_OPTIONS) {
-      return res.status(400).json({ message: `Chi ho tro toi da ${POLL_MAX_OPTIONS} lua chon` });
+      return res.status(400).json({ message: `Chỉ hỗ trợ tối đa ${POLL_MAX_OPTIONS} lựa chọn` });
     }
 
     const normalizedText = parsedOptionText.value;
@@ -1094,7 +1094,7 @@ export const addOptionToGroupPoll = async (req, res) => {
     );
 
     if (duplicatedOption) {
-      return res.status(400).json({ message: "Lua chon nay da ton tai" });
+      return res.status(400).json({ message: "Lựa chọn này đã tồn tại" });
     }
 
     message.pollMeta.options.push({
@@ -1107,8 +1107,8 @@ export const addOptionToGroupPoll = async (req, res) => {
 
     return res.status(200).json({ message });
   } catch (error) {
-    console.error("Loi khi them lua chon cho binh chon:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi thêm lựa chọn cho bình chọn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -1126,11 +1126,11 @@ export const closeGroupPoll = async (req, res) => {
     const { message } = result;
 
     if (message.messageType !== "poll" || !message.pollMeta) {
-      return res.status(400).json({ message: "Tin nhan nay khong phai binh chon" });
+      return res.status(400).json({ message: "Tin nhắn này không phải bình chọn" });
     }
 
     if (message.pollMeta.createdBy.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Chi nguoi tao moi co the dong binh chon" });
+      return res.status(403).json({ message: "Chỉ người tạo mới có thể đóng bình chọn" });
     }
 
     if (message.pollMeta.closedAt) {
@@ -1138,7 +1138,7 @@ export const closeGroupPoll = async (req, res) => {
     }
 
     if (message.pollMeta.expiresAt && new Date(message.pollMeta.expiresAt).getTime() <= Date.now()) {
-      return res.status(400).json({ message: "Binh chon da dong" });
+      return res.status(400).json({ message: "Bình chọn đã đóng" });
     }
 
     message.pollMeta.closedAt = new Date();
@@ -1149,8 +1149,8 @@ export const closeGroupPoll = async (req, res) => {
 
     return res.status(200).json({ message });
   } catch (error) {
-    console.error("Loi khi dong binh chon:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi đóng bình chọn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -1197,8 +1197,8 @@ export const createGroupAppointment = async (req, res) => {
 
     return res.status(201).json({ message });
   } catch (error) {
-    console.error("Loi khi tao lich hen nhom:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi tạo lịch hẹn nhóm:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -1209,7 +1209,7 @@ export const respondToGroupAppointment = async (req, res) => {
     const userId = req.user._id;
 
     if (!APPOINTMENT_RESPONSE_STATUSES.includes(status)) {
-      return res.status(400).json({ message: "Trang thai xac nhan khong hop le" });
+      return res.status(400).json({ message: "Trạng thái xác nhận không hợp lệ" });
     }
 
     const result = await loadAuthorizedGroupMessage(messageId, userId);
@@ -1221,11 +1221,11 @@ export const respondToGroupAppointment = async (req, res) => {
     const { message } = result;
 
     if (message.messageType !== "appointment" || !message.appointmentMeta) {
-      return res.status(400).json({ message: "Tin nhan nay khong phai lich hen" });
+      return res.status(400).json({ message: "Tin nhắn này không phải lịch hẹn" });
     }
 
     if (new Date(message.appointmentMeta.scheduledAt).getTime() <= Date.now()) {
-      return res.status(400).json({ message: "Lich hen da den thoi gian dien ra" });
+      return res.status(400).json({ message: "Lịch hẹn đã đến thời gian diễn ra" });
     }
 
     const existingResponse = message.appointmentMeta.responses.find(
@@ -1248,8 +1248,8 @@ export const respondToGroupAppointment = async (req, res) => {
 
     return res.status(200).json({ message });
   } catch (error) {
-    console.error("Loi khi xac nhan lich hen:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi xác nhận lịch hẹn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -1271,11 +1271,11 @@ export const deleteGroupAppointment = async (req, res) => {
     }
 
     if (message.messageType !== "appointment" || !message.appointmentMeta) {
-      return res.status(400).json({ message: "Tin nhan nay khong phai lich hen" });
+      return res.status(400).json({ message: "Tin nhắn này không phải lịch hẹn" });
     }
 
     if (message.appointmentMeta.createdBy.toString() !== userId.toString()) {
-      return res.status(403).json({ message: "Chi nguoi tao moi co the xoa lich hen" });
+      return res.status(403).json({ message: "Chỉ người tạo mới có thể xóa lịch hẹn" });
     }
 
     applyRecallMutation(message, userId);
@@ -1285,8 +1285,8 @@ export const deleteGroupAppointment = async (req, res) => {
 
     return res.status(200).json({ message });
   } catch (error) {
-    console.error("Loi khi xoa lich hen:", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi xóa lịch hẹn:", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 

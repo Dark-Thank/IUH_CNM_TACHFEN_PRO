@@ -129,21 +129,21 @@ const getCallMessageOutcome = (reason, activeCall) => {
 };
 
 const getCallPreviewContent = (callType, outcome) => {
-    const typeLabel = callType === "video" ? "Cuoc goi video" : "Cuoc goi thoai";
+    const typeLabel = callType === "video" ? "Cuộc gọi video" : "Cuộc gọi thoại";
 
     switch (outcome) {
         case "busy":
-            return "Nguoi nhan ban";
+            return "Người nhận bận";
         case "declined":
-            return `${typeLabel} bi tu choi`;
+            return `${typeLabel} bị từ chối`;
         case "missed":
-            return `${typeLabel} nho`;
+            return `${typeLabel} nhỡ`;
         case "cancelled":
-            return `${typeLabel} da huy`;
+            return `${typeLabel} đã hủy`;
         case "disconnected":
-            return `${typeLabel} bi gian doan`;
+            return `${typeLabel} bị gián đoạn`;
         case "reconnect-timeout":
-            return `${typeLabel} mat ket noi`;
+            return `${typeLabel} mất kết nối`;
         default:
             return typeLabel;
     }
@@ -482,7 +482,7 @@ const broadcastOnlineUsers = async () => {
 
         io.emit("online-users", onlineUserIds);
     } catch (error) {
-        console.error("Khong the dong bo online-users:", error);
+        console.error("Không thể đồng bộ online-users:", error);
     }
 };
 
@@ -586,7 +586,7 @@ io.on("connection", async (socket) => {
             await syncUserOnlineStatusVisibility(userId, showOnlineStatus);
             socket.emit("presence:visibility-updated", { showOnlineStatus });
         } catch (error) {
-            console.error("Khong the cap nhat hien thi trang thai online:", error);
+            console.error("Không thể cập nhật hiển thị trạng thái online:", error);
         }
     });
 
@@ -729,7 +729,7 @@ io.on("connection", async (socket) => {
 
             scheduleMissedCall(callId);
         } catch (error) {
-            console.error("Khong the khoi tao cuoc goi:", error);
+            console.error("Không thể khởi tạo cuộc gọi:", error);
         }
     });
 
@@ -1039,7 +1039,7 @@ io.on("connection", async (socket) => {
                 }
 
                 broadcastOnlineUsers().catch((error) => {
-                    console.error("Khong the cap nhat online-users khi disconnect:", error);
+                    console.error("Không thể cập nhật online-users khi disconnect:", error);
                 });
                 return;
             }
@@ -1065,7 +1065,7 @@ io.on("connection", async (socket) => {
         }
 
         broadcastOnlineUsers().catch((error) => {
-            console.error("Khong the cap nhat online-users khi disconnect:", error);
+            console.error("Không thể cập nhật online-users khi disconnect:", error);
         });
     });
 });

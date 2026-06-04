@@ -1,5 +1,5 @@
 import { chatService } from "@/services/chatServiec";
-import type { Conversation } from "@/types/chat";
+import type { Conversation, Message } from "@/types/chat";
 import type { ChatState } from "@/types/store";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -23,6 +23,162 @@ const mergeConversationList = (
 ) =>
   [nextConversation, ...conversations.filter((conversation) => conversation._id !== nextConversation._id)]
     .sort((left, right) => getConversationTimestamp(right) - getConversationTimestamp(left));
+
+const getMessageTimestamp = (message: Partial<Message>) =>
+  new Date(message.createdAt ?? "1970-01-01T00:00:00.000Z").getTime();
+
+const sortMessagesAscending = (items: Message[]) =>
+  [...items].sort((left, right) => getMessageTimestamp(left) - getMessageTimestamp(right));
+
+const getFormString = (formData: FormData, key: string) => {
+  const value = formData.get(key);
+  return typeof value === "string" ? value : "";
+};
+
+const canOptimisticallySend = (formData: FormData) => {
+  const hasFiles = formData.getAll("files").length > 0;
+  const hasForward = Boolean(getFormString(formData, "forwardedFromMessageId"));
+  const content = getFormString(formData, "content").trim();
+
+  return Boolean(content) && !hasFiles && !hasForward;
+};
+
+const buildOptimisticMessage = ({
+  conversationId,
+  senderId,
+  formData,
+  replyingMessage,
+}: {
+  conversationId: string;
+  senderId: string;
+  formData: FormData;
+  replyingMessage: Message | null;
+}): Message => {
+  const now = new Date().toISOString();
+
+  return {
+    _id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    conversationId,
+    senderId,
+    content: getFormString(formData, "content"),
+    messageType: "text",
+    deliveredTo: [],
+    seenBy: [],
+    imgUrls: [],
+    fileUrls: [],
+    createdAt: now,
+    updatedAt: now,
+    isOwn: true,
+    replyTo: replyingMessage
+      ? {
+        messageId: replyingMessage._id,
+        senderId: replyingMessage.senderId,
+        content: replyingMessage.content,
+        messageType: replyingMessage.messageType,
+        imgUrls: replyingMessage.imgUrls,
+        fileUrls: replyingMessage.fileUrls,
+        createdAt: replyingMessage.createdAt,
+      }
+      : null,
+  };
+};
+
+const appendOptimisticMessage = (
+  set: (
+    partial:
+      | Partial<ChatState>
+      | ChatState
+      | ((state: ChatState) => Partial<ChatState> | ChatState)
+  ) => void,
+  message: Message
+) => {
+  set((state: ChatState) => {
+    const current = state.messages[message.conversationId];
+    const currentItems = current?.items ?? [];
+
+    if (currentItems.some((item) => item._id === message._id)) {
+      return state;
+    }
+
+    return {
+      messages: {
+        ...state.messages,
+        [message.conversationId]: {
+          items: sortMessagesAscending([...currentItems, message]),
+          hasMore: current?.hasMore ?? false,
+          nextCursor: current?.nextCursor ?? undefined,
+        },
+      },
+      conversations: state.conversations.map((conversation) =>
+        conversation._id === message.conversationId
+          ? {
+            ...conversation,
+            lastMessage: message,
+            lastMessageAt: message.createdAt,
+            updatedAt: message.createdAt,
+          }
+          : conversation
+      ),
+    };
+  });
+};
+
+const reconcileOptimisticMessage = (
+  set: (
+    partial:
+      | Partial<ChatState>
+      | ChatState
+      | ((state: ChatState) => Partial<ChatState> | ChatState)
+  ) => void,
+  tempId: string | null,
+  serverMessage?: Message
+) => {
+  if (!tempId) {
+    return;
+  }
+
+  set((state: ChatState) => {
+    const nextMessages = { ...state.messages };
+    let touchedConvoId: string | null = null;
+
+    Object.entries(state.messages).forEach(([conversationId, convoMessages]) => {
+      const hasTemp = convoMessages.items.some((item) => item._id === tempId);
+      const hasServer = serverMessage && convoMessages.items.some((item) => item._id === serverMessage._id);
+
+      if (!hasTemp && !hasServer) {
+        return;
+      }
+
+      touchedConvoId = conversationId;
+      const withoutTempOrDuplicate = convoMessages.items.filter(
+        (item) => item._id !== tempId && item._id !== serverMessage?._id
+      );
+
+      nextMessages[conversationId] = {
+        ...convoMessages,
+        items: serverMessage
+          ? sortMessagesAscending([...withoutTempOrDuplicate, { ...serverMessage, isOwn: true, clientTempId: tempId }])
+          : withoutTempOrDuplicate,
+      };
+    });
+
+    return {
+      messages: nextMessages,
+      conversations: serverMessage && touchedConvoId
+        ? state.conversations.map((conversation) =>
+          conversation._id === touchedConvoId
+            ? {
+              ...conversation,
+              lastMessage: serverMessage,
+              lastMessageAt: serverMessage.createdAt,
+              updatedAt: serverMessage.createdAt,
+            }
+            : conversation
+        )
+        : state.conversations,
+    };
+  });
+};
 
 
 
@@ -131,8 +287,10 @@ export const useChatStore = create<ChatState>()(
         }
       },
       sendDirectMessage: async (recipientId, formData?: FormData) => {
+        let optimisticId: string | null = null;
         try {
-          const { activeConversationId } = get();
+          const { activeConversationId, replyingMessage } = get();
+          const userId = useAuthStore.getState().user?._id;
 
           const data = formData || new FormData();
 
@@ -142,35 +300,70 @@ export const useChatStore = create<ChatState>()(
             data.append("conversationId", activeConversationId);
           }
 
+          if (activeConversationId && userId && canOptimisticallySend(data)) {
+            const optimisticMessage = buildOptimisticMessage({
+              conversationId: activeConversationId,
+              senderId: userId,
+              formData: data,
+              replyingMessage,
+            });
+            optimisticId = optimisticMessage._id;
+            appendOptimisticMessage(set, optimisticMessage);
+          }
+
           const message = await chatService.sendDirectMessage(data);
 
           if (message) {
-            await get().addMessage(message);
+            if (optimisticId) {
+              reconcileOptimisticMessage(set, optimisticId, message);
+            } else {
+              await get().addMessage(message);
+            }
           }
 
           return message;
 
         } catch (error) {
+          reconcileOptimisticMessage(set, optimisticId);
           console.error("Lỗi xảy ra khi gửi direct message", error);
           throw error;
         }
       },
       sendGroupMessage: async (conversationId, formData?: FormData) => {
+        let optimisticId: string | null = null;
         try {
+          const { replyingMessage } = get();
+          const userId = useAuthStore.getState().user?._id;
           const data = formData || new FormData();
 
           data.append("conversationId", conversationId);
 
+          if (userId && canOptimisticallySend(data)) {
+            const optimisticMessage = buildOptimisticMessage({
+              conversationId,
+              senderId: userId,
+              formData: data,
+              replyingMessage,
+            });
+            optimisticId = optimisticMessage._id;
+            appendOptimisticMessage(set, optimisticMessage);
+          }
+
           const message = await chatService.sendGroupMessage(data);
 
           if (message) {
-            await get().addMessage(message);
+            if (optimisticId) {
+              reconcileOptimisticMessage(set, optimisticId, message);
+            } else {
+              await get().addMessage(message);
+            }
           }
 
           return message;
 
         } catch (error) {
           console.error("Lỗi xảy ra gửi group message", error);
+          reconcileOptimisticMessage(set, optimisticId);
           throw error;
         }
       },
@@ -187,7 +380,7 @@ export const useChatStore = create<ChatState>()(
             expiresAt: payload.expiresAt ?? null,
           });
         } catch (error) {
-          console.error("Loi khi tao binh chon nhom:", error);
+          console.error("Lỗi khi tạo bình chọn nhóm:", error);
           throw error;
         }
       },
@@ -221,7 +414,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi khi them lua chon cho binh chon:", error);
+          console.error("Lỗi khi thêm lựa chọn cho bình chọn:", error);
           throw error;
         }
       },
@@ -255,7 +448,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi khi vote binh chon:", error);
+          console.error("Lỗi khi vote bình chọn:", error);
           throw error;
         }
       },
@@ -289,7 +482,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi khi dong binh chon:", error);
+          console.error("Lỗi khi đóng bình chọn:", error);
           throw error;
         }
       },
@@ -303,7 +496,7 @@ export const useChatStore = create<ChatState>()(
             scheduledAt: payload.scheduledAt,
           });
         } catch (error) {
-          console.error("Loi khi tao lich hen nhom:", error);
+          console.error("Lỗi khi tạo lịch hẹn nhóm:", error);
           throw error;
         }
       },
@@ -337,7 +530,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi khi xac nhan lich hen:", error);
+          console.error("Lỗi khi xác nhận lịch hẹn:", error);
           throw error;
         }
       },
@@ -367,7 +560,7 @@ export const useChatStore = create<ChatState>()(
             };
           });
         } catch (error) {
-          console.error("Loi khi xoa lich hen:", error);
+          console.error("Lỗi khi xóa lịch hẹn:", error);
           throw error;
         }
       },
@@ -520,7 +713,7 @@ export const useChatStore = create<ChatState>()(
             ))
           }));
         } catch (error) {
-          console.error("Lỗi xảy ra khi goi markAsSeen trong store:", error);
+          console.error("Lỗi xảy ra khi gọi markAsSeen trong store:", error);
         }
       },
       toggleConversationPin: async (conversationId) => {
@@ -528,7 +721,7 @@ export const useChatStore = create<ChatState>()(
           const conversation = await chatService.toggleConversationPin(conversationId);
           get().upsertConversation(conversation);
         } catch (error) {
-          console.error("Loi khi ghim cuoc tro chuyen:", error);
+          console.error("Lỗi khi ghim cuộc trò chuyện:", error);
           throw error;
         }
       },
@@ -582,7 +775,7 @@ export const useChatStore = create<ChatState>()(
           const data = await chatService.reviewGroupJoinRequest(conversationId, userId, action);
           get().upsertConversation(data.conversation);
         } catch (error) {
-          console.error("Loi khi duyet thanh vien nhom:", error);
+          console.error("Lỗi khi duyệt thành viên nhóm:", error);
           throw error;
         } finally {
           set({ loading: false });

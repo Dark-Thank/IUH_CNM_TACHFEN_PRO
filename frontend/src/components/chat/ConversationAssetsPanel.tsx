@@ -100,7 +100,7 @@ const ConversationAssetsPanel = ({ messages, conversation }: Props) => {
         entry.file.name
       );
     } catch (error) {
-      console.error("Khong the tai tep dinh kem:", error);
+      console.error("Không thể tải tệp đính kèm:", error);
     }
   };
 

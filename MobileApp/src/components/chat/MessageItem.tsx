@@ -384,16 +384,16 @@ function MessageItem({
       }
 
       if (data?.pendingApproval) {
-        Alert.alert("Yeu cau dang cho duyet", data?.message || "Yeu cau tham gia nhom da duoc gui den truong/phó nhom.");
+        Alert.alert("Yêu cầu đang chờ duyệt", data?.message || "Yêu cầu tham gia nhóm đã được gửi đến trưởng/phó nhóm.");
         return;
       }
 
       Alert.alert(
-        action === "accept" ? "Da tham gia nhom" : "Da tu choi loi moi",
-        data?.message || (action === "accept" ? "Ban da chap nhan loi moi tham gia nhom." : "Ban da tu choi loi moi tham gia nhom.")
+        action === "accept" ? "Đã tham gia nhóm" : "Đã từ chối lời mời",
+        data?.message || (action === "accept" ? "Bạn đã chấp nhận lời mời tham gia nhóm." : "Bạn đã từ chối lời mời tham gia nhóm.")
       );
     } catch (error: any) {
-      Alert.alert("Khong the xu ly loi moi", error?.response?.data?.message || "Vui long thu lai sau.");
+      Alert.alert("Không thể xử lý lời mời", error?.response?.data?.message || "Vui lòng thử lại sau.");
     } finally {
       setGroupInviteAction(null);
     }
@@ -743,7 +743,7 @@ function MessageItem({
               </View>
               <View style={styles.groupInviteTextBlock}>
                 <Text style={[styles.groupInviteKicker, { color: isDark ? "#cbd5e1" : "#475569" }]}>
-                  Loi moi tham gia nhom
+                  Lời mời tham gia nhóm
                 </Text>
                 <Text style={[styles.groupInviteTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
                   {message.groupInviteMeta.groupName}
@@ -783,8 +783,8 @@ function MessageItem({
                   ]}
                 >
                   {message.groupInviteMeta.responseStatus === "accepted"
-                    ? "Loi moi da duoc chap nhan"
-                    : "Loi moi da bi tu choi"}
+                    ? "Lời mời đã được chấp nhận"
+                    : "Lời mời đã bị từ chối"}
                 </Text>
               </View>
             ) : (
@@ -796,7 +796,7 @@ function MessageItem({
                 >
                   <Check size={16} color="#ffffff" />
                   <Text style={styles.groupInvitePrimaryText}>
-                    {groupInviteAction === "accept" ? "Dang tham gia..." : "Tham gia"}
+                    {groupInviteAction === "accept" ? "Đang tham gia..." : "Tham gia"}
                   </Text>
                 </Pressable>
                 <Pressable
@@ -810,7 +810,7 @@ function MessageItem({
                 >
                   <X size={16} color={isDark ? "#f8fafc" : "#0f172a"} />
                   <Text style={[styles.groupInviteSecondaryText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
-                    {groupInviteAction === "decline" ? "Dang tu choi..." : "Tu choi"}
+                    {groupInviteAction === "decline" ? "Đang từ chối..." : "Từ chối"}
                   </Text>
                 </Pressable>
               </View>

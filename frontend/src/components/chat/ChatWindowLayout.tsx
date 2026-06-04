@@ -60,7 +60,7 @@ const isUnknownLanguage = (value: string) => {
     normalized === "unknown" ||
     normalized === "undetermined" ||
     normalized.includes("cannot determine") ||
-    normalized.includes("khong xac dinh") ||
+    normalized.includes("không xác định") ||
     normalized.includes("không xác định");
 };
 

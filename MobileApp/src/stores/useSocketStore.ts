@@ -22,7 +22,7 @@ const withCallStore = <T,>(
     void import("./useCallStore")
       .then((mod) => handler(mod.useCallStore.getState(), payload))
       .catch((error) => {
-        console.error("Loi khi tai call store:", error);
+        console.error("Lỗi khi tải call store:", error);
       });
   };
 };
@@ -110,18 +110,18 @@ export const useSocketStore = create<SocketState>((set, get) => ({
     set({ socket });
 
     socket.on("connect", () => {
-      console.log("Da ket noi voi socket");
+      console.log("Đã kết nối với socket");
       set({ isConnected: true });
       joinKnownConversations(socket);
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("Socket da ngat ket noi:", reason);
+      console.log("Socket đã ngắt kết nối:", reason);
       set({ isConnected: false, onlineUsers: [], typingByConversation: {} });
     });
 
     socket.on("connect_error", (error) => {
-      console.log("Loi ket noi socket:", error.message);
+      console.log("Lỗi kết nối socket:", error.message);
       set({ isConnected: false });
     });
 
@@ -166,7 +166,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       if (currentUserId && message.senderId !== currentUserId && !isActiveConversation) {
         void chatService.markMessageDelivered(message._id).catch((error) => {
-          console.error("Loi khi cap nhat trang thai da nhan:", error);
+          console.error("Lỗi khi cập nhật trạng thái đã nhận:", error);
         });
       }
 
@@ -321,7 +321,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       if (wasBackground && nextState === "active") {
         get().connectSocket();
         refreshChatAfterForeground().catch((error) => {
-          console.log("Loi dong bo chat sau khi quay lai app:", error);
+          console.log("Lỗi đồng bộ chat sau khi quay lại app:", error);
         });
       }
     });

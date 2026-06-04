@@ -205,6 +205,7 @@ export interface Message {
   }[];
   createdAt: string;
   isOwn?: boolean;
+  clientTempId?: string;
   reactions?: {
     [emoji: string]: ReactionUser[];
   };

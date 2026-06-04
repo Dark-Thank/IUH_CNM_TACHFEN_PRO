@@ -28,7 +28,7 @@ export const checkFriendship = async (req, res, next) => {
         }
 
 
-        //todo: chat nhom
+        //todo: chat nhóm
 
         const friendChecks = memberIds.map(async (memberId) => {
             const [userA, userB] = pair(me, memberId);

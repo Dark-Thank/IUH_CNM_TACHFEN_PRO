@@ -657,7 +657,7 @@ export const toggleConversationPin = async (req, res) => {
         const conversation = await Conversation.findById(conversationId);
 
         if (!conversation) {
-            return res.status(404).json({ message: "Cuoc tro chuyen khong ton tai" });
+            return res.status(404).json({ message: "Cuộc trò chuyện không tồn tại" });
         }
 
         const isParticipant = conversation.participants.some(
@@ -665,7 +665,7 @@ export const toggleConversationPin = async (req, res) => {
         );
 
         if (!isParticipant) {
-            return res.status(403).json({ message: "Ban khong thuoc cuoc tro chuyen nay" });
+            return res.status(403).json({ message: "Bạn không thuộc cuộc trò chuyện này" });
         }
 
         const existingEntryIndex = (conversation.pinnedBy || []).findIndex(
@@ -695,8 +695,8 @@ export const toggleConversationPin = async (req, res) => {
             isPinned,
         });
     } catch (error) {
-        console.error("Loi khi toggle pin conversation:", error);
-        return res.status(500).json({ message: "Loi he thong" });
+        console.error("Lỗi khi toggle pin conversation:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };
 
@@ -731,7 +731,7 @@ export const markAsSeen = async (req, res) => {
         }
 
         if (last.senderId.toString() === userId) {
-            return res.status(200).json({ message: "Sender khong can Mark as seen" });
+            return res.status(200).json({ message: "Người gửi không cần đánh dấu đã xem" });
         }
 
         const unreadMessages = await Message.find({
@@ -1316,19 +1316,19 @@ export const respondToGroupInvitation = async (req, res) => {
         const userId = req.user._id;
 
         if (!["accept", "decline"].includes(action)) {
-            return res.status(400).json({ message: "Hanh dong khong hop le" });
+            return res.status(400).json({ message: "Hành động không hợp lệ" });
         }
 
         const inviteMessage = await Message.findById(messageId);
 
         if (!inviteMessage || inviteMessage.messageType !== "group_invite" || !inviteMessage.groupInviteMeta) {
-            return res.status(404).json({ message: "Loi moi khong ton tai" });
+            return res.status(404).json({ message: "Lời mời không tồn tại" });
         }
 
         const directConversation = await loadConversation(inviteMessage.conversationId);
 
         if (!directConversation) {
-            return res.status(404).json({ message: "Cuoc tro chuyen khong ton tai" });
+            return res.status(404).json({ message: "Cuộc trò chuyện không tồn tại" });
         }
 
         const isDirectParticipant = directConversation.participants.some(
@@ -1336,22 +1336,22 @@ export const respondToGroupInvitation = async (req, res) => {
         );
 
         if (!isDirectParticipant || normalizeId(inviteMessage.senderId) === normalizeId(userId)) {
-            return res.status(403).json({ message: "Ban khong co quyen phan hoi loi moi nay" });
+            return res.status(403).json({ message: "Bạn không có quyền phản hồi lời mời này" });
         }
 
         if (inviteMessage.groupInviteMeta.responseStatus) {
-            return res.status(400).json({ message: "Loi moi nay da duoc phan hoi" });
+            return res.status(400).json({ message: "Lời mời này đã được phản hồi" });
         }
 
         const groupConversation = await Conversation.findById(inviteMessage.groupInviteMeta.conversationId);
 
         if (!groupConversation || groupConversation.type !== "group") {
-            return res.status(404).json({ message: "Nhom khong ton tai" });
+            return res.status(404).json({ message: "Nhóm không tồn tại" });
         }
 
         if (action === "accept") {
             if (groupConversation.invitationExpiry && new Date() > groupConversation.invitationExpiry) {
-                return res.status(400).json({ message: "Link moi da het han" });
+                return res.status(400).json({ message: "Link mời đã hết hạn" });
             }
 
             const isAlreadyMember = groupConversation.participants.some(
@@ -1406,8 +1406,8 @@ export const respondToGroupInvitation = async (req, res) => {
             status: responseStatus,
         });
     } catch (error) {
-        console.error("Loi khi phan hoi loi moi nhom:", error);
-        return res.status(500).json({ message: "Loi he thong" });
+        console.error("Lỗi khi phản hồi lời mời nhóm:", error);
+        return res.status(500).json({ message: "Lỗi hệ thống" });
     }
 };
 

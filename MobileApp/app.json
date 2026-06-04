@@ -15,8 +15,8 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Ung dung can quyen microphone de goi thoai, goi video va ghi am tin nhan.",
-        "NSCameraUsageDescription": "Ung dung can quyen camera de thuc hien cuoc goi video.",
+        "NSMicrophoneUsageDescription": "Ứng dụng cần quyền microphone để gọi thoại, gọi video và ghi âm tin nhắn.",
+        "NSCameraUsageDescription": "Ứng dụng cần quyền camera để thực hiện cuộc gọi video.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.hoan22729651.MobileApp"

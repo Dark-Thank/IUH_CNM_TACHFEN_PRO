@@ -98,7 +98,7 @@ export default function VoiceMessagePlayer({
 
       await sound.playAsync();
     } catch (error) {
-      console.error("Loi khi phat audio:", error);
+      console.error("Lỗi khi phát audio:", error);
       setIsLoading(false);
     }
   };

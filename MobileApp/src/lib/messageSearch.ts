@@ -14,12 +14,12 @@ export const getConversationTitleForSearch = (
   currentUserId?: string
 ) => {
   if (conversation.type === "group") {
-    return conversation.group?.name || "Nhom chat";
+    return conversation.group?.name || "Nhóm chat";
   }
 
   return (
     conversation.participants.find((participant) => participant._id !== currentUserId)?.displayName ||
-    "Cuoc tro chuyen"
+    "Cuộc trò chuyện"
   );
 };
 
@@ -73,11 +73,11 @@ export const getMessageSearchBody = (message: Message) => {
   }
 
   if (message.messageType === "voice") {
-    textParts.push("Tin nhan thoai");
+    textParts.push("Tin nhắn thoại");
   }
 
   if (message.messageType === "call") {
-    textParts.push("Cuoc goi");
+    textParts.push("Cuộc gọi");
   }
 
   return textParts.join(" ").trim();
@@ -105,12 +105,12 @@ export const getMessageSenderName = (
   const senderId = getMessageSenderId(message);
 
   if (senderId === currentUserId) {
-    return "Ban";
+    return "Bạn";
   }
 
   return (
     conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
-    "Thanh vien"
+    "Thành viên"
   );
 };
 

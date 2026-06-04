@@ -477,7 +477,7 @@ const CallOverlay = () => {
                   ) : (
                     <div className="flex h-full flex-col items-center justify-center gap-2 bg-slate-900 px-3 text-center">
                       <div className="flex size-12 items-center justify-center rounded-full bg-white/10 text-lg font-semibold uppercase text-white">
-                        {getInitial("Ban")}
+                        {getInitial("Bạn")}
                       </div>
                       <p className="text-xs font-medium text-slate-200">
                         {isCameraEnabled ? "Đang chuẩn bị camera" : "Camera đang tắt"}

@@ -104,7 +104,7 @@ const isUnknownLanguage = (value: string) => {
     normalized === "unknown" ||
     normalized === "undetermined" ||
     normalized.includes("cannot determine") ||
-    normalized.includes("khong xac dinh") ||
+    normalized.includes("không xác định") ||
     normalized.includes("không xác định");
 };
 
@@ -394,7 +394,7 @@ const GROUP_ROLE_LABELS: Record<"owner" | "deputy" | "member", string> = {
   member: "Thành viên",
 };
 
-const isSuccessMessage = (message: string) => /thanh cong|thành công/i.test(message);
+const isSuccessMessage = (message: string) => /thành công/i.test(message);
 
 function SidebarActionCard({
   title,
@@ -613,7 +613,7 @@ export default function ChatAppScreen() {
 
         setBlockedUsers(statuses.filter(Boolean) as string[]);
       } catch (error) {
-        console.error("Loi khi kiem tra block status:", error);
+        console.error("Lỗi khi kiểm tra block status:", error);
       }
     };
 
@@ -792,6 +792,9 @@ export default function ChatAppScreen() {
 
   const hasMoreMessages = selectedConvo ? messages[selectedConvo._id]?.hasMore ?? false : false;
   const latestMessageId = messageItems[messageItems.length - 1]?._id;
+  const latestMessageScrollKey =
+    messageItems[messageItems.length - 1]?.clientTempId ??
+    messageItems[messageItems.length - 1]?._id;
 
   const keyExtractor = useCallback((item: Message) => item._id, []);
 
@@ -1446,7 +1449,7 @@ export default function ChatAppScreen() {
       const data = await chatService.joinGroupByToken(normalizedToken);
 
       if (data?.pendingApproval) {
-        toast.info(data?.message || "Yeu cau tham gia nhom dang cho duyet.");
+        toast.info(data?.message || "Yêu cầu tham gia nhóm đang chờ duyệt.");
         await fetchConversations();
         handleCloseJoinGroupModal();
         return;
@@ -1534,9 +1537,9 @@ export default function ChatAppScreen() {
 
     try {
       await reviewGroupJoinRequest(selectedConvo._id, requestUserId, action);
-      toast.success(action === "accept" ? "Da duyet thanh vien tham gia nhom." : "Da tu choi yeu cau tham gia nhom.");
+      toast.success(action === "accept" ? "Đã duyệt thành viên tham gia nhóm." : "Đã từ chối yêu cầu tham gia nhóm.");
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || "Khong the xu ly yeu cau tham gia.");
+      toast.error(error?.response?.data?.message || "Không thể xử lý yêu cầu tham gia.");
     }
   }, [reviewGroupJoinRequest, selectedConvo]);
 
@@ -1548,7 +1551,7 @@ export default function ChatAppScreen() {
       return;
     }
 
-    if (/lỗi|that bai|thất bại/i.test(resultMessage)) {
+    if (/lỗi|thất bại/i.test(resultMessage)) {
       toast.error(resultMessage);
       return;
     }
@@ -1827,7 +1830,7 @@ export default function ChatAppScreen() {
     setShowScrollToLatest(false);
 
     return () => clearTimeout(timeout);
-  }, [latestMessageId, selectedConvo]);
+  }, [latestMessageScrollKey, selectedConvo]);
 
   useLayoutEffect(() => {
     if (!selectedConversationId) {
@@ -2536,7 +2539,7 @@ export default function ChatAppScreen() {
                 ]}
               >
                 <Text style={[styles.searchFilterText, { color: messageSearchSenderFilter === "all" ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") }]}>
-                  Tat ca nguoi gui
+                  Tất cả người gửi
                 </Text>
               </Pressable>
               {messageSearchSenderOptions.map((participant) => (
@@ -2556,7 +2559,7 @@ export default function ChatAppScreen() {
                   ]}
                 >
                   <Text numberOfLines={1} style={[styles.searchFilterText, { color: messageSearchSenderFilter === participant._id ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") }]}>
-                    {participant._id === user?._id ? "Ban" : participant.displayName}
+                    {participant._id === user?._id ? "Bạn" : participant.displayName}
                   </Text>
                 </Pressable>
               ))}
@@ -2564,11 +2567,11 @@ export default function ChatAppScreen() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.searchFilterRow}>
               {[
-                ["all", "Tat ca"],
-                ["1d", "24 gio"],
-                ["7d", "7 ngay"],
-                ["30d", "30 ngay"],
-                ["year", "Nam nay"],
+                ["all", "Tất cả"],
+                ["1d", "24 giờ"],
+                ["7d", "7 ngày"],
+                ["30d", "30 ngày"],
+                ["year", "Năm nay"],
               ].map(([value, label]) => (
                 <Pressable
                   key={value}
@@ -2773,10 +2776,10 @@ export default function ChatAppScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Duyet thanh vien</Text>
+                <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Duyệt thành viên</Text>
                 {(selectedConvo?.joinRequests?.length ?? 0) === 0 ? (
                   <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                    Khong co yeu cau tham gia nao dang cho duyet.
+                    Không có yêu cầu tham gia nào đang chờ duyệt.
                   </Text>
                 ) : (
                   selectedConvo?.joinRequests?.map((request) => (
@@ -2797,7 +2800,7 @@ export default function ChatAppScreen() {
                             {request.user.displayName}
                           </Text>
                           <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>
-                            {request.source === "add" ? "Duoc thanh vien them vao" : "Chap nhan loi moi tham gia"}
+                            {request.source === "add" ? "Được thành viên thêm vào" : "Chấp nhận lời mời tham gia"}
                           </Text>
                         </View>
                       </View>
@@ -2808,7 +2811,7 @@ export default function ChatAppScreen() {
                           disabled={chatLoading}
                           style={[styles.primaryButton, styles.groupActionButton]}
                         >
-                          <Text style={styles.primaryButtonText}>Chap nhan</Text>
+                          <Text style={styles.primaryButtonText}>Chấp nhận</Text>
                         </Pressable>
                         <Pressable
                           onPress={() => void handleReviewJoinRequest(request.user._id, "decline")}
@@ -2822,7 +2825,7 @@ export default function ChatAppScreen() {
                             },
                           ]}
                         >
-                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Tu choi</Text>
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Từ chối</Text>
                         </Pressable>
                       </View>
                     </View>
@@ -3603,7 +3606,7 @@ export default function ChatAppScreen() {
               },
             ]}
           >
-            <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Che do nhom</Text>
+            <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Chế độ nhóm</Text>
             <View style={styles.groupPrivacyRow}>
               {(["public", "private"] as const).map((privacy) => {
                 const selected = groupPrivacy === privacy;
@@ -3630,12 +3633,12 @@ export default function ChatAppScreen() {
                         { color: selected ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") },
                       ]}
                     >
-                      {privacy === "public" ? "Cong khai" : "Rieng tu"}
+                      {privacy === "public" ? "Công khai" : "Riêng tư"}
                     </Text>
                     <Text style={[styles.groupPrivacyDescription, { color: isDark ? "#94a3b8" : "#64748b" }]}>
                       {privacy === "public"
-                        ? "Ai co loi moi hoac duoc them deu vao ngay."
-                        : "Thanh vien moi can truong/phó nhom duyet."}
+                        ? "Ai có lời mời hoặc được thêm đều vào ngay."
+                        : "Thành viên mới cần trưởng/phó nhóm duyệt."}
                     </Text>
                   </Pressable>
                 );

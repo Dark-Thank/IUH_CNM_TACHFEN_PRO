@@ -64,7 +64,7 @@ const bootstrapServer = async () => {
       console.log(`server bat dau tren cong ${PORT}`);
     });
   } catch (error) {
-    console.error("Khong the khoi dong server:", error);
+    console.error("Không thể khởi động server:", error);
     process.exit(1);
   }
 };

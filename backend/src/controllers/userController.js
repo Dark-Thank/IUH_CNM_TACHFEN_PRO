@@ -95,8 +95,8 @@ export const authMe = async (req, res) => {
       user: req.user,
     });
   } catch (error) {
-    console.error("Loi khi goi authMe", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi gọi authMe", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -104,8 +104,8 @@ export const getRealtimeConfig = async (_req, res) => {
   try {
     return res.status(200).json(getRealtimeConfigPayload());
   } catch (error) {
-    console.error("Loi khi lay realtime config", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi lấy realtime config", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -114,7 +114,7 @@ export const searchUserByUsername = async (req, res) => {
     const { username } = req.query;
 
     if (!username || username.trim() === "") {
-      return res.status(400).json({ message: "Can cung cap username trong query." });
+      return res.status(400).json({ message: "Cần cung cấp username trong query." });
     }
 
     const user = await User.findOne({ username }).select(
@@ -123,8 +123,8 @@ export const searchUserByUsername = async (req, res) => {
 
     return res.status(200).json({ user });
   } catch (error) {
-    console.error("Loi xay ra khi searchUserByUsername", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi xảy ra khi searchUserByUsername", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -133,7 +133,7 @@ export const getUserById = async (req, res) => {
     const { userId } = req.params;
 
     if (!userId) {
-      return res.status(400).json({ message: "Can cung cap userId." });
+      return res.status(400).json({ message: "Cần cung cấp userId." });
     }
 
     const user = await User.findById(userId).select(
@@ -141,13 +141,13 @@ export const getUserById = async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({ message: "Khong tim thay nguoi dung." });
+      return res.status(404).json({ message: "Không tìm thấy người dùng." });
     }
 
     return res.status(200).json({ user });
   } catch (error) {
-    console.error("Loi xay ra khi getUserById", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi xảy ra khi getUserById", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -178,7 +178,7 @@ export const uploadAvatar = async (req, res) => {
 
     return res.status(200).json({ avatarUrl: updatedUser.avatarUrl });
   } catch (error) {
-    console.error("Loi xay ra khi upload avatar", error);
+    console.error("Lỗi xảy ra khi upload avatar", error);
     return res.status(500).json({ message: "Upload failed" });
   }
 };
@@ -193,7 +193,7 @@ export const updateMe = async (req, res) => {
       const trimmedDisplayName = displayName.trim();
 
       if (!trimmedDisplayName) {
-        return res.status(400).json({ message: "Display name khong duoc de trong." });
+        return res.status(400).json({ message: "Tên hiển thị không được để trống." });
       }
 
       updates.displayName = trimmedDisplayName;
@@ -208,7 +208,7 @@ export const updateMe = async (req, res) => {
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ message: "Khong co truong nao de cap nhat." });
+      return res.status(400).json({ message: "Không có trường nào để cập nhật." });
     }
 
     const updatedUser = await User.findByIdAndUpdate(userId, updates, {
@@ -222,8 +222,8 @@ export const updateMe = async (req, res) => {
 
     return res.status(200).json({ user: updatedUser });
   } catch (error) {
-    console.error("Loi khi updateMe", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi updateMe", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -275,8 +275,8 @@ export const deleteMe = async (req, res) => {
 
     return res.status(200).json({ message: "Xoa tai khoan thanh cong." });
   } catch (error) {
-    console.error("Loi khi deleteMe", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi khi deleteMe", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -290,19 +290,19 @@ export const changePassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
     if (!oldPassword || !newPassword) {
-      return res.status(400).json({ message: "Can cung cap oldPassword va newPassword." });
+      return res.status(400).json({ message: "Cần cung cấp oldPassword và newPassword." });
     }
 
     const user = await User.findById(userId).select("hashedPassword");
 
     if (!user) {
-      return res.status(404).json({ message: "Nguoi dung khong ton tai." });
+      return res.status(404).json({ message: "Người dùng không tồn tại." });
     }
 
     const match = await bcrypt.compare(oldPassword, user.hashedPassword);
 
     if (!match) {
-      return res.status(401).json({ message: "Mat khau hien tai khong dung." });
+      return res.status(401).json({ message: "Mật khẩu hiện tại không đúng." });
     }
 
     user.hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -310,8 +310,8 @@ export const changePassword = async (req, res) => {
 
     return res.status(200).json({ message: "Doi mat khau thanh cong." });
   } catch (error) {
-    console.error("Loi changePassword", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi changePassword", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };
 
@@ -321,19 +321,19 @@ export const requestChangePassword = async (req, res) => {
     const { oldPassword, newPassword } = req.body;
 
     if (!oldPassword || !newPassword) {
-      return res.status(400).json({ message: "Can cung cap oldPassword va newPassword." });
+      return res.status(400).json({ message: "Cần cung cấp oldPassword và newPassword." });
     }
 
     const user = await User.findById(userId).select("hashedPassword email");
 
     if (!user) {
-      return res.status(404).json({ message: "Nguoi dung khong ton tai." });
+      return res.status(404).json({ message: "Người dùng không tồn tại." });
     }
 
     const match = await bcrypt.compare(oldPassword, user.hashedPassword);
 
     if (!match) {
-      return res.status(401).json({ message: "Mat khau hien tai khong dung." });
+      return res.status(401).json({ message: "Mật khẩu hiện tại không đúng." });
     }
 
     const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -348,19 +348,19 @@ export const requestChangePassword = async (req, res) => {
       sendEmail({
         to: user.email,
         subject: "Ma doi mat khau",
-        text: `Ma doi mat khau cua ban: ${resetOtp}. Ma co hieu luc trong 10 phut.`,
+        text: `Mã đổi mật khẩu của bạn: ${resetOtp}. Mã có hiệu lực trong 10 phút.`,
       })
         .then(() => console.log("Change-password OTP dispatched"))
         .catch((emailError) => console.error("Gui email OTP that bai", emailError));
     } catch (emailError) {
-      console.error("Khong the gui email OTP", emailError);
+      console.error("Không thể gửi email OTP", emailError);
     }
 
     return res.status(200).json({
-      message: "Ma OTP doi mat khau da duoc gui toi email cua ban.",
+      message: "Mã OTP đổi mật khẩu đã được gửi tới email của bạn.",
     });
   } catch (error) {
-    console.error("Loi requestChangePassword", error);
-    return res.status(500).json({ message: "Loi he thong" });
+    console.error("Lỗi requestChangePassword", error);
+    return res.status(500).json({ message: "Lỗi hệ thống" });
   }
 };

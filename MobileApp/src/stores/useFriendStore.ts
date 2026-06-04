@@ -156,7 +156,7 @@ unblockUser: (id: string) =>
       await get().getFriends();
     } catch (error) {
       if (!isUnauthorizedError(error)) {
-        console.error("Loi xay ra khi acceptRequest", error);
+        console.error("Lỗi xảy ra khi acceptRequest", error);
       }
     } finally {
       set({ loading: false });
@@ -177,7 +177,7 @@ unblockUser: (id: string) =>
       }));
     } catch (error) {
       if (!isUnauthorizedError(error)) {
-        console.error("Loi xay ra khi declineRequest", error);
+        console.error("Lỗi xảy ra khi declineRequest", error);
       }
     } finally {
       set({ loading: false });
@@ -196,7 +196,7 @@ unblockUser: (id: string) =>
       set({ friends });
     } catch (error) {
       if (!isUnauthorizedError(error)) {
-        console.error("Loi xay ra khi load friends", error);
+        console.error("Lỗi xảy ra khi load friends", error);
       }
 
       set({ friends: [] });

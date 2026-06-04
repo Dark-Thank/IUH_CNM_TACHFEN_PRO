@@ -155,15 +155,15 @@ export const getChatAiErrorResponse = (error) => {
   const parsed = parseProviderError(error);
 
   if (error?.message === "Missing Gemini API key") {
-    return { status: 500, message: "Backend chua cau hinh CHAT_GEMINI_API_KEY" };
+    return { status: 500, message: "Backend chưa cấu hình CHAT_GEMINI_API_KEY" };
   }
 
   if (error?.message === "Missing Groq API key") {
-    return { status: 500, message: "Gemini het quota va backend chua cau hinh CHAT_GROQ_API_KEY" };
+    return { status: 500, message: "Gemini hết quota và backend chưa cấu hình CHAT_GROQ_API_KEY" };
   }
 
   if (error?.message === "fetch failed") {
-    return { status: 503, message: "Backend khong ket noi duoc AI provider" };
+    return { status: 503, message: "Backend không kết nối được AI provider" };
   }
 
   return {
