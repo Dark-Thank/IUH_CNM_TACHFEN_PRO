@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { Label } from "../ui/label";
+import logoSrc from '/logo.svg';
 
 const signInSchema = z.object({
     username: z.string().min(3, "Tên đăng nhập phải có ít nhất 3 ký tự"),
@@ -59,7 +60,7 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
                                     className="mx-auto block w-fit text-center"
                                 >
                                     <img
-                                        src="/assets/logo.png"
+                                        src={logoSrc}
                                         alt="logo"
                                     />
                                 </a>
