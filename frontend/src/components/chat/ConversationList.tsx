@@ -34,11 +34,7 @@ const getConversationDisplayName = (conversation: Conversation, currentUserId?: 
 };
 
 const getConversationSearchText = (conversation: Conversation, currentUserId?: string) => {
-  const name = getConversationDisplayName(conversation, currentUserId);
-  const participantNames = conversation.participants.map((participant) => participant.displayName).join(" ");
-  const lastMessageText = conversation.lastMessage?.content || "";
-
-  return normalizeSearchText(`${name} ${participantNames} ${lastMessageText}`);
+  return normalizeSearchText(getConversationDisplayName(conversation, currentUserId));
 };
 
 const renderConversationCard = (conversation: Conversation) =>

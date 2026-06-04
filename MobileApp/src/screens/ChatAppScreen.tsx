@@ -10,8 +10,11 @@ import { getApiBaseUrl } from "@/lib/backendUrl";
 import {
   buildSearchSnippet,
   getConversationSearchBody,
+  getMessageSenderId,
   getMessageSearchBody,
   getMessageSenderName,
+  matchesDateFilter,
+  type MessageSearchDateFilter,
   normalizeSearchText,
 } from "@/lib/messageSearch";
 import { toast } from "@/lib/toast";
@@ -516,10 +519,13 @@ export default function ChatAppScreen() {
   const [searchStatus, setSearchStatus] = useState<SearchStatus>("idle");
   const [newMessageQuery, setNewMessageQuery] = useState("");
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
+  const [messageSearchSenderFilter, setMessageSearchSenderFilter] = useState("all");
+  const [messageSearchDateFilter, setMessageSearchDateFilter] = useState<MessageSearchDateFilter>("all");
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [conversationSummary, setConversationSummary] = useState<ConversationSummary | null>(null);
   const [summaryScope, setSummaryScope] = useState<"recent" | "unread">("recent");
   const [groupName, setGroupName] = useState("");
+  const [groupPrivacy, setGroupPrivacy] = useState<"public" | "private">("public");
   const [groupQuery, setGroupQuery] = useState("");
   const [joinGroupMode, setJoinGroupMode] = useState<"link" | "camera">("link");
   const [joinGroupToken, setJoinGroupToken] = useState("");
@@ -574,6 +580,7 @@ export default function ChatAppScreen() {
     toggleConversationPin,
     createConversation,
     addGroupMembers,
+    reviewGroupJoinRequest,
     removeGroupMember,
     updateGroupMemberRole,
     transferGroupOwnership,
@@ -748,6 +755,13 @@ export default function ChatAppScreen() {
     typeof latestMessage.content === "string" &&
     latestMessage.content.trim()
   );
+  const messageSearchSenderOptions = useMemo(() => {
+    if (!selectedConvo) {
+      return [];
+    }
+
+    return selectedConvo.participants;
+  }, [selectedConvo]);
 
   const messageSearchResults = useMemo(() => {
     if (!selectedConvo) {
@@ -762,9 +776,14 @@ export default function ChatAppScreen() {
 
     return [...messageItems]
       .filter((message) => !message.isRecalled)
+      .filter((message) =>
+        messageSearchSenderFilter === "all" ||
+        getMessageSenderId(message) === messageSearchSenderFilter
+      )
+      .filter((message) => matchesDateFilter(message.createdAt, messageSearchDateFilter))
       .filter((message) => normalizeSearchText(getMessageSearchBody(message)).includes(normalizedQuery))
       .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  }, [messageItems, messageSearchQuery, selectedConvo]);
+  }, [messageItems, messageSearchDateFilter, messageSearchQuery, messageSearchSenderFilter, selectedConvo]);
 
   const pinnedMessages = useMemo(
     () => messageItems.filter((message) => message.isPinned),
@@ -1048,6 +1067,11 @@ export default function ChatAppScreen() {
     return selectedConvo.participants.find((participant) => participant._id === user._id) ?? null;
   }, [selectedConvo, user?._id]);
 
+  const canReviewJoinRequests =
+    selectedConvo?.type === "group" &&
+    selectedConvo.group?.privacy === "private" &&
+    (selectedGroupRole?.role === "owner" || selectedGroupRole?.role === "deputy");
+
   const filteredFriendsForGroupManagement = useMemo(() => {
     if (!selectedConvo || selectedConvo.type !== "group") {
       return [] as Friend[];
@@ -1149,6 +1173,7 @@ export default function ChatAppScreen() {
 
   const resetCreateGroupState = useCallback(() => {
     setGroupName("");
+    setGroupPrivacy("public");
     setGroupQuery("");
     setSelectedGroupMembers([]);
     setSelectedGroupAvatar(null);
@@ -1359,7 +1384,8 @@ export default function ChatAppScreen() {
       const createdConversation = await createConversation(
         "group",
         groupName.trim(),
-        selectedGroupMembers.map((friend) => friend._id)
+        selectedGroupMembers.map((friend) => friend._id),
+        groupPrivacy
       );
 
       if (!createdConversation) {
@@ -1393,7 +1419,7 @@ export default function ChatAppScreen() {
       isCreatingGroupRef.current = false;
       setIsCreatingGroup(false);
     }
-  }, [chatLoading, createConversation, groupName, isCreatingGroup, resetCreateGroupState, selectedGroupAvatar, selectedGroupMembers]);
+  }, [chatLoading, createConversation, groupName, groupPrivacy, isCreatingGroup, resetCreateGroupState, selectedGroupAvatar, selectedGroupMembers]);
 
   const resetJoinGroupState = useCallback(() => {
     setJoinGroupMode("link");
@@ -1419,9 +1445,18 @@ export default function ChatAppScreen() {
       setJoinGroupLoading(true);
       const data = await chatService.joinGroupByToken(normalizedToken);
 
+      if (data?.pendingApproval) {
+        toast.info(data?.message || "Yeu cau tham gia nhom dang cho duyet.");
+        await fetchConversations();
+        handleCloseJoinGroupModal();
+        return;
+      }
+
       toast.success(data?.message || "Tham gia nhóm thành công.");
       await fetchConversations();
-      setActiveConversation(data.conversation._id);
+      if (data?.conversation?._id) {
+        setActiveConversation(data.conversation._id);
+      }
       handleCloseJoinGroupModal();
     } catch (error: any) {
       joinScanLockRef.current = false;
@@ -1491,6 +1526,19 @@ export default function ChatAppScreen() {
       toast.error(error?.response?.data?.message || "Thêm thành viên thất bại.");
     }
   }, [addGroupMembers, resetGroupManagementState, selectedConvo, selectedMembersToAdd]);
+
+  const handleReviewJoinRequest = useCallback(async (requestUserId: string, action: "accept" | "decline") => {
+    if (!selectedConvo || selectedConvo.type !== "group") {
+      return;
+    }
+
+    try {
+      await reviewGroupJoinRequest(selectedConvo._id, requestUserId, action);
+      toast.success(action === "accept" ? "Da duyet thanh vien tham gia nhom." : "Da tu choi yeu cau tham gia nhom.");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || "Khong the xu ly yeu cau tham gia.");
+    }
+  }, [reviewGroupJoinRequest, selectedConvo]);
 
   const handleSendFriendRequestToGroupMember = useCallback(async (participant: Conversation["participants"][number]) => {
     const resultMessage = await addFriend(participant._id);
@@ -1694,6 +1742,8 @@ export default function ChatAppScreen() {
     setShowMessageSearch(false);
     setShowSummaryModal(false);
     setMessageSearchQuery("");
+    setMessageSearchSenderFilter("all");
+    setMessageSearchDateFilter("all");
     setConversationSummary(null);
     setSummaryLoading(false);
     setSummaryScope("recent");
@@ -2470,6 +2520,78 @@ export default function ChatAppScreen() {
               ]}
             />
 
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.searchFilterRow}>
+              <Pressable
+                onPress={() => setMessageSearchSenderFilter("all")}
+                style={[
+                  styles.searchFilterChip,
+                  {
+                    backgroundColor: messageSearchSenderFilter === "all"
+                      ? isDark ? "#312e81" : "#ede9fe"
+                      : isDark ? "#111827" : "#ffffff",
+                    borderColor: messageSearchSenderFilter === "all"
+                      ? isDark ? "#8b5cf6" : "#a78bfa"
+                      : isDark ? "#334155" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.searchFilterText, { color: messageSearchSenderFilter === "all" ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") }]}>
+                  Tat ca nguoi gui
+                </Text>
+              </Pressable>
+              {messageSearchSenderOptions.map((participant) => (
+                <Pressable
+                  key={participant._id}
+                  onPress={() => setMessageSearchSenderFilter(participant._id)}
+                  style={[
+                    styles.searchFilterChip,
+                    {
+                      backgroundColor: messageSearchSenderFilter === participant._id
+                        ? isDark ? "#312e81" : "#ede9fe"
+                        : isDark ? "#111827" : "#ffffff",
+                      borderColor: messageSearchSenderFilter === participant._id
+                        ? isDark ? "#8b5cf6" : "#a78bfa"
+                        : isDark ? "#334155" : "#e2e8f0",
+                    },
+                  ]}
+                >
+                  <Text numberOfLines={1} style={[styles.searchFilterText, { color: messageSearchSenderFilter === participant._id ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") }]}>
+                    {participant._id === user?._id ? "Ban" : participant.displayName}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.searchFilterRow}>
+              {[
+                ["all", "Tat ca"],
+                ["1d", "24 gio"],
+                ["7d", "7 ngay"],
+                ["30d", "30 ngay"],
+                ["year", "Nam nay"],
+              ].map(([value, label]) => (
+                <Pressable
+                  key={value}
+                  onPress={() => setMessageSearchDateFilter(value as MessageSearchDateFilter)}
+                  style={[
+                    styles.searchFilterChip,
+                    {
+                      backgroundColor: messageSearchDateFilter === value
+                        ? isDark ? "#312e81" : "#ede9fe"
+                        : isDark ? "#111827" : "#ffffff",
+                      borderColor: messageSearchDateFilter === value
+                        ? isDark ? "#8b5cf6" : "#a78bfa"
+                        : isDark ? "#334155" : "#e2e8f0",
+                    },
+                  ]}
+                >
+                  <Text style={[styles.searchFilterText, { color: messageSearchDateFilter === value ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") }]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
             <ScrollView style={styles.friendList} showsVerticalScrollIndicator={false}>
               {!messageSearchQuery.trim() ? (
                 <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
@@ -2640,6 +2762,74 @@ export default function ChatAppScreen() {
                 ))
                 : null}
             </View>
+
+            {canReviewJoinRequests ? (
+              <View
+                style={[
+                  styles.requestCard,
+                  {
+                    backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                    borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                  },
+                ]}
+              >
+                <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Duyet thanh vien</Text>
+                {(selectedConvo?.joinRequests?.length ?? 0) === 0 ? (
+                  <Text style={[styles.emptyModalText, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                    Khong co yeu cau tham gia nao dang cho duyet.
+                  </Text>
+                ) : (
+                  selectedConvo?.joinRequests?.map((request) => (
+                    <View
+                      key={request.user._id}
+                      style={[
+                        styles.friendRow,
+                        {
+                          backgroundColor: isDark ? "#111827" : "#ffffff",
+                          borderColor: isDark ? "#1f2937" : "#e2e8f0",
+                        },
+                      ]}
+                    >
+                      <View style={styles.requestInfo}>
+                        <UserAvatar name={request.user.displayName} avatarUrl={request.user.avatarUrl} size={42} />
+                        <View style={styles.requestTextBlock}>
+                          <Text style={[styles.requestName, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                            {request.user.displayName}
+                          </Text>
+                          <Text style={[styles.requestUsername, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                            {request.source === "add" ? "Duoc thanh vien them vao" : "Chap nhan loi moi tham gia"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.groupActionColumn}>
+                        <Pressable
+                          onPress={() => void handleReviewJoinRequest(request.user._id, "accept")}
+                          disabled={chatLoading}
+                          style={[styles.primaryButton, styles.groupActionButton]}
+                        >
+                          <Text style={styles.primaryButtonText}>Chap nhan</Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => void handleReviewJoinRequest(request.user._id, "decline")}
+                          disabled={chatLoading}
+                          style={[
+                            styles.secondaryButton,
+                            styles.groupActionButton,
+                            {
+                              backgroundColor: isDark ? "#3f1d24" : "#fff1f2",
+                              borderColor: isDark ? "#7f1d1d" : "#fecdd3",
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.secondaryButtonText, { color: isDark ? "#fecdd3" : "#be123c" }]}>Tu choi</Text>
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            ) : null}
 
             <View
               style={[
@@ -3406,6 +3596,55 @@ export default function ChatAppScreen() {
 
           <View
             style={[
+              styles.groupPrivacyCard,
+              {
+                backgroundColor: isDark ? "#0f172a" : "#f8fafc",
+                borderColor: isDark ? "#1f2937" : "#e2e8f0",
+              },
+            ]}
+          >
+            <Text style={[styles.modalSectionTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>Che do nhom</Text>
+            <View style={styles.groupPrivacyRow}>
+              {(["public", "private"] as const).map((privacy) => {
+                const selected = groupPrivacy === privacy;
+
+                return (
+                  <Pressable
+                    key={privacy}
+                    onPress={() => setGroupPrivacy(privacy)}
+                    style={[
+                      styles.groupPrivacyOption,
+                      {
+                        backgroundColor: selected
+                          ? isDark ? "#312e81" : "#ede9fe"
+                          : isDark ? "#111827" : "#ffffff",
+                        borderColor: selected
+                          ? isDark ? "#8b5cf6" : "#a78bfa"
+                          : isDark ? "#334155" : "#e2e8f0",
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.groupPrivacyTitle,
+                        { color: selected ? (isDark ? "#ddd6fe" : "#6d28d9") : (isDark ? "#f8fafc" : "#0f172a") },
+                      ]}
+                    >
+                      {privacy === "public" ? "Cong khai" : "Rieng tu"}
+                    </Text>
+                    <Text style={[styles.groupPrivacyDescription, { color: isDark ? "#94a3b8" : "#64748b" }]}>
+                      {privacy === "public"
+                        ? "Ai co loi moi hoac duoc them deu vao ngay."
+                        : "Thanh vien moi can truong/phó nhom duyet."}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          <View
+            style={[
               styles.groupAvatarCard,
               {
                 backgroundColor: isDark ? "#0f172a" : "#f8fafc",
@@ -3969,6 +4208,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "600",
   },
+  searchFilterRow: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  searchFilterChip: {
+    maxWidth: 180,
+    minHeight: 38,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchFilterText: {
+    fontSize: 12,
+    fontWeight: "800",
+  },
   primaryButton: {
     minHeight: 46,
     borderRadius: 16,
@@ -4080,6 +4336,30 @@ const styles = StyleSheet.create({
   },
   groupFooterButton: {
     flex: 1,
+  },
+  groupPrivacyCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 12,
+  },
+  groupPrivacyRow: {
+    gap: 10,
+  },
+  groupPrivacyOption: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  groupPrivacyTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  groupPrivacyDescription: {
+    fontSize: 12,
+    lineHeight: 17,
   },
   relationshipPill: {
     minHeight: 34,

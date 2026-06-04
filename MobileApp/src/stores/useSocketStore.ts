@@ -157,12 +157,14 @@ export const useSocketStore = create<SocketState>((set, get) => ({
       socket.emit("join-conversation", conversation._id);
     });
 
-    socket.on("new-message", ({ message, conversation, unreadCounts }) => {
+    socket.on("new-message", async ({ message, conversation, unreadCounts }) => {
       const currentUserId = authSession.getCurrentUserId();
+      const chatStore = useChatStore.getState();
+      const isActiveConversation = chatStore.activeConversationId === message.conversationId;
 
-      useChatStore.getState().addMessage(message);
+      await chatStore.addMessage(message);
 
-      if (currentUserId && message.senderId !== currentUserId) {
+      if (currentUserId && message.senderId !== currentUserId && !isActiveConversation) {
         void chatService.markMessageDelivered(message._id).catch((error) => {
           console.error("Loi khi cap nhat trang thai da nhan:", error);
         });
@@ -170,14 +172,19 @@ export const useSocketStore = create<SocketState>((set, get) => ({
 
       const updatedConversation = {
         ...conversation,
-        unreadCounts,
+        unreadCounts: isActiveConversation && currentUserId
+          ? {
+            ...unreadCounts,
+            [currentUserId]: 0,
+          }
+          : unreadCounts,
       };
 
-      if (useChatStore.getState().activeConversationId === message.conversationId) {
-        useChatStore.getState().markAsSeen();
+      if (isActiveConversation) {
+        void chatStore.markAsSeen();
       }
 
-      useChatStore.getState().updateConversation(updatedConversation);
+      chatStore.updateConversation(updatedConversation);
     });
 
     socket.on("read-message", ({ conversation, lastMessage }) => {

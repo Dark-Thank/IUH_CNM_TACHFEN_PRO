@@ -104,6 +104,7 @@ export default function MessageInput({
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingConversationIdRef = useRef(selectedConvo._id);
   const isTypingRef = useRef(false);
+  const inputRef = useRef<TextInput | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isVoiceCaptureBusy, setIsVoiceCaptureBusy] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
@@ -482,8 +483,6 @@ export default function MessageInput({
       return;
     }
 
-    if (sending) return;
-
     const trimmed = value.trim();
 
     if (voiceCaptureBusyRef.current || isRecording) {
@@ -505,6 +504,9 @@ export default function MessageInput({
     setSending(true);
     setValue("");
     setSelectionStart(0);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
 
     try {
       if (selectedConvo.type === "direct") {
@@ -531,10 +533,16 @@ export default function MessageInput({
       setFiles([]);
       setVoiceDraft(null);
       clearReplyingMessage();
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     } catch (error) {
       console.error(error);
       setValue(trimmed);
       setSelectionStart(trimmed.length);
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
       const serverMessage = (error as any)?.response?.data?.message;
       toast.error(
         serverMessage || "Gửi tin nhắn thất bại"
@@ -853,6 +861,7 @@ export default function MessageInput({
         ]}
       >
         <TextInput
+          ref={inputRef}
           value={value}
           onChangeText={handleChangeText}
           onSelectionChange={(event) => {
@@ -987,7 +996,6 @@ export default function MessageInput({
           onPress={handleSend}
           disabled={
             disabled ||
-            sending ||
             isVoiceCaptureActive ||
             !hasComposerContent
           }
@@ -996,7 +1004,6 @@ export default function MessageInput({
             {
               backgroundColor:
                 !disabled &&
-                  !sending &&
                   !isVoiceCaptureActive &&
                   hasComposerContent
                   ? isDark

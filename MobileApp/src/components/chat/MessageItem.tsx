@@ -5,11 +5,12 @@ import { useCallStore } from "@/stores/useCallStore";
 import { useChatStore } from "@/stores/useChatStore";
 import { useThemeStore } from "@/stores/useThemeStore";
 import type { Conversation, Message, Participant, ReactionUser } from "@/types/chat";
-import { Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pin, Video } from "lucide-react-native";
+import { Check, Phone, PhoneIncoming, PhoneMissed, PhoneOff, PhoneOutgoing, Pin, UserPlus, Video, X } from "lucide-react-native";
 import { memo, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -171,7 +172,7 @@ const getReactionUsersLabel = (users: ReactionUser[], currentUserId?: string) =>
     .join(", ");
 };
 
-const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm)/i;
+const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm|đã duyệt .+ tham gia nhóm)/i;
 
 const isGroupNoticeMessage = (message: Message, conversation: Conversation) => (
   conversation.type === "group"
@@ -222,6 +223,7 @@ function MessageItem({
     deleteGroupAppointment,
     setReplyingMessage,
     updateMessage,
+    upsertConversation,
   } = useChatStore();
   const currentCall = useCallStore((state) => state.currentCall);
   const startOutgoingCall = useCallStore((state) => state.startOutgoingCall);
@@ -234,6 +236,7 @@ function MessageItem({
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [reactionDetailEmoji, setReactionDetailEmoji] = useState<string | null>(null);
   const [forwardingConversationId, setForwardingConversationId] = useState<string | null>(null);
+  const [groupInviteAction, setGroupInviteAction] = useState<"accept" | "decline" | null>(null);
   const previous = previousMessage;
   const previousCreatedAt = previous?.createdAt
     ? new Date(previous.createdAt).getTime()
@@ -253,7 +256,8 @@ function MessageItem({
   const isDeletedForMe = message.deletedForUsers?.includes(currentUserId || "");
   const isPollMessage = message.messageType === "poll" && Boolean(message.pollMeta);
   const isAppointmentMessage = message.messageType === "appointment" && Boolean(message.appointmentMeta);
-  const isStructuredMessage = isPollMessage || isAppointmentMessage;
+  const isGroupInviteMessage = message.messageType === "group_invite" && Boolean(message.groupInviteMeta);
+  const isStructuredMessage = isPollMessage || isAppointmentMessage || isGroupInviteMessage;
   const useOwnAccentBubble = isOwn && !isStructuredMessage;
   const canTogglePin = !message.isRecalled && !isDeletedForMe;
   const canReply = !message.isRecalled && !isDeletedForMe;
@@ -361,6 +365,38 @@ function MessageItem({
   };
   const handleDeleteAppointment = async () => {
     await deleteGroupAppointment(message._id);
+  };
+  const handleGroupInviteResponse = async (action: "accept" | "decline") => {
+    if (groupInviteAction) {
+      return;
+    }
+
+    try {
+      setGroupInviteAction(action);
+      const data = await chatService.respondToGroupInvitation(message._id, action);
+
+      if (data?.inviteMessage) {
+        updateMessage(data.inviteMessage);
+      }
+
+      if (data?.conversation) {
+        upsertConversation(data.conversation);
+      }
+
+      if (data?.pendingApproval) {
+        Alert.alert("Yeu cau dang cho duyet", data?.message || "Yeu cau tham gia nhom da duoc gui den truong/phó nhom.");
+        return;
+      }
+
+      Alert.alert(
+        action === "accept" ? "Da tham gia nhom" : "Da tu choi loi moi",
+        data?.message || (action === "accept" ? "Ban da chap nhan loi moi tham gia nhom." : "Ban da tu choi loi moi tham gia nhom.")
+      );
+    } catch (error: any) {
+      Alert.alert("Khong the xu ly loi moi", error?.response?.data?.message || "Vui long thu lai sau.");
+    } finally {
+      setGroupInviteAction(null);
+    }
   };
   const handleTogglePin = () => {
     closeActions();
@@ -689,6 +725,97 @@ function MessageItem({
             onRespond={handleAppointmentResponse}
             onDelete={handleDeleteAppointment}
           />
+        ) : null}
+
+        {isGroupInviteMessage && message.groupInviteMeta ? (
+          <View
+            style={[
+              styles.groupInviteCard,
+              {
+                backgroundColor: isDark ? "#111827" : "#faf7ff",
+                borderColor: isDark ? "#475569" : "#c4b5fd",
+              },
+            ]}
+          >
+            <View style={styles.groupInviteHeader}>
+              <View style={[styles.groupInviteIcon, { backgroundColor: isDark ? "#312e81" : "#ede9fe" }]}>
+                <UserPlus size={20} color={isDark ? "#ddd6fe" : "#7c3aed"} />
+              </View>
+              <View style={styles.groupInviteTextBlock}>
+                <Text style={[styles.groupInviteKicker, { color: isDark ? "#cbd5e1" : "#475569" }]}>
+                  Loi moi tham gia nhom
+                </Text>
+                <Text style={[styles.groupInviteTitle, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                  {message.groupInviteMeta.groupName}
+                </Text>
+                {message.groupInviteMeta.invitationUrl ? (
+                  <Pressable onPress={() => Linking.openURL(message.groupInviteMeta?.invitationUrl || "")}>
+                    <Text
+                      numberOfLines={2}
+                      style={[styles.groupInviteLink, { color: isDark ? "#c4b5fd" : "#6d28d9" }]}
+                    >
+                      {message.groupInviteMeta.invitationUrl}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+
+            {message.groupInviteMeta.responseStatus && message.groupInviteMeta.responseStatus !== "pending" ? (
+              <View
+                style={[
+                  styles.groupInviteStatus,
+                  {
+                    backgroundColor: message.groupInviteMeta.responseStatus === "accepted"
+                      ? isDark ? "#064e3b" : "#dcfce7"
+                      : isDark ? "#3f1d24" : "#ffe4e6",
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.groupInviteStatusText,
+                    {
+                      color: message.groupInviteMeta.responseStatus === "accepted"
+                        ? isDark ? "#bbf7d0" : "#166534"
+                        : isDark ? "#fecdd3" : "#be123c",
+                    },
+                  ]}
+                >
+                  {message.groupInviteMeta.responseStatus === "accepted"
+                    ? "Loi moi da duoc chap nhan"
+                    : "Loi moi da bi tu choi"}
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.groupInviteActions}>
+                <Pressable
+                  onPress={() => void handleGroupInviteResponse("accept")}
+                  disabled={Boolean(groupInviteAction)}
+                  style={[styles.groupInvitePrimaryButton, groupInviteAction && { opacity: 0.65 }]}
+                >
+                  <Check size={16} color="#ffffff" />
+                  <Text style={styles.groupInvitePrimaryText}>
+                    {groupInviteAction === "accept" ? "Dang tham gia..." : "Tham gia"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void handleGroupInviteResponse("decline")}
+                  disabled={Boolean(groupInviteAction)}
+                  style={[
+                    styles.groupInviteSecondaryButton,
+                    { borderColor: isDark ? "#475569" : "#94a3b8" },
+                    groupInviteAction && { opacity: 0.65 },
+                  ]}
+                >
+                  <X size={16} color={isDark ? "#f8fafc" : "#0f172a"} />
+                  <Text style={[styles.groupInviteSecondaryText, { color: isDark ? "#f8fafc" : "#0f172a" }]}>
+                    {groupInviteAction === "decline" ? "Dang tu choi..." : "Tu choi"}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
         ) : null}
 
         {isVoice && voiceAttachment ? (
@@ -1601,13 +1728,93 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#00000010",
   },
+  groupInviteCard: {
+    minWidth: 260,
+    maxWidth: 320,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 14,
+  },
+  groupInviteHeader: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  groupInviteIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  groupInviteTextBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  groupInviteKicker: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  groupInviteTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  groupInviteLink: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  groupInviteActions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  groupInvitePrimaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    backgroundColor: "#7c3aed",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  groupInvitePrimaryText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  groupInviteSecondaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  groupInviteSecondaryText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  groupInviteStatus: {
+    minHeight: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  groupInviteStatusText: {
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+  },
   modal: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.9)",
+    backgroundColor: "rgba(0,0,0,0.78)",
     justifyContent: "center",
     alignItems: "center",
   },
-  fullImage: { width: "100%", height: "100%" },
+  fullImage: { width: "80%", height: "80%" },
   actionRoot: {
     flex: 1,
     justifyContent: "center", // 

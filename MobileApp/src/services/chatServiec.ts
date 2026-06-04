@@ -302,12 +302,14 @@ export const chatService = {
   async createConversation(
     type: "direct" | "group",
     name: string,
-    memberIds: string[]
+    memberIds: string[],
+    privacy: "public" | "private" = "public"
   ) {
     const res = await api.post("/conversations", {
       type,
       name,
       memberIds,
+      privacy,
     });
 
     return res.data.conversation;
@@ -315,7 +317,37 @@ export const chatService = {
 
   async addGroupMembers(conversationId: string, memberIds: string[]) {
     const res = await api.post(`/conversations/${conversationId}/members`, { memberIds });
-    return res.data.conversation;
+    return res.data;
+  },
+
+  async generateInvitationLink(conversationId: string) {
+    const res = await api.post(`/conversations/${conversationId}/generate-invite`);
+    return res.data;
+  },
+
+  async shareGroupInvitation(conversationId: string, recipientId: string) {
+    const res = await api.post(`/conversations/${conversationId}/share-invite`, {
+      recipientId,
+    });
+    return res.data;
+  },
+
+  async respondToGroupInvitation(messageId: string, action: "accept" | "decline") {
+    const res = await api.post(`/conversations/group-invites/${messageId}/respond`, {
+      action,
+    });
+    return res.data;
+  },
+
+  async reviewGroupJoinRequest(
+    conversationId: string,
+    userId: string,
+    action: "accept" | "decline"
+  ) {
+    const res = await api.post(`/conversations/${conversationId}/join-requests/${userId}/review`, {
+      action,
+    });
+    return res.data;
   },
 
   async removeGroupMember(conversationId: string, memberId: string) {

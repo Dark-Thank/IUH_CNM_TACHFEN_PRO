@@ -240,7 +240,7 @@ const getReplyPreviewContent = (replyTo?: Message["replyTo"]) => {
   return "Tin nhắn";
 };
 
-const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm)/i;
+const GROUP_NOTICE_PATTERN = /(đã tạo nhóm|đã thêm .+ vào nhóm|đã xóa .+ khỏi nhóm|đã rời nhóm|đã tham gia nhóm|đã duyệt .+ tham gia nhóm)/i;
 
 const isGroupNoticeMessage = (message: Message, conversation: Conversation) => (
   conversation.type === "group"

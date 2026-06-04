@@ -142,9 +142,15 @@ export interface ChatState {
   createConversation: (
     type: "group" | "direct",
     name: string,
-    memberIds: string[]
+    memberIds: string[],
+    privacy?: "public" | "private"
   ) => Promise<Conversation | undefined>;
   addGroupMembers: (conversationId: string, memberIds: string[]) => Promise<void>;
+  reviewGroupJoinRequest: (
+    conversationId: string,
+    userId: string,
+    action: "accept" | "decline"
+  ) => Promise<void>;
   removeGroupMember: (conversationId: string, memberId: string) => Promise<void>;
   updateGroupMemberRole: (
     conversationId: string,

@@ -248,7 +248,7 @@ export const useChatStore = create<ChatState>()(
         try {
           const { activeConversationId, replyingMessage } = get();
 
-          await chatService.sendDirectMessage(recipientId, {
+          const message = await chatService.sendDirectMessage(recipientId, {
             content,
             conversationId: activeConversationId || undefined,
             replyToMessageId: replyingMessage?._id,
@@ -259,6 +259,10 @@ export const useChatStore = create<ChatState>()(
               type: file.type,
             })),
           });
+
+          if (message) {
+            await get().addMessage(message);
+          }
 
         } catch (error) {
           console.error("Loi xay ra khi gui direct message", error);
@@ -283,7 +287,11 @@ export const useChatStore = create<ChatState>()(
             });
           }
 
-          await chatService.sendGroupMessage(conversationId, formData, voiceDurationSeconds, replyingMessage?._id);
+          const message = await chatService.sendGroupMessage(conversationId, formData, voiceDurationSeconds, replyingMessage?._id);
+
+          if (message) {
+            await get().addMessage(message);
+          }
         } catch (error) {
           console.error("Loi xay ra khi gui group message", error);
           throw error;
@@ -574,13 +582,7 @@ export const useChatStore = create<ChatState>()(
             return;
           }
 
-          const convo = conversations.find((c) => c._id === activeConversationId);
-
-          if (!convo) {
-            return;
-          }
-
-          if ((convo.unreadCounts?.[currentUserId] ?? 0) === 0) {
+          if (!conversations.some((c) => c._id === activeConversationId)) {
             return;
           }
 
@@ -625,13 +627,14 @@ export const useChatStore = create<ChatState>()(
         });
       },
 
-      createConversation: async (type, name, memberIds) => {
+      createConversation: async (type, name, memberIds, privacy: "public" | "private" = "public") => {
         try {
           set({ loading: true });
           const conversation = await chatService.createConversation(
             type,
             name,
-            memberIds
+            memberIds,
+            privacy
           );
 
           get().addConvo(conversation);
@@ -650,10 +653,27 @@ export const useChatStore = create<ChatState>()(
       addGroupMembers: async (conversationId, memberIds) => {
         try {
           set({ loading: true });
-          const conversation = await chatService.addGroupMembers(conversationId, memberIds);
-          get().upsertConversation(conversation);
+          const data = await chatService.addGroupMembers(conversationId, memberIds);
+          if (data?.conversation) {
+            get().upsertConversation(data.conversation);
+          }
         } catch (error) {
           console.error("Loi khi them thanh vien nhom:", error);
+          throw error;
+        } finally {
+          set({ loading: false });
+        }
+      },
+
+      reviewGroupJoinRequest: async (conversationId, userId, action) => {
+        try {
+          set({ loading: true });
+          const data = await chatService.reviewGroupJoinRequest(conversationId, userId, action);
+          if (data?.conversation) {
+            get().upsertConversation(data.conversation);
+          }
+        } catch (error) {
+          console.error("Loi khi duyet yeu cau tham gia nhom:", error);
           throw error;
         } finally {
           set({ loading: false });

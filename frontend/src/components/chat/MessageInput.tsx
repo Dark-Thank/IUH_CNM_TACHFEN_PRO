@@ -101,7 +101,7 @@ const MessageInput = ({
     onSmartReplyConsumed?: () => void;
 }) => {
     const { user } = useAuthStore();
-    const { sendDirectMessage, sendGroupMessage, replyingMessage, setReplyingMessage, clearReplyingMessage } = useChatStore();
+    const { sendDirectMessage, sendGroupMessage, replyingMessage, clearReplyingMessage } = useChatStore();
     const { startTyping, stopTyping } = useSocketStore();
 
     const [isBlocked, setIsBlocked] = useState(false);
@@ -109,6 +109,15 @@ const MessageInput = ({
     const typingConversationIdRef = useRef(selectedConvo._id);
     const isTypingRef = useRef(false);
     const inputRef = useRef<HTMLInputElement | null>(null);
+
+    const focusComposer = () => {
+        window.requestAnimationFrame(() => {
+            inputRef.current?.focus();
+        });
+        window.setTimeout(() => {
+            inputRef.current?.focus();
+        }, 0);
+    };
 
     // Sync the prop value to local state
     useEffect(() => {
@@ -122,7 +131,6 @@ const MessageInput = ({
     const [isRecording, setIsRecording] = useState(false);
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [isVoiceCaptureBusy, setIsVoiceCaptureBusy] = useState(false);
-    const [isSending, setIsSending] = useState(false);
     const recorderRef = useRef<MediaRecorder | null>(null);
     const mediaStreamRef = useRef<MediaStream | null>(null);
     const chunksRef = useRef<Blob[]>([]);
@@ -414,10 +422,6 @@ const MessageInput = ({
     if (!user) return null;
 
     const sendMessage = async (contentOverride?: string) => {
-        if (isSending) {
-            return;
-        }
-
         if (voiceCaptureBusyRef.current || isRecording) {
             toast.error("Hãy dừng ghi âm trước khi gửi.");
             return;
@@ -429,9 +433,6 @@ const MessageInput = ({
 
         stopTypingIndicator();
 
-        const previousValue = value;
-        const previousFiles = files;
-        const previousReplyingMessage = replyingMessage;
         const shouldClearComposerImmediately = !voiceDraft;
 
         const formData = new FormData();
@@ -451,13 +452,12 @@ const MessageInput = ({
         }
 
         try {
-            setIsSending(true);
-
             if (shouldClearComposerImmediately) {
                 setValue("");
                 setSelectionStart(0);
                 setFiles([]);
                 clearReplyingMessage();
+                focusComposer();
             }
 
             if (selectedConvo.type === "direct") {
@@ -470,11 +470,14 @@ const MessageInput = ({
                 await sendGroupMessage(selectedConvo._id, formData);
             }
 
-            setValue("");
-            setSelectionStart(0);
-            setFiles([]);
-            resetVoiceDraft();
-            clearReplyingMessage();
+            if (!shouldClearComposerImmediately) {
+                setValue("");
+                setSelectionStart(0);
+                setFiles([]);
+                resetVoiceDraft();
+                clearReplyingMessage();
+                focusComposer();
+            }
 
             if (contentOverride) {
                 onSmartReplyConsumed?.();
@@ -497,14 +500,6 @@ const MessageInput = ({
                 toast.error(serverMessage || "Gửi tin nhắn thất bại!");
             }
 
-            if (shouldClearComposerImmediately) {
-                setValue(previousValue);
-                setSelectionStart(previousValue.length);
-                setFiles(previousFiles);
-                setReplyingMessage(previousReplyingMessage);
-            }
-        } finally {
-            setIsSending(false);
         }
     };
 
@@ -763,7 +758,7 @@ const MessageInput = ({
                         }}
                         onKeyDown={handleKeyPress}
                         placeholder={isBlocked ? "Bạn không thể nhắn tin..." : "Soạn tin nhắn..."}
-                        disabled={isBlocked || isSending}
+                        disabled={isBlocked}
                         className="pr-20 h-9 bg-white"
                     />
 
@@ -778,8 +773,9 @@ const MessageInput = ({
 
                 {/* SEND */}
                 <Button
+                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() => void sendMessage()}
-                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive || isSending}
+                    disabled={(!value.trim() && !hasAttachments) || isBlocked || isVoiceCaptureActive}
                 >
                     <Send className="size-4 text-white" />
                 </Button>

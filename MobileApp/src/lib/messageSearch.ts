@@ -14,12 +14,12 @@ export const getConversationTitleForSearch = (
   currentUserId?: string
 ) => {
   if (conversation.type === "group") {
-    return conversation.group?.name || "Nhóm chat";
+    return conversation.group?.name || "Nhom chat";
   }
 
   return (
     conversation.participants.find((participant) => participant._id !== currentUserId)?.displayName ||
-    "Cuộc trò chuyện"
+    "Cuoc tro chuyen"
   );
 };
 
@@ -27,13 +27,7 @@ export const getConversationSearchBody = (
   conversation: Conversation,
   currentUserId?: string
 ) =>
-  normalizeSearchText(
-    [
-      getConversationTitleForSearch(conversation, currentUserId),
-      conversation.participants.map((participant) => participant.displayName).join(" "),
-      conversation.lastMessage?.content || "",
-    ].join(" ")
-  );
+  normalizeSearchText(getConversationTitleForSearch(conversation, currentUserId));
 
 export const getMessageSearchBody = (message: Message) => {
   const textParts: string[] = [];
@@ -67,19 +61,40 @@ export const getMessageSearchBody = (message: Message) => {
     }
   }
 
+  if (message.groupInviteMeta) {
+    textParts.push(message.groupInviteMeta.groupName);
+    if (message.groupInviteMeta.invitationUrl) {
+      textParts.push(message.groupInviteMeta.invitationUrl);
+    }
+  }
+
   if (message.fileUrls?.length) {
     textParts.push(...message.fileUrls.map((file) => file.name));
   }
 
   if (message.messageType === "voice") {
-    textParts.push("Tin nhắn thoại");
+    textParts.push("Tin nhan thoai");
   }
 
   if (message.messageType === "call") {
-    textParts.push("Cuộc gọi");
+    textParts.push("Cuoc goi");
   }
 
   return textParts.join(" ").trim();
+};
+
+export const getMessageSenderId = (message: Message) => {
+  const sender = message.senderId as unknown;
+
+  if (typeof sender === "string") {
+    return sender;
+  }
+
+  if (sender && typeof sender === "object" && "_id" in sender) {
+    return String((sender as { _id?: string })._id ?? "");
+  }
+
+  return "";
 };
 
 export const getMessageSenderName = (
@@ -87,13 +102,15 @@ export const getMessageSenderName = (
   conversation: Conversation,
   currentUserId?: string
 ) => {
-  if (message.senderId === currentUserId) {
-    return "Bạn";
+  const senderId = getMessageSenderId(message);
+
+  if (senderId === currentUserId) {
+    return "Ban";
   }
 
   return (
-    conversation.participants.find((participant) => participant._id === message.senderId)?.displayName ||
-    "Thành viên"
+    conversation.participants.find((participant) => participant._id === senderId)?.displayName ||
+    "Thanh vien"
   );
 };
 
@@ -103,6 +120,10 @@ export const matchesDateFilter = (createdAt: string, filter: MessageSearchDateFi
   }
 
   const createdTime = new Date(createdAt).getTime();
+  if (!Number.isFinite(createdTime)) {
+    return false;
+  }
+
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
