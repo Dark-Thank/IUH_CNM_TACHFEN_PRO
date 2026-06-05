@@ -1,14 +1,16 @@
 
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { z } from "zod";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Label } from "../ui/label";
+import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/useAuthStore";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useForm } from "react-hook-form";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { z } from "zod";
+import { Label } from "../ui/label";
+import logoSrc from '/logo.svg';
 
 const signInSchema = z.object({
     username: z.string().min(3, "Tên đăng nhập phải có ít nhất 3 ký tự"),
@@ -28,13 +30,15 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
         resolver: zodResolver(signInSchema),
     });
 
+    const [showPassword, setShowPassword] = useState(false);
+
     const onSubmit = async (data: SignInFormValues) => {
         const { username, password } = data;
 
         // gọi backend để signin
         await signIn(username, password);
-
-        navigate("/");
+        // đi tới trang nhập OTP
+        navigate("/verify-otp");
     };
 
     return (
@@ -56,7 +60,7 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
                                     className="mx-auto block w-fit text-center"
                                 >
                                     <img
-                                        src="/logo.svg"
+                                        src={logoSrc}
                                         alt="logo"
                                     />
                                 </a>
@@ -79,11 +83,11 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
                                 <Input
                                     type="text"
                                     id="username"
-                                    placeholder="moji"
+                                    placeholder="tachfen"
                                     {...register("username")}
                                 />
                                 {errors.username && (
-                                    <p className="text-destructive text-sm">
+                                    <p className="error-message">
                                         {errors.username.message}
                                     </p>
                                 )}
@@ -97,13 +101,27 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
                                 >
                                     Mật khẩu
                                 </Label>
-                                <Input
-                                    type="password"
-                                    id="password"
-                                    {...register("password")}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        type={showPassword ? "text" : "password"}
+                                        id="password"
+                                        {...register("password")}
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword((s) => !s)}
+                                        aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                                    >
+                                        {showPassword ? (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10 10 0 0 1 12 20c-4.97 0-9.11-3.16-10-8 0 0 3.5-8 10-8 2.3 0 4.4.7 6.06 1.94" /><path d="M1 1l22 22" /></svg>
+                                        ) : (
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z" /><circle cx="12" cy="12" r="3" /></svg>
+                                        )}
+                                    </button>
+                                </div>
                                 {errors.password && (
-                                    <p className="text-destructive text-sm">
+                                    <p className="error-message">
                                         {errors.password.message}
                                     </p>
                                 )}
@@ -126,6 +144,9 @@ export function SignInForm({ className, ...props }: React.ComponentProps<"div">)
                                 >
                                     Đăng kí
                                 </a>
+                                <div className="mt-2">
+                                    <a href="/forgot-password" className="text-sm underline">Quên mật khẩu?</a>
+                                </div>
                             </div>
                         </div>
                     </form>

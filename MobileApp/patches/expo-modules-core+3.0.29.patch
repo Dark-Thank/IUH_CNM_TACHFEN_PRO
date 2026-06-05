@@ -1,0 +1,23 @@
+diff --git a/node_modules/expo-modules-core/android/CMakeLists.txt b/node_modules/expo-modules-core/android/CMakeLists.txt
+index 5d309ef..d581fe0 100644
+--- a/node_modules/expo-modules-core/android/CMakeLists.txt
++++ b/node_modules/expo-modules-core/android/CMakeLists.txt
+@@ -121,6 +121,7 @@ target_compile_options(
+ 
+ target_link_libraries(
+   ${PACKAGE_NAME}
++  c++_shared
+   CommonSettings
+   ${LOG_LIB}
+   fbjni::fbjni
+diff --git a/node_modules/expo-modules-core/android/src/fabric/CMakeLists.txt b/node_modules/expo-modules-core/android/src/fabric/CMakeLists.txt
+--- a/node_modules/expo-modules-core/android/src/fabric/CMakeLists.txt
++++ b/node_modules/expo-modules-core/android/src/fabric/CMakeLists.txt
+@@ -28,6 +28,7 @@ target_include_directories(fabric PRIVATE
+ )
+ 
+ target_link_libraries(fabric
++  c++_shared
+   CommonSettings
+   fbjni::fbjni
+   ReactAndroid::jsi

@@ -1,0 +1,155 @@
+import mongoose from "mongoose";
+
+const participantSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    role: {
+        type: String,
+        enum: ["owner", "deputy", "member"],
+        default: "member",
+    },
+    joinedAt: {
+        type: Date,
+        default: Date.now,
+    },
+},
+    { _id: false, }
+);
+
+const joinRequestSchema = new mongoose.Schema({
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    requestedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+    },
+    addedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+    },
+    source: {
+        type: String,
+        enum: ["invite", "add"],
+        default: "invite",
+    },
+    requestedAt: {
+        type: Date,
+        default: Date.now,
+    },
+},
+    { _id: false, }
+);
+
+const groupSchema = new mongoose.Schema({
+    name: {
+        type: String,
+        trim: true,
+    },
+    avatar: {
+        type: String, // URL ảnh
+        default: null,
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    },
+    privacy: {
+        type: String,
+        enum: ["public", "private"],
+        default: "public",
+    },
+}, { _id: false, });
+
+const lastMessageSchema = new mongoose.Schema({
+    _id: { type: String },
+    content: {
+        type: String,
+        default: null,
+    },
+    senderId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+    },
+    createdAt: {
+        type: Date,
+        default: null,
+    },
+}, { _id: false, });
+
+
+const ConversationSchema = new mongoose.Schema({
+    type: {
+        type: String,
+        enum: ["direct", "group"],
+        required: true,
+    },
+    participants: {
+        type: [participantSchema],
+        required: true,
+    },
+    joinRequests: {
+        type: [joinRequestSchema],
+        default: [],
+    },
+    group: {
+        type: groupSchema,
+    },
+    lastMessageAt: {
+        type: Date,
+    },
+    seenBy: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }
+    ],
+    lastMessage: {
+        type: lastMessageSchema,
+        default: null,
+    },
+    unreadCounts: {
+        type: Map,
+        of: Number,
+        default: {},
+    },
+    invitationToken: {
+        type: String,
+        unique: true,
+        sparse: true,
+    },
+    invitationExpiry: {
+        type: Date,
+        default: null,
+    },
+    pinnedBy: {
+        type: [
+            {
+                userId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "User",
+                    required: true,
+                },
+                pinnedAt: {
+                    type: Date,
+                    default: Date.now,
+                },
+            }
+        ],
+        default: [],
+    },
+
+}, { timestamps: true });
+
+ConversationSchema.index({ "participants.userId": 1, lastMessageAt: -1 });
+
+const Conversation = mongoose.model("Conversation", ConversationSchema);
+
+export default Conversation;

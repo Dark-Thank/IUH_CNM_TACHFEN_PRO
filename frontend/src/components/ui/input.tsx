@@ -1,11 +1,15 @@
-import * as React from "react"
-import { Input as InputPrimitive } from "@base-ui/react/input"
+import { Input as InputPrimitive } from "@base-ui/react/input";
+import * as React from "react";
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/utils";
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+const Input = React.forwardRef<
+  React.ElementRef<typeof InputPrimitive>,
+  React.ComponentPropsWithoutRef<typeof InputPrimitive>
+>(({ className, type, ...props }, ref) => {
   return (
     <InputPrimitive
+      ref={ref} // ✅ thêm dòng này
       type={type}
       data-slot="input"
       className={cn(
@@ -14,7 +18,9 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
       )}
       {...props}
     />
-  )
-}
+  );
+});
 
-export { Input }
+Input.displayName = "Input";
+
+export { Input };

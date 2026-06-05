@@ -39,6 +39,27 @@ const userSchema = new mongoose.Schema(
       type: String,
       sparse: true, // cho phép null, nhưng không được trùng
     },
+    showOnlineStatus: {
+      type: Boolean,
+      default: true,
+    },
+    // OTP / verification and password reset fields
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    otp: {
+      type: String,
+    },
+    otpExpires: {
+      type: Date,
+    },
+    resetOtp: {
+      type: String,
+    },
+    resetOtpExpires: {
+      type: Date,
+    },
   },
   {
     timestamps: true,

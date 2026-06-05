@@ -19,11 +19,38 @@ export const authService = {
 
   signIn: async (username: string, password: string) => {
     const res = await api.post(
-      "auth/signin",
+      "/auth/signin",
       { username, password },
       { withCredentials: true }
     );
-    return res.data; // access token
+    return res.data; // { message, userId, email }
+  },
+
+  verifyOtp: async (email: string, otp: string) => {
+    const res = await api.post(
+      "/auth/verify-otp",
+      { email, otp },
+      { withCredentials: true }
+    );
+    return res.data; // { accessToken }
+  },
+
+  forgotPassword: async (email: string) => {
+    const res = await api.post(
+      "/auth/forgot-password",
+      { email },
+      { withCredentials: true }
+    );
+    return res.data;
+  },
+
+  resetPassword: async (email: string, otp: string, newPassword: string) => {
+    const res = await api.post(
+      "/auth/reset-password",
+      { email, otp, newPassword },
+      { withCredentials: true }
+    );
+    return res.data;
   },
 
   signOut: async () => {

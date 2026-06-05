@@ -1,11 +1,34 @@
 import { useAuthStore } from "@/stores/useAuthStore";
 import axios from "axios";
+import { getApiBaseUrl, warnIfLocalOnlyRealtimeConfig } from "./runtimeConfig";
+
+warnIfLocalOnlyRealtimeConfig();
 
 const api = axios.create({
-  baseURL:
-    import.meta.env.MODE === "development" ? "http://localhost:5001/api" : "/api",
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
 });
+
+const isTokenAuthError = (status?: number, message = "") => {
+  if (status === 401) {
+    return true;
+  }
+
+  if (status !== 403) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  return normalizedMessage.includes("access token") || normalizedMessage.includes("token không hợp lệ") || normalizedMessage.includes("token đã hết hạn");
+};
+
+const isAuthBypassRequest = (url = "") => {
+  const normalizedUrl = url.startsWith("/") ? url : `/${url}`;
+
+  return normalizedUrl.includes("/auth/signin") ||
+    normalizedUrl.includes("/auth/signup") ||
+    normalizedUrl.includes("/auth/refresh");
+};
 
 // gắn access token vào req header
 api.interceptors.request.use((config) => {
@@ -23,19 +46,17 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+    const message = error.response?.data?.message || "";
 
     // những api không cần check
-    if (
-      originalRequest.url.includes("/auth/signin") ||
-      originalRequest.url.includes("/auth/signup") ||
-      originalRequest.url.includes("/auth/refresh")
-    ) {
+    if (isAuthBypassRequest(originalRequest.url)) {
       return Promise.reject(error);
     }
 
     originalRequest._retryCount = originalRequest._retryCount || 0;
 
-    if (error.response?.status === 403 && originalRequest._retryCount < 4) {
+    if (isTokenAuthError(status, message) && originalRequest._retryCount < 4) {
       originalRequest._retryCount += 1;
       console.log("refresh", originalRequest._retryCount);
 
